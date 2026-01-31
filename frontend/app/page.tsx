@@ -17,7 +17,7 @@ const SERVICES = [
 ];
 
 const HIGHLIGHTS = [
-  { title: "Fast Scheduling", desc: "Book online in minutes." },
+  { title: "Fast Scheduling", desc: "Book online in minutes using our modern UI." },
   { title: "Bay Area Service", desc: "Local coverage with reliable arrival windows." },
   { title: "Clear Pricing", desc: "Residential and commercial packages." },
   { title: "Professional Care", desc: "Respectful service for homes and businesses." },
@@ -77,35 +77,20 @@ export default function HomePage() {
           {/* Hero image/logo placeholder */}
           <ScrollReveal>
             <div
-              className="rounded-3xl border p-4 md:p-6"
+              className="rounded-3xl border p-4 md:p-4"
               style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
             >
-              <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border bg-white"
+              <div className="relative aspect-[4/3.5] w-full overflow-hidden rounded-2xl border bg-white"
                    style={{ borderColor: "rgb(var(--border))" }}>
-                {/* Option A: Placeholder block (keep this for now) */}
-                <div className="absolute inset-0 grid place-items-center">
-                  <div className="text-center">
-                    <div className="text-sm font-semibold" style={{ color: "rgb(var(--fg))" }}>
-                      Image Placeholder
-                    </div>
-                    <div className="mt-1 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                      Put a brand image or large logo here
-                    </div>
-                    <div className="mt-3 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                      Suggested file: <code>/public/hero.jpg</code>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Option B: Once you have an image, replace the placeholder above with this:
+                
                 <Image
-                  src="/hero.jpg"
-                  alt="Sharkey’s Pest Control"
+                  src="/main-logo.jpg"
+                  alt="Sharkeys Pest Control"
                   fill
                   className="object-cover"
                   priority
                 />
-                */}
+               
               </div>
 
               <div className="mt-4 text-sm" style={{ color: "rgb(var(--muted))" }}>
