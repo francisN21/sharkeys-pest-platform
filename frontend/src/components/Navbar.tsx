@@ -74,14 +74,14 @@ export default function Navbar() {
         <Link href="/" className="flex items-center gap-3">
           <Image
             src="/logo.png"
-            alt="Sharkey’s Pest Control"
+            alt="Sharkys Pest Control"
             width={44}
             height={44}
             className="rounded-xl"
             priority
           />
           <div className="leading-tight">
-            <div className="text-base font-semibold">Sharkey’s Pest Control</div>
+            <div className="text-base font-semibold">Sharkys Pest Control</div>
             <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
               Bay Area
             </div>

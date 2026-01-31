@@ -4,7 +4,7 @@ import ThemeProvider from "../src/components/ThemeProvider";
 
 
 export const metadata: Metadata = {
-  title: "Sharkey’s Pest Control | Bay Area",
+  title: "Sharkys Pest Control | Bay Area",
   description:
     "Residential and commercial pest control services in the Bay Area. Book rodent, termite, roach, bee, and scorpion services online.",
   icons: {

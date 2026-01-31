@@ -25,67 +25,8 @@ export default function HomePage() {
   return (
     <main>
       {/* Header */}
-      <header
-  className="sticky top-0 z-50 border-b backdrop-blur"
-  style={{
-    borderColor: "rgb(var(--border))",
-    background: "rgba(var(--bg), 0.85)",
-  }}
->
-  <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-    <Link href="/" className="flex items-center gap-3">
-      <Image
-        src="/logo.png"
-        alt="Sharkey’s Pest Control"
-        width={44}
-        height={44}
-        className="rounded-xl"
-        priority
-      />
-      <div className="leading-tight">
-        <div className="text-base font-semibold">Sharkys Pest Control</div>
-        <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-          Bay Area
-        </div>
-      </div>
-    </Link>
-
-    <nav className="hidden items-center gap-6 md:flex">
-      <a href="#services" className="text-sm hover:opacity-90" style={{ color: "rgb(var(--muted))" }}>
-        Services
-      </a>
-      <a href="#pricing" className="text-sm hover:opacity-90" style={{ color: "rgb(var(--muted))" }}>
-        Pricing
-      </a>
-      <a href="#contact" className="text-sm hover:opacity-90" style={{ color: "rgb(var(--muted))" }}>
-        Contact
-      </a>
-    </nav>
-
-    <div className="flex items-center gap-3">
-      <ThemeToggle />
-
-      <Link
-        href="/login"
-        className="rounded-xl px-3 py-2 text-sm font-medium hover:opacity-90"
-        style={{ color: "rgb(var(--muted))" }}
-      >
-        Sign in
-      </Link>
-
-      <Link
-        href="/signup"
-        className="rounded-xl px-4 py-2 text-sm font-semibold hover:opacity-90"
-        style={{
-          background: "rgb(var(--primary))",
-          color: "rgb(var(--primary-fg))",
-        }}
-      >
-        Book a Service
-      </Link>
-    </div>
-  </div>
-</header>
+      
+      <Navbar />
 
       {/* Hero */}
       <section className="border-b">

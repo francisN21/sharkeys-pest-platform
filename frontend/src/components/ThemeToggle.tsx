@@ -3,7 +3,7 @@
 import { useTheme } from "next-themes";
 
 export default function ThemeToggle() {
-  const { theme, setTheme, resolvedTheme } = useTheme();
+  const { setTheme, resolvedTheme } = useTheme();
 
   // During SSR + initial hydration, resolvedTheme can be undefined.
   // Render a stable button that won't change text until resolvedTheme exists.
