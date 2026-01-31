@@ -39,4 +39,8 @@ body {
   background: rgb(var(--bg));
   color: rgb(var(--fg));
   font-family: Arial, Helvetica, sans-serif;
+  overflow: hidden;
+}
+html, body {
+  height: 100%;
 }
