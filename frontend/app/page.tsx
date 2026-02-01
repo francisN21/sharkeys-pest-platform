@@ -31,7 +31,7 @@ export default function HomePage() {
       <Navbar />
 
       {/* Hero */}
-      <section id="booking" className={`${SECTION} scroll-mt-24 md:scroll-mt-28`} style={{ borderColor: "rgb(var(--border))" }} >
+      <section id="spc" className={`${SECTION} scroll-mt-24 md:scroll-mt-28`} style={{ borderColor: "rgb(var(--border))" }} >
         <div className={`${CONTAINER} grid gap-10 md:grid-cols-2 md:items-center`}>
           <ScrollReveal>
             <div className="space-y-5">
@@ -102,7 +102,7 @@ export default function HomePage() {
       </section>
 
       {/* BOOKING FLOW (moved under hero) */}
-      <section id="services" className={`${SECTION} scroll-mt-24 md:scroll-mt-28`}>
+      <section id="booking" className={`${SECTION} scroll-mt-24 md:scroll-mt-28`}>
         <div className={CONTAINER}>
           <ScrollReveal className="mx-auto max-w-4xl">
             <div className="rounded-3xl border p-8"

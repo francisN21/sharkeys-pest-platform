@@ -71,13 +71,16 @@ export default function Navbar() {
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between px4 py-3">
         {/* Brand */}
-        <Link href="/" className="flex items-center gap-3">
+        <Link href="" className="flex items-center gap-3">
           <Image
             src="/spc-icon.png"
             alt="Sharkys Pest Control"
             width={52}
             height={52}
             className="rounded-xl"
+            style={{
+                marginLeft: "5px",
+            }}
             priority
           />
           <div className="leading-tight">
@@ -137,7 +140,7 @@ export default function Navbar() {
           <button
             type="button"
             className="md:hidden rounded-xl border p-2 hover:opacity-90"
-            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))", marginRight: "5px" }}
             aria-label="Open menu"
             aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
