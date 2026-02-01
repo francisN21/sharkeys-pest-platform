@@ -24,13 +24,17 @@ then layering authentication, scheduling, payments, and production hardening.
 
 ## Phase 0 – Project Setup
 
-- [ ] Create Next.js project
-- [ ] Configure Tailwind CSS
-- [ ] Install Font Awesome
-- [ ] Environment variable setup (`NEXT_PUBLIC_API_BASE`)
-- [ ] Base layout (header, footer, navigation)
-- [ ] Connect frontend to `auth_module` backend
-- [ ] Verify cookie-based auth works cross-origin
+- [x] Create Next.js project
+- [x] Configure Tailwind CSS
+- [x] Install Font Awesome
+- [x] Environment variable setup (`NEXT_PUBLIC_API_BASE`)
+- [x] Base layout (header, footer, navigation)
+- [x] Responsive navbar with mobile hamburger menu
+- [x] Dark / Light mode toggle
+- [x] Scroll-based full-page sections (desktop)
+- [x] Disable snap scrolling on mobile
+- [x] Placeholder routes created (/login, /signup, /book, /account, /employee)
+- [x] Backend auth_module integrated as reusable module (repo-level)
 
 ---
 
@@ -39,16 +43,23 @@ then layering authentication, scheduling, payments, and production hardening.
 ### Homepage (Public)
 Accessible to everyone (no authentication).
 
-- [ ] Homepage landing section
-- [ ] Service overview (Residential & Commercial)
-- [ ] Pricing display (static for now)
-- [ ] Call-to-action buttons (Schedule / Sign Up)
-- [ ] Contact information section
-- [ ] Responsive design (mobile-first)
+- [x] Homepage landing section
+- [x] Brand/logo placement
+- [x] Services overview section (modularized)
+- [x] About / company messaging
+- [x] Contact information section
+- [x] Placeholder routes created (/login, /signup, /book, /account, /employee)
+- [x] Mobile-first responsive layout
+- [x] Scroll reveal animations
 
 ---
 
 ## Phase 2 – Authentication (Customer Accounts)
+
+### Primary Auth
+
+- [ ] Connect frontend to `auth_module` backend
+- [ ] Verify cookie-based auth works cross-origin
 
 ### Customer Account Creation
 Used for scheduling and managing services.
