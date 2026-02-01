@@ -8,8 +8,8 @@ import ThemeToggle from "../components/ThemeToggle";
 type NavItem = { label: string; href: string };
 
 const NAV: NavItem[] = [
-  { label: "Services", href: "#services" },
   { label: "Booking", href: "#booking" },
+  { label: "Services", href: "#services" },
   { label: "About", href: "#about" },
   { label: "Contact", href: "#contact" },
 ];

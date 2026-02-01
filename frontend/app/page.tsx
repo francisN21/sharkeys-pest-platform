@@ -9,11 +9,12 @@ const SECTION = "min-h-screen snap-start flex items-center";
 const CONTAINER = "mx-auto w-full max-w-6xl px-4";
 
 const SERVICES = [
-  { name: "Rodents", desc: "Inspection, exclusion, and treatment plans." },
-  { name: "Bees", desc: "Safe removal and prevention recommendations." },
-  { name: "Termites", desc: "Assessment and treatment options." },
-  { name: "Roaches", desc: "Targeted treatment and follow-up scheduling." },
-  { name: "Scorpions", desc: "Perimeter defense and habitat reduction." },
+  { title: "Pest Extermination", desc: "Ants, roaches, bed bugs, fleas/ticks, flies, snails, earwigs, mites, crickets, mosquitoes, spiders, wasps, gophers, moles, voles, and rodents." },
+  { title: "Wildlife Control", desc: "Raccoon, skunk, possum, squirrel, and other wildlife—removal and prevention." },
+  { title: "Specialty Services", desc: "General Pest Control, Rodent Exclusion, Crawl/Attic Clean Up, Vapor Barrier, Rodent Proofing, Pigeon Exclusion, Animal Removal, Tree/Yard Spray, Sanitize & Deodorize." },
+  { title: "Commercial Services", desc: "Partnership-based approach for restaurants, healthcare, and retail—with documentation support." },
+  { title: "Eco/Green Options", desc: "Environmentally conscious treatments available upon request—ask what fits your situation." },
+  { title: "Customized Plans", desc: "Tailored solutions for residential and commercial needs based on your property and pest pressure." },
 ];
 
 const HIGHLIGHTS = [
@@ -36,7 +37,7 @@ export default function HomePage() {
           <ScrollReveal>
             <div className="space-y-5">
               <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
-                Family-owned pest control in Benicia, serving the Bay Area.
+                Sharkys Pest Control in Benicia, serving the Bay Area.
               </h1>
 
               <p className="text-base md:text-lg" style={{ color: "rgb(var(--muted))" }}>
@@ -150,48 +151,18 @@ export default function HomePage() {
               Comprehensive pest control solutions for homes and businesses, including eco-conscious options.
             </p>
 
-            <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {[
-                {
-                  title: "Pest Extermination",
-                  body:
-                    "Ants, roaches, bed bugs, fleas/ticks, flies, snails, earwigs, mites, crickets, mosquitoes, spiders, wasps, gophers, moles, voles, and rodents.",
-                },
-                {
-                  title: "Wildlife Control",
-                  body:
-                    "Raccoon, skunk, possum, squirrel, and other wildlife—removal and prevention.",
-                },
-                {
-                  title: "Specialty Services",
-                  body:
-                    "General Pest Control, Rodent Exclusion, Crawl/Attic Clean Up, Vapor Barrier, Rodent Proofing, Pigeon Exclusion, Animal Removal, Tree/Yard Spray, Sanitize & Deodorize.",
-                },
-                {
-                  title: "Commercial Services",
-                  body:
-                    "Partnership-based approach for restaurants, healthcare, and retail—with documentation support.",
-                },
-                {
-                  title: "Eco/Green Options",
-                  body:
-                    "Environmentally conscious treatments available upon request—ask what fits your situation.",
-                },
-                {
-                  title: "Customized Plans",
-                  body:
-                    "Tailored solutions for residential and commercial needs based on your property and pest pressure.",
-                },
-              ].map((c) => (
+            <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {SERVICES.map((s) => (
                 <div
-                  key={c.title}
-                  className="rounded-2xl border p-5"
+                  key={s.title}
+                  className="rounded-2xl border p-6"
                   style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
                 >
-                  <div className="text-lg font-semibold">{c.title}</div>
-                  <p className="mt-2 text-sm" style={{ color: "rgb(var(--muted))" }}>
-                    {c.body}
-                  </p>
+                  <div className="text-sm font-semibold">{s.title}</div>
+                  <div className="mt-2 text-sm" style={{ color: "rgb(var(--muted))" }}>
+                    {s.desc}
+                  </div>
+
                   <a
                     href="#contact"
                     className="mt-4 inline-block text-sm font-semibold hover:underline"
@@ -238,14 +209,14 @@ export default function HomePage() {
               <div className="space-y-4 text-sm leading-relaxed" style={{ color: "rgb(var(--muted))" }}>
                 <p>
                   <span className="font-semibold" style={{ color: "rgb(var(--fg))" }}>
-                    Sharky’s Pest Control
+                    Sharkys Pest Control
                   </span>{" "}
                   is a family-owned and operated pest control company located in Benicia, CA—founded by Allan and Deillen,
                   a dedicated father-and-son team committed to protecting homes and businesses from unwanted pests.
                 </p>
 
                 <p>
-                  Built on decades of combined hands-on experience, Sharky’s was created with a clear mission:
+                  Built on decades of combined hands-on experience, Sharkys was created with a clear mission:
                   reliable, honest, high-quality pest control backed by personal accountability.
                 </p>
 
@@ -298,7 +269,7 @@ export default function HomePage() {
               </div>
 
               <div className="mt-8 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                © {new Date().getFullYear()} Sharkey’s Pest Control. All rights reserved.
+                © {new Date().getFullYear()} Sharkys Pest Control. All rights reserved.
               </div>
             </div>
           </ScrollReveal>
