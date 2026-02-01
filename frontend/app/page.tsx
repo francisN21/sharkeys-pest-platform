@@ -1,6 +1,6 @@
 import Image from "next/image";
-import Link from "next/link";
-import ThemeToggle from "../src/components/ThemeToggle";
+// import Link from "next/link";
+// import ThemeToggle from "../src/components/ThemeToggle";
 import Navbar from "../src/components/Navbar";
 import ScrollReveal from "../src/components/ScrollReveal";
 
