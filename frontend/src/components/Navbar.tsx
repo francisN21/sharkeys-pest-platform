@@ -69,14 +69,14 @@ export default function Navbar() {
         background: "rgba(var(--bg), 0.85)",
       }}
     >
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px4 py-3">
         {/* Brand */}
         <Link href="/" className="flex items-center gap-3">
           <Image
-            src="/logo.png"
+            src="/spc-icon.png"
             alt="Sharkys Pest Control"
-            width={44}
-            height={44}
+            width={52}
+            height={52}
             className="rounded-xl"
             priority
           />

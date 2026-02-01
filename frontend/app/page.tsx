@@ -25,13 +25,13 @@ const HIGHLIGHTS = [
 
 export default function HomePage() {
   return (
-    <main className="h-screen overflow-y-auto snap-y snap-mandatory scroll-smooth">
+    <main className="h-screen overflow-y-auto scroll-smooth md:snap-y md:snap-mandatory">
       {/* Header */}
       
       <Navbar />
 
       {/* Hero */}
-      <section className={SECTION} style={{ borderColor: "rgb(var(--border))" }}>
+      <section id="booking" className={`${SECTION} scroll-mt-24 md:scroll-mt-28`} style={{ borderColor: "rgb(var(--border))" }} >
         <div className={`${CONTAINER} grid gap-10 md:grid-cols-2 md:items-center`}>
           <ScrollReveal>
             <div className="space-y-5">
@@ -102,7 +102,7 @@ export default function HomePage() {
       </section>
 
       {/* BOOKING FLOW (moved under hero) */}
-      <section id="booking" className={SECTION}>
+      <section id="services" className={`${SECTION} scroll-mt-24 md:scroll-mt-28`}>
         <div className={CONTAINER}>
           <ScrollReveal className="mx-auto max-w-4xl">
             <div className="rounded-3xl border p-8"
@@ -207,7 +207,7 @@ export default function HomePage() {
       </section>
 
       {/* ABOUT */}
-      <section id="about" className={SECTION}>
+      <section id="about" className={`${SECTION} scroll-mt-24 md:scroll-mt-28`}>
         <div className={CONTAINER}>
           <ScrollReveal className="grid gap-8 md:grid-cols-2 md:items-start">
             <div>
@@ -265,7 +265,7 @@ export default function HomePage() {
       </section>
 
       {/* CONTACT */}
-      <section id="contact" className={SECTION}>
+      <section id="contact" className={`${SECTION} scroll-mt-24 md:scroll-mt-28`}>
         <div className={CONTAINER}>
           <ScrollReveal className="mx-auto max-w-4xl">
             <div className="rounded-3xl border p-8" style={{ borderColor: "rgb(var(--border))" }}>
