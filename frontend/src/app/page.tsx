@@ -1,8 +1,8 @@
 import Image from "next/image";
 // import Link from "next/link";
 // import ThemeToggle from "../src/components/ThemeToggle";
-import Navbar from "../src/components/Navbar";
-import ScrollReveal from "../src/components/ScrollReveal";
+import Navbar from "../components/Navbar";
+import ScrollReveal from "../components/ScrollReveal";
 
 
 const SECTION = "min-h-screen snap-start flex items-center";

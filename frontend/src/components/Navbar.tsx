@@ -73,11 +73,10 @@ export default function Navbar() {
         {/* Brand */}
         <Link href="" className="flex items-center gap-3">
           <Image
-            src="/spc-icon.png"
+            src="/main-logo.jpg"
             alt="Sharkys Pest Control"
             width={52}
             height={52}
-            className="rounded-xl"
             style={{
                 marginLeft: "5px",
             }}

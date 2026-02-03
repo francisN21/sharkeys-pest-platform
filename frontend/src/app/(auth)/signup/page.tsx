@@ -66,7 +66,7 @@ export default function SignupPage() {
       >
         <AuthTextField
           label="Full name"
-          placeholder="Allan Sharkey"
+          placeholder="First and Last Name"
           error={errors.fullName?.message}
           {...register("fullName")}
         />

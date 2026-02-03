@@ -24,7 +24,7 @@ export default function LoginPage() {
     await login(values);
     // For now, just show success via redirect later in Phase 2.
     // You can navigate to /account once that page uses /auth/me.
-    // window.location.href = "/account";
+    window.location.href = "/account";
   }
 
   return (
