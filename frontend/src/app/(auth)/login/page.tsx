@@ -47,8 +47,8 @@ export default function LoginPage() {
         onSubmit={handleSubmit(async (v) => {
           try {
             await onSubmit(v);
-          } catch (error) {
-            console.log(error);
+          } catch (e: any) {
+            setServerError(e?.message || "Login failed");
           }
         })}
       >

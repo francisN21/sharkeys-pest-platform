@@ -59,14 +59,14 @@ export default function SignupPage() {
         onSubmit={handleSubmit(async (v) => {
           try {
             await onSubmit(v);
-          } catch (e) {
-            console.log(e);
+          } catch (e: any) {
+            setServerError(e?.message || "Signup failed");
           }
         })}
       >
         <AuthTextField
           label="Full name"
-          placeholder="First and Last Name"
+          placeholder="John Doe"
           error={errors.fullName?.message}
           {...register("fullName")}
         />
