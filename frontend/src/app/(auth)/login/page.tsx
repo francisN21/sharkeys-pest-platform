@@ -1,5 +1,5 @@
 "use client";
-
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -19,13 +19,22 @@ export default function LoginPage() {
     resolver: zodResolver(loginSchema),
   });
 
-  async function onSubmit(values: LoginValues) {
-    setServerError(null);
+const router = useRouter();
+
+async function onSubmit(values: LoginValues) {
+  setServerError(null);
+
+  try {
     await login(values);
-    // For now, just show success via redirect later in Phase 2.
-    // You can navigate to /account once that page uses /auth/me.
-    window.location.href = "/account";
+    router.push("/account");
+  } catch (e: unknown) {
+    if (e instanceof Error) {
+      setServerError(e.message);
+    } else {
+      setServerError("Login failed");
+    }
   }
+}
 
   return (
     <div className="space-y-5">
@@ -47,8 +56,12 @@ export default function LoginPage() {
         onSubmit={handleSubmit(async (v) => {
           try {
             await onSubmit(v);
-          } catch (e: any) {
-            setServerError(e?.message || "Login failed");
+          } catch (e: unknown) {
+            if(e instanceof Error){
+              setServerError(e.message);
+            } else {
+              setServerError("Signup failed")
+            }
           }
         })}
       >

@@ -71,7 +71,7 @@ export default function Navbar() {
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between px4 py-3">
         {/* Brand */}
-        <Link href="" className="flex items-center gap-3">
+        <Link href="/" className="flex items-center gap-3">
           <Image
             src="/main-logo.jpg"
             alt="Sharkys Pest Control"

@@ -32,7 +32,7 @@ export default function HomePage() {
       <Navbar />
 
       {/* Hero */}
-      <section id="spc" className={`${SECTION} scroll-mt-24 md:scroll-mt-28`} style={{ borderColor: "rgb(var(--border))" }} >
+      <section id="home" className={`${SECTION} scroll-mt-24 md:scroll-mt-28`} style={{ borderColor: "rgb(var(--border))" }} >
         <div className={`${CONTAINER} grid gap-10 md:grid-cols-2 md:items-center`}>
           <ScrollReveal>
             <div className="space-y-5">

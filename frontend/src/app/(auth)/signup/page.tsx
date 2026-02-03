@@ -59,8 +59,12 @@ export default function SignupPage() {
         onSubmit={handleSubmit(async (v) => {
           try {
             await onSubmit(v);
-          } catch (e: any) {
-            setServerError(e?.message || "Signup failed");
+          } catch (e: unknown) {
+            if(e instanceof Error){
+              setServerError(e.message);
+            } else {
+              setServerError("Signup failed")
+            }
           }
         })}
       >
