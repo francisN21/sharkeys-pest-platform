@@ -1,35 +1,63 @@
 import type { LoginValues, SignupValues } from "../validators/auth";
 
+type ApiErrorShape = { message?: string; error?: string; ok?: boolean };
+
+type SignupResponse = {
+  ok: true;
+  user: {
+    id: string;
+    email: string;
+    email_verified_at: string | null;
+    created_at: string;
+  };
+  session?: { expiresAt: string };
+};
+
+type LoginResponse = SignupResponse;
+
+type MeResponse = SignupResponse;
+
+type LogoutResponse = { ok: true } | { ok: true; message?: string };
+
+function getErrorMessage(data: unknown, status: number) {
+  const d = data as ApiErrorShape | null;
+  return d?.message || d?.error || `Request failed (${status})`;
+}
+
 async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     ...init,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(init?.headers || {}),
     },
-    credentials: "include", // IMPORTANT: cookie session
   });
 
-  const data = await res.json().catch(() => ({}));
+  // Some endpoints may return empty body
+  const text = await res.text();
+  const data = text ? (JSON.parse(text) as unknown) : {};
 
   if (!res.ok) {
-    const msg = (data && (data.message || data.error)) || `Request failed (${res.status})`;
-    throw new Error(msg);
+    throw new Error(getErrorMessage(data, res.status));
   }
 
   return data as T;
 }
 
+/**
+ * Signup:
+ * Keep payload flexible—backend can ignore unknown fields.
+ * (Later I'll expand DB schema to persist phone/address/type.)
+ */
 export function signup(payload: SignupValues) {
-  // adapt to your backend expected keys if needed
-  return jsonFetch("/api/auth/signup", {
+  return jsonFetch<SignupResponse>("/api/auth/signup", {
     method: "POST",
     body: JSON.stringify({
       fullName: payload.fullName,
       email: payload.email,
       phone: payload.phone,
       password: payload.password,
-      // optional fields for later:
       accountType: payload.accountType,
       address: payload.address,
     }),
@@ -37,16 +65,17 @@ export function signup(payload: SignupValues) {
 }
 
 export function login(payload: LoginValues) {
-  return jsonFetch("/api/auth/login", {
+  return jsonFetch<LoginResponse>("/api/auth/login", {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
+// Your backend route is POST /auth/logout (so proxy is /api/auth/logout)
 export function logout() {
-  return jsonFetch("/api/auth/logout", { method: "POST" });
+  return jsonFetch<LogoutResponse>("/api/auth/logout", { method: "POST" });
 }
 
 export function me() {
-  return jsonFetch("/api/auth/me", { method: "GET" });
+  return jsonFetch<MeResponse>("/api/auth/me", { method: "GET" });
 }
