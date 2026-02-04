@@ -6,6 +6,7 @@ import { me as apiMe, logout as apiLogout } from "../lib/api/auth";
 export type AuthUser = {
   id: string;
   email: string;
+  full_name: string | null;
   email_verified_at: string | null;
   created_at: string;
 };
@@ -33,7 +34,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     try {
       const data = (await apiMe()) as MeResponse;
+      
       setUser(data.user ?? null);
+      console.log(data)
     } catch {
       setUser(null);
     } finally {

@@ -6,6 +6,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import ThemeToggle from "../components/ThemeToggle";
 import { useAuth } from "./AuthProvider";
+// const { user, loading, logout } = useAuth;
+
+// const isAuthed = !!user;
+
+// const displayName = useMemo(() => {
+//   if (!user) return "Account";
+//   const name = user.full_name?.trim();
+//   if (name) return name;
+//   // fallback to email prefix if no name stored
+//   const emailPrefix = user.email?.split("@")[0]?.trim();
+//   return emailPrefix || "Account";
+// }, [user]);
 
 type NavItem = { label: string; href: string };
 
@@ -23,6 +35,8 @@ function pickAvatar(seed: string) {
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
   return AVATARS[h % AVATARS.length];
 }
+
+
 
 export default function Navbar() {
   const router = useRouter();
