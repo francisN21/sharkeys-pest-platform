@@ -10,6 +10,12 @@ export type AuthUser = {
   created_at: string;
 };
 
+type MeResponse = {
+  ok: boolean;
+  user?: AuthUser;
+  session?: { expiresAt: string };
+};
+
 type AuthContextValue = {
   user: AuthUser | null;
   loading: boolean;
@@ -24,10 +30,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
+    setLoading(true);
     try {
-      const data = await apiMe();
-      // backend returns { ok, user, session }
-      setUser((data as any)?.user ?? null);
+      const data = (await apiMe()) as MeResponse;
+      setUser(data.user ?? null);
     } catch {
       setUser(null);
     } finally {
@@ -36,7 +42,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    // even if the request fails, treat it as logged out
     try {
       await apiLogout();
     } catch {
