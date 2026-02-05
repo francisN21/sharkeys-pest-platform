@@ -2,14 +2,34 @@ import { z } from "zod";
 
 export const signupSchema = z
   .object({
-    fullName: z.string().min(2, "Full name is required"),
+    firstName: z
+      .string()
+      .min(2, "First name is required")
+      .max(50, "First name is too long"),
+
+    lastName: z
+      .string()
+      .min(2, "Last name is required")
+      .max(50, "Last name is too long"),
+
     email: z.string().email("Enter a valid email"),
-    phone: z.string().min(7, "Enter a valid phone number"),
-    password: z.string().min(8, "Password must be at least 8 characters"),
+
+    phone: z
+      .string()
+      .min(7, "Enter a valid phone number")
+      .max(20, "Phone number is too long"),
+
+    password: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .max(128, "Password is too long"),
+
     confirmPassword: z.string().min(8, "Confirm your password"),
-    // optional for later — UI now, not required
+
+    // Optional (used later in booking/onboarding)
     accountType: z.enum(["residential", "business"]).optional(),
-    address: z.string().optional(),
+    address: z.string().min(5).optional(),
+
     agree: z.boolean().optional(),
   })
   .refine((d) => d.password === d.confirmPassword, {

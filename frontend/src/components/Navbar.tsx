@@ -6,19 +6,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import ThemeToggle from "../components/ThemeToggle";
 import { useAuth } from "./AuthProvider";
-// const { user, loading, logout } = useAuth;
-
-// const isAuthed = !!user;
-
-// const displayName = useMemo(() => {
-//   if (!user) return "Account";
-//   const name = user.full_name?.trim();
-//   if (name) return name;
-//   // fallback to email prefix if no name stored
-//   const emailPrefix = user.email?.split("@")[0]?.trim();
-//   return emailPrefix || "Account";
-// }, [user]);
-
 type NavItem = { label: string; href: string };
 
 const NAV: NavItem[] = [
@@ -28,120 +15,119 @@ const NAV: NavItem[] = [
   { label: "Contact", href: "#contact" },
 ];
 
-const AVATARS = ["/avatars/a1.svg", "/avatars/a2.svg", "/avatars/a3.svg", "/avatars/a4.svg", "/avatars/a5.svg"];
-
-function pickAvatar(seed: string) {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  return AVATARS[h % AVATARS.length];
+function getInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const a = parts[0]?.[0] ?? "";
+  const b = parts[1]?.[0] ?? "";
+  return (a + b).toUpperCase() || "U";
 }
 
-
+function displayName(user: { first_name?: string | null; last_name?: string | null; email: string }) {
+  const first = (user.first_name || "").trim();
+  const last = (user.last_name || "").trim();
+  const full = `${first} ${last}`.trim();
+  return full || user.email;
+}
 
 export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
+
   const { user, loading, logout } = useAuth();
 
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
 
-  const mobilePanelRef = useRef<HTMLDivElement | null>(null);
-  const mobileToggleRef = useRef<HTMLButtonElement | null>(null);
-
-  const acctPanelRef = useRef<HTMLDivElement | null>(null);
-  const acctToggleRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const accountRef = useRef<HTMLDivElement | null>(null);
 
   const isAuthed = !!user;
+  const name = useMemo(() => (user ? displayName(user) : ""), [user]);
+  const initials = useMemo(() => (name ? getInitials(name) : "U"), [name]);
 
-  const avatarSrc = useMemo(() => {
-    if (!user) return AVATARS[0];
-    return pickAvatar(user.email || user.id);
-  }, [user]);
-
-  // Close menus on route change
+  // Close dropdowns when navigating
   useEffect(() => {
-    setMobileOpen(false);
+    setMenuOpen(false);
     setAccountOpen(false);
   }, [pathname]);
 
-  // Smooth scroll to anchor
-  function scrollToAnchor(href: string) {
-    if (!href.startsWith("#")) return;
-    const el = document.querySelector(href);
-    el?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
-  // Outside click handling for both menus
+  // Close on outside click
   useEffect(() => {
-    function onPointerDown(e: PointerEvent) {
-      const t = e.target as Node | null;
-      if (!t) return;
+    function onDown(e: MouseEvent) {
+      const t = e.target as Node;
 
-      // Mobile menu
-      if (mobileOpen) {
-        const panel = mobilePanelRef.current;
-        const toggle = mobileToggleRef.current;
-        const clickInsidePanel = panel?.contains(t);
-        const clickOnToggle = toggle?.contains(t);
-        if (!clickInsidePanel && !clickOnToggle) setMobileOpen(false);
+      if (menuOpen && menuRef.current && !menuRef.current.contains(t)) {
+        setMenuOpen(false);
       }
-
-      // Account dropdown
-      if (accountOpen) {
-        const panel = acctPanelRef.current;
-        const toggle = acctToggleRef.current;
-        const clickInsidePanel = panel?.contains(t);
-        const clickOnToggle = toggle?.contains(t);
-        if (!clickInsidePanel && !clickOnToggle) setAccountOpen(false);
+      if (accountOpen && accountRef.current && !accountRef.current.contains(t)) {
+        setAccountOpen(false);
       }
     }
 
-    window.addEventListener("pointerdown", onPointerDown);
-    return () => window.removeEventListener("pointerdown", onPointerDown);
-  }, [mobileOpen, accountOpen]);
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [menuOpen, accountOpen]);
 
-  // ESC to close menus
+  // ESC to close
   useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key !== "Escape") return;
-      setMobileOpen(false);
-      setAccountOpen(false);
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setMenuOpen(false);
+        setAccountOpen(false);
+      }
     }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  // Lock body scroll only for mobile menu
+  // Lock body scroll when mobile menu open
   useEffect(() => {
-    if (!mobileOpen) return;
+    if (!menuOpen) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = prev;
     };
-  }, [mobileOpen]);
+  }, [menuOpen]);
 
-  async function handleLogout() {
+  function onNavClick(href: string) {
+    setMenuOpen(false);
+
+    if (href.startsWith("#")) {
+      const el = document.querySelector(href);
+      el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  async function onLogout() {
+    setAccountOpen(false);
+    setMenuOpen(false);
     try {
       await logout();
     } finally {
-      setAccountOpen(false);
-      setMobileOpen(false);
-      router.push("/");
-      router.refresh();
+      router.push("/login");
     }
   }
 
   return (
     <header
       className="sticky top-0 z-50 border-b backdrop-blur"
-      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.85)" }}
+      style={{
+        borderColor: "rgb(var(--border))",
+        background: "rgba(var(--bg), 0.85)",
+      }}
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         {/* Brand */}
         <Link href="/" className="flex items-center gap-3">
-          <Image src="/main-logo.jpg" alt="Sharkys Pest Control" width={52} height={52} className="rounded-xl" priority />
+          <Image
+            src="/main-logo.jpg"
+            alt="Sharkys Pest Control"
+            width={52}
+            height={52}
+            priority
+            className="rounded-lg"
+          />
           <div className="leading-tight">
             <div className="text-base font-semibold">Sharkys Pest Control</div>
             <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
@@ -160,7 +146,7 @@ export default function Navbar() {
               style={{ color: "rgb(var(--muted))" }}
               onClick={(e) => {
                 e.preventDefault();
-                scrollToAnchor(n.href);
+                onNavClick(n.href);
               }}
             >
               {n.label}
@@ -170,107 +156,120 @@ export default function Navbar() {
 
         {/* Right actions */}
         <div className="flex items-center gap-3">
-          <ThemeToggle />
+          {/* Desktop theme toggle */}
+          <div className="hidden md:block">
+            <ThemeToggle />
+          </div>
 
-          {/* Desktop actions */}
+          {/* Desktop auth/actions */}
           <div className="hidden items-center gap-3 md:flex">
-            {/* KEEP Book a Service always */}
+            {/* Book a Service ALWAYS */}
             <Link
               href="/book"
               className="rounded-xl px-4 py-2 text-sm font-semibold hover:opacity-90"
-              style={{ background: "rgb(var(--primary))", color: "rgb(var(--primary-fg))" }}
+              style={{
+                background: "rgb(var(--primary))",
+                color: "rgb(var(--primary-fg))",
+              }}
             >
               Book a Service
             </Link>
 
-            {loading ? null : isAuthed ? (
-              <div className="relative">
+            {!loading && !isAuthed ? (
+              <>
+                <Link
+                  href="/login"
+                  className="rounded-xl px-3 py-2 text-sm font-medium hover:opacity-90"
+                  style={{ color: "rgb(var(--muted))" }}
+                >
+                  Sign in
+                </Link>
+              </>
+            ) : null}
+
+            {!loading && isAuthed ? (
+              <div className="relative" ref={accountRef}>
                 <button
-                  ref={acctToggleRef}
                   type="button"
-                  className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
-                  style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))", color: "rgb(var(--fg))" }}
+                  onClick={() => setAccountOpen((v) => !v)}
+                  className="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
+                  style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
                   aria-haspopup="menu"
                   aria-expanded={accountOpen}
-                  onClick={() => setAccountOpen((v) => !v)}
                 >
-                  <span className="inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border">
-                    <Image src={avatarSrc} alt="" className="h-full w-full object-cover" />
+                  <span
+                    className="grid h-7 w-7 place-items-center rounded-full text-xs font-bold"
+                    style={{ background: "rgba(var(--fg), 0.12)" }}
+                    aria-hidden="true"
+                  >
+                    {initials}
                   </span>
-                  <span className="hidden lg:inline">Account</span>
+                  <span className="max-w-[160px] truncate">{name}</span>
+                  <span className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                    ▾
+                  </span>
                 </button>
 
-                {accountOpen && (
+                {accountOpen ? (
                   <div
-                    ref={acctPanelRef}
-                    className="absolute right-0 mt-2 w-48 rounded-2xl border p-2 shadow-sm"
+                    className="absolute right-0 mt-2 w-48 overflow-hidden rounded-2xl border shadow-sm"
                     style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
                     role="menu"
                   >
-                    <Link
-                      href="/account"
-                      className="block rounded-xl px-3 py-2 text-sm font-semibold hover:opacity-90"
+                    <button
+                      className="w-full px-4 py-3 text-left text-sm font-semibold hover:opacity-90"
                       style={{ color: "rgb(var(--fg))" }}
-                      onClick={() => setAccountOpen(false)}
+                      onClick={() => {
+                        setAccountOpen(false);
+                        router.push("/account");
+                      }}
                       role="menuitem"
                     >
                       Account
-                    </Link>
-
+                    </button>
                     <button
-                      type="button"
-                      className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold hover:opacity-90"
+                      className="w-full px-4 py-3 text-left text-sm font-semibold hover:opacity-90"
                       style={{ color: "rgb(var(--fg))" }}
-                      onClick={handleLogout}
+                      onClick={onLogout}
                       role="menuitem"
                     >
                       Logout
                     </button>
                   </div>
-                )}
+                ) : null}
               </div>
-            ) : (
-              <Link
-                href="/login"
-                className="rounded-xl px-3 py-2 text-sm font-medium hover:opacity-90"
-                style={{ color: "rgb(var(--muted))" }}
-              >
-                Sign in
-              </Link>
-            )}
+            ) : null}
           </div>
 
           {/* Hamburger (mobile) */}
           <button
-            ref={mobileToggleRef}
             type="button"
             className="md:hidden rounded-xl border p-2 hover:opacity-90"
             style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-            aria-label={mobileOpen ? "Close menu" : "Open menu"}
-            aria-expanded={mobileOpen}
-            aria-controls="mobile-menu"
-            onClick={() => setMobileOpen((v) => !v)}
+            aria-label="Open menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((v) => !v)}
           >
             <span className="sr-only">Menu</span>
             <div className="relative h-5 w-5">
               <span
                 className={[
                   "absolute left-0 top-[4px] h-[2px] w-5 transition-transform",
-                  mobileOpen ? "translate-y-[6px] rotate-45" : "",
+                  menuOpen ? "translate-y-[6px] rotate-45" : "",
                 ].join(" ")}
                 style={{ background: "rgb(var(--fg))" }}
               />
               <span
                 className={[
                   "absolute left-0 top-[10px] h-[2px] w-5 transition-opacity",
-                  mobileOpen ? "opacity-0" : "opacity-100",
+                  menuOpen ? "opacity-0" : "opacity-100",
                 ].join(" ")}
                 style={{ background: "rgb(var(--fg))" }}
               />
               <span
                 className={[
                   "absolute left-0 top-[16px] h-[2px] w-5 transition-transform",
-                  mobileOpen ? "translate-y-[-6px] -rotate-45" : "",
+                  menuOpen ? "translate-y-[-6px] -rotate-45" : "",
                 ].join(" ")}
                 style={{ background: "rgb(var(--fg))" }}
               />
@@ -280,13 +279,20 @@ export default function Navbar() {
       </div>
 
       {/* Mobile dropdown */}
-      {mobileOpen && (
+      {menuOpen ? (
         <div
-          id="mobile-menu"
           className="md:hidden border-t"
           style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.95)" }}
         >
-          <div ref={mobilePanelRef} className="mx-auto max-w-6xl px-4 py-4">
+          <div ref={menuRef} className="mx-auto max-w-6xl px-4 py-4 space-y-4">
+            {/* Theme toggle inside mobile panel */}
+            <div className="flex items-center justify-between rounded-xl border p-3"
+              style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+            >
+              <div className="text-sm font-semibold">Theme</div>
+              <ThemeToggle />
+            </div>
+
             <div className="grid gap-2">
               {NAV.map((n) => (
                 <a
@@ -296,8 +302,7 @@ export default function Navbar() {
                   style={{ background: "rgb(var(--card))", color: "rgb(var(--fg))" }}
                   onClick={(e) => {
                     e.preventDefault();
-                    setMobileOpen(false);
-                    scrollToAnchor(n.href);
+                    onNavClick(n.href);
                   }}
                 >
                   {n.label}
@@ -305,51 +310,76 @@ export default function Navbar() {
               ))}
             </div>
 
-            <div className="mt-4 grid gap-2">
-              {/* Keep Book a Service always */}
-              <Link
-                href="/book"
-                className="rounded-xl px-3 py-3 text-sm font-semibold hover:opacity-90"
-                style={{ background: "rgb(var(--primary))", color: "rgb(var(--primary-fg))" }}
-                onClick={() => setMobileOpen(false)}
-              >
-                Book a Service
-              </Link>
+            {/* Book a Service ALWAYS */}
+            <Link
+              href="/book"
+              className="block rounded-xl px-3 py-3 text-center text-sm font-semibold hover:opacity-90"
+              style={{
+                background: "rgb(var(--primary))",
+                color: "rgb(var(--primary-fg))",
+              }}
+              onClick={() => setMenuOpen(false)}
+            >
+              Book a Service
+            </Link>
 
-              {loading ? null : isAuthed ? (
-                <>
-                  <Link
-                    href="/account"
-                    className="rounded-xl border px-3 py-3 text-sm font-semibold hover:opacity-90"
-                    style={{ borderColor: "rgb(var(--border))", color: "rgb(var(--fg))" }}
-                    onClick={() => setMobileOpen(false)}
-                  >
-                    Account
-                  </Link>
-
-                  <button
-                    type="button"
-                    className="rounded-xl border px-3 py-3 text-sm font-semibold hover:opacity-90"
-                    style={{ borderColor: "rgb(var(--border))", color: "rgb(var(--fg))" }}
-                    onClick={handleLogout}
-                  >
-                    Logout
-                  </button>
-                </>
-              ) : (
+            {!loading && !isAuthed ? (
+              <div className="grid gap-2">
                 <Link
                   href="/login"
-                  className="rounded-xl border px-3 py-3 text-sm font-semibold hover:opacity-90"
+                  className="rounded-xl border px-3 py-3 text-center text-sm font-semibold hover:opacity-90"
                   style={{ borderColor: "rgb(var(--border))", color: "rgb(var(--fg))" }}
-                  onClick={() => setMobileOpen(false)}
+                  onClick={() => setMenuOpen(false)}
                 >
                   Sign in
                 </Link>
-              )}
-            </div>
+
+                <Link
+                  href="/signup"
+                  className="rounded-xl border px-3 py-3 text-center text-sm font-semibold hover:opacity-90"
+                  style={{ borderColor: "rgb(var(--border))", color: "rgb(var(--fg))" }}
+                  onClick={() => setMenuOpen(false)}
+                >
+                  Sign up
+                </Link>
+              </div>
+            ) : null}
+
+            {!loading && isAuthed ? (
+              <div className="grid gap-2">
+                <div
+                  className="rounded-xl border p-3"
+                  style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                >
+                  <div className="text-sm font-semibold truncate">{name}</div>
+                  <div className="text-xs mt-1" style={{ color: "rgb(var(--muted))" }}>
+                    Signed in
+                  </div>
+                </div>
+
+                <button
+                  className="rounded-xl border px-3 py-3 text-sm font-semibold hover:opacity-90"
+                  style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    router.push("/account");
+                  }}
+                >
+                  Account
+                </button>
+
+                <button
+                  className="rounded-xl border px-3 py-3 text-sm font-semibold hover:opacity-90"
+                  style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                  onClick={onLogout}
+                >
+                  Logout
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
-      )}
+      ) : null}
     </header>
   );
 }

@@ -28,7 +28,6 @@ export default function SignupPage() {
     setServerError(null);
     setOkMsg(null);
 
-    // If "agree" becomes required later, enforce here or in schema.
     await signup(values);
     setOkMsg("Account created! You’re now signed in.");
   }
@@ -42,38 +41,43 @@ export default function SignupPage() {
         </p>
       </div>
 
-      {serverError ? (
-        <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(239 68 68)" }}>
+      {serverError && (
+        <div className="rounded-xl border p-3 text-sm border-red-500">
           {serverError}
         </div>
-      ) : null}
+      )}
 
-      {okMsg ? (
-        <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(34 197 94)" }}>
+      {okMsg && (
+        <div className="rounded-xl border p-3 text-sm border-green-500">
           {okMsg}
         </div>
-      ) : null}
+      )}
 
       <form
         className="space-y-4"
         onSubmit={handleSubmit(async (v) => {
           try {
             await onSubmit(v);
-          } catch (e: unknown) {
-            if(e instanceof Error){
-              setServerError(e.message);
-            } else {
-              setServerError("Signup failed")
-            }
+          } catch (e) {
+            setServerError(e instanceof Error ? e.message : "Signup failed");
           }
         })}
       >
-        <AuthTextField
-          label="Full name"
-          placeholder="John Doe"
-          error={errors.fullName?.message}
-          {...register("fullName")}
-        />
+        {/* First + Last */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <AuthTextField
+            label="First name"
+            placeholder="Juan"
+            error={errors.firstName?.message}
+            {...register("firstName")}
+          />
+          <AuthTextField
+            label="Last name"
+            placeholder="Dela Cruz"
+            error={errors.lastName?.message}
+            {...register("lastName")}
+          />
+        </div>
 
         <AuthTextField
           label="Email"
@@ -90,13 +94,11 @@ export default function SignupPage() {
           {...register("phone")}
         />
 
-        {/* optional fields now, not required */}
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <label className="text-sm font-semibold">Account type (optional)</label>
             <select
               className="w-full rounded-xl border px-3 py-2 text-sm"
-              style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
               {...register("accountType")}
             >
               <option value="residential">Residential</option>
@@ -129,7 +131,7 @@ export default function SignupPage() {
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" className="mt-1" {...register("agree")} />
           <span style={{ color: "rgb(var(--muted))" }}>
-            I agree to the terms (optional for now)
+            I agree to the terms (optional)
           </span>
         </label>
 
@@ -144,7 +146,7 @@ export default function SignupPage() {
 
       <p className="text-sm text-center" style={{ color: "rgb(var(--muted))" }}>
         Already have an account?{" "}
-        <Link className="font-semibold hover:underline" href="/login" style={{ color: "rgb(var(--fg))" }}>
+        <Link href="/login" className="font-semibold hover:underline">
           Sign in
         </Link>
       </p>

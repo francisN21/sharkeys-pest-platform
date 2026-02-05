@@ -22,6 +22,21 @@ html[data-theme="dark"] {
   --primary-fg: 2 6 23; /* slate-950 */
 }
 
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-up {
+  animation: fadeUp 260ms ease-out both;
+}
+
 /* System preference default (only when no user choice exists) */
 @media (prefers-color-scheme: dark) {
   html:not([data-theme]) {
@@ -44,3 +59,4 @@ body {
 html, body {
   height: 100%;
 }
+
