@@ -58,26 +58,26 @@ Accessible to everyone (no authentication).
 
 ### Primary Auth
 
-- [ ] Connect frontend to `auth_module` backend
-- [ ] Verify cookie-based auth works cross-origin
+- [x] Connect frontend to `auth_module` backend
+- [x] Verify cookie-based auth works cross-origin
 
 ### Customer Account Creation
 Used for scheduling and managing services.
 
-- [ ] Signup page
-- [ ] Login page
-- [ ] Logout
-- [ ] Session persistence (`/auth/me`)
-- [ ] Protected routes (customer dashboard)
+- [x] Signup page
+- [x] Login page
+- [x] Logout
+- [x] Session persistence (`/auth/me`)
+- [x] Protected routes (customer dashboard)
 
 ### Customer Profile Data
 Collected during signup or onboarding:
 
-- [ ] Full name
-- [ ] Email
-- [ ] Phone number
-- [ ] Address
-- [ ] Residential or Business account type
+- [x] Full name
+- [x] Email
+- [x] Phone number
+- [x] Address
+- [x] Residential or Business account type
 
 ---
 
