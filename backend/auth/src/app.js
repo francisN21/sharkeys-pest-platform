@@ -12,6 +12,13 @@ const { notFound } = require("../middleware/notFound");
 const { errorHandler } = require("../middleware/errorHandler");
 const { pool } = require("./db");
 
+// Service routes pipeline
+const servicesRouter = require("../routes/services");
+const bookingsRouter = require("../routes/bookings");
+const bookingsMeRouter = require("../routes/bookingsMe");
+const adminBookingsRouter = require("../routes/adminBookings");
+const workerBookingsRouter = require("../routes/workerBookings");
+
 
 const app = express();
 
@@ -59,6 +66,12 @@ app.get("/health/db", async (req, res, next) => {
 });
 
 app.use("/auth", authRouter);
+// Service routes pipeline
+app.use("/services", servicesRouter);
+app.use("/bookings", bookingsRouter);
+app.use("/bookings", bookingsMeRouter);
+app.use("/admin/bookings", adminBookingsRouter);
+app.use("/worker/bookings", workerBookingsRouter);
 
 app.use(notFound);
 app.use(errorHandler);
