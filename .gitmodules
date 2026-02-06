@@ -1,3 +1,0 @@
-[submodule "backend/auth"]
-	path = backend/auth
-	url = git@github.com:francisN21/auth_module.git
