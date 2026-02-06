@@ -1,6 +1,0 @@
-node_modules/
-.env
-log/*.json
-log/suspiciousInput*.txt
-log/suspiciousInput.txt
-!log/*.test.js
