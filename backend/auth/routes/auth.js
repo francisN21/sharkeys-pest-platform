@@ -24,19 +24,53 @@ const loginSchema = z.object({
 });
 
 router.post("/signup", async (req, res, next) => {
+  const client = await pool.connect();
   try {
-    const { email, password } = signupSchema.parse(req.body);
+    const { first_name, last_name, email, phone, password, accountType, address } = req.body;
 
-    const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
+    if (!first_name || !last_name || !email || !password) {
+      return res.status(400).json({ ok: false, message: "Missing required fields" });
+    }
 
-    const userRes = await pool.query(
-      `INSERT INTO users (email, password_hash)
-       VALUES ($1, $2)
-       RETURNING id, email, email_verified_at, created_at`,
-      [email, passwordHash]
+    const normalizedEmail = String(email).trim().toLowerCase();
+
+    await client.query("BEGIN");
+
+    const existing = await client.query(`SELECT id FROM users WHERE email = $1`, [normalizedEmail]);
+    if (existing.rowCount > 0) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ ok: false, message: "Email already in use" });
+    }
+
+    const passwordHash = await argon2.hash(password);
+
+    const created = await client.query(
+      `
+      INSERT INTO users (email, password_hash, first_name, last_name, phone, account_type, address)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, public_id, email, first_name, last_name, email_verified_at, created_at
+      `,
+      [
+        normalizedEmail,
+        passwordHash,
+        first_name,
+        last_name,
+        phone || null,
+        accountType || null,
+        address || null,
+      ]
     );
 
-    const user = userRes.rows[0];
+    const user = created.rows[0];
+
+    // ✅ Default role: customer
+    await client.query(
+      `INSERT INTO user_roles (user_id, role) VALUES ($1, 'customer')
+       ON CONFLICT DO NOTHING`,
+      [user.id]
+    );
+
+    await client.query("COMMIT");
 
     const { sessionId, expiresAt } = await createSession(user.id);
 
@@ -46,17 +80,23 @@ router.post("/signup", async (req, res, next) => {
       expires: new Date(expiresAt),
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       ok: true,
-      user: { id: user.id, email: user.email, emailVerifiedAt: user.email_verified_at },
+      user: {
+        public_id: user.public_id,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        email_verified_at: user.email_verified_at,
+        created_at: user.created_at,
+      },
       session: { expiresAt },
     });
-  } catch (err) {
-    // Handle duplicate email nicely
-    if (err && err.code === "23505") {
-      return res.status(409).json({ ok: false, message: "Email already in use" });
-    }
-    next(err);
+  } catch (e) {
+    try { await client.query("ROLLBACK"); } catch {}
+    next(e);
+  } finally {
+    client.release();
   }
 });
 
