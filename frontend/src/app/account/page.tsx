@@ -1,15 +1,53 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "../../components/Navbar";
 import AccountPage from "../account/profile/page";
 import Bookingspage from "../account/bookings/page";
+import { me, logout as apiLogout, type MeResponse } from "../../lib/api/auth";
 
 type Section = "one" | "two" | "three";
 
+
 export default function HomePage() {
   const [activeSection, setActiveSection] = useState<Section>("one");
+  
+    const router = useRouter();
+    const [data, setData] = useState<MeResponse | null>(null);
+    const [err, setErr] = useState<string | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+      let alive = true;
+  
+      (async () => {
+        try {
+          const res = await me();
+          if (!alive) return;
+  
+          if (!res?.ok || !res.user) {
+            setErr("Not authenticated");
+            router.replace("/login");
+            return;
+          }
+  
+          setData(res);
+        } catch (e: unknown) {
+          if (!alive) return;
+          const msg = e instanceof Error ? e.message : "Not logged in";
+          setErr(msg);
+          router.replace("/login");
+        } finally {
+          if (alive) setLoading(false);
+        }
+      })();
+  
+      return () => {
+        alive = false;
+      };
+    }, [router]);
+  
 
   return (
     <main className="h-screen overflow-y-auto scroll-smooth md:snap-y md:snap-mandatory">
