@@ -1,4 +1,4 @@
-export default function Page1() {
+export default function Bookingspage() {
   return (
     <div>
       <h2 className="text-xl font-bold mb-2">Page 1 Content</h2>

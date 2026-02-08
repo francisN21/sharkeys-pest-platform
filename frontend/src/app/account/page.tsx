@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "../../components/Navbar";
-import Profilpage from "../account/profile/page";
-import Bookingspgae from "../account/bookings/page";
+import AccountPage from "../account/profile/page";
+import Bookingspage from "../account/bookings/page";
 
 type Section = "one" | "two" | "three";
 
@@ -36,8 +36,8 @@ export default function HomePage() {
 
                 {/* Render modular "pages" */}
                 <div className="w-full max-w-3xl bg-white rounded-xl shadow p-6">
-                    {activeSection === "one" && <Profilpage />}
-                    {activeSection === "two" && <Bookingspgae />}
+                    {activeSection === "one" && <AccountPage />}
+                    {activeSection === "two" && <Bookingspage />}
                 </div>
             </section>
     </main>
