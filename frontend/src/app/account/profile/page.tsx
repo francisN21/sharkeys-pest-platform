@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { me, logout as apiLogout, type MeResponse } from "../../../lib/api/auth";
+import { me, type MeResponse } from "../../../lib/api/auth";
 import { useRouter } from "next/navigation";
 
 type AccountUser = NonNullable<MeResponse["user"]>;
@@ -49,15 +49,7 @@ export default function AccountPage() {
     };
   }, [router]);
 
-  async function onLogout() {
-    try {
-      await apiLogout();
-    } catch {
-      // ignore
-    } finally {
-      router.push("/login");
-    }
-  }
+
 
   const user = data?.user;
 
@@ -70,15 +62,6 @@ export default function AccountPage() {
             View your profile details and manage your account.
           </p>
         </div>
-
-        <button
-          className="rounded-xl border px-4 py-2 text-sm font-semibold hover:opacity-90"
-          style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-          onClick={onLogout}
-          disabled={loading}
-        >
-          Logout
-        </button>
       </div>
 
       {err ? (
