@@ -53,3 +53,29 @@ async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
 export function getMyBookings() {
   return jsonFetch<MyBookingsResponse>("/bookings/me", { method: "GET" });
 }
+export type CreateBookingInput = {
+  servicePublicId: string;
+  startsAt: string; // ISO
+  endsAt: string;   // ISO
+  address: string;
+  notes?: string;
+};
+
+export type CreateBookingResponse = {
+  ok: boolean;
+  booking: {
+    public_id: string;
+    status: string;
+    starts_at: string;
+    ends_at: string;
+    address: string;
+    created_at: string;
+  };
+};
+
+export function createBooking(input: CreateBookingInput) {
+  return jsonFetch<CreateBookingResponse>("/bookings", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
