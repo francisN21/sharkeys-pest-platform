@@ -6,7 +6,12 @@ const router = express.Router();
 
 router.get("/me", requireAuth, async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    // ✅ requireAuth should set req.auth = { userId, expiresAt, ... }
+    const userId = req.auth?.userId;
+
+    if (!userId) {
+      return res.status(401).json({ ok: false, message: "Not authenticated" });
+    }
 
     const r = await pool.query(
       `
@@ -29,6 +34,7 @@ router.get("/me", requireAuth, async (req, res, next) => {
 
     const upcoming = [];
     const history = [];
+    console.log("This is from bookingsMe.js","AUTH:", req.auth, "USER:", req.user);
     for (const row of r.rows) {
       if (row.status === "completed" || row.status === "cancelled") history.push(row);
       else upcoming.push(row);

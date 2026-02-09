@@ -13,7 +13,7 @@ function displayName(u: AccountUser) {
   return full || u.email;
 }
 
-export default function AccountPage() {
+export default function ProfilePage() {
   const router = useRouter();
   const [data, setData] = useState<MeResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);

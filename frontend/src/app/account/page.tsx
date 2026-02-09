@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "../../components/Navbar";
 import AccountPage from "../account/profile/page";
-import Bookingspage from "../account/bookings/page";
+import BookingsPage from "../account/bookings/page";
 import { me, type MeResponse } from "../../lib/api/auth";
 
 type Section = "one" | "two" | "three";
@@ -77,7 +77,7 @@ export default function HomePage() {
         {/* Render modular "pages" */}
         <div className="w-full max-w-3xl bg-white rounded-xl shadow p-6">
           {activeSection === "one" && <AccountPage />}
-          {activeSection === "two" && <Bookingspage />}
+          {activeSection === "two" && <BookingsPage />}
           {activeSection === "three" && (
             <div>
               <h2 className="text-xl font-bold mb-2">Template</h2>
