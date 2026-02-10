@@ -84,27 +84,29 @@ Collected during signup or onboarding:
 ## Phase 3 – Scheduling & Booking System
 
 ### Service Selection
-- [ ] Service categories:
+- [x] Service categories:
   - Rodents
   - Bees
   - Termites
   - Roaches
   - Scorpions
-- [ ] Service descriptions
-- [ ] Pricing per service (initially static)
+- [x] Service descriptions
 
 ### Date & Time Scheduling
-- [ ] Calendar UI (availability-based)
-- [ ] Select date
-- [ ] Select time slot
-- [ ] Select service type
-- [ ] Confirm address for service
+- [x] Calendar UI (availability-based)
+- [x] Select date
+- [x] Select time slot
+- [x] Select service type
+- [x] Address prefill + override
 
 ### Booking Rules
-- [ ] Block reserved time slots
-- [ ] Prevent double-booking
-- [ ] Show unavailable times to customers
-- [ ] Backend validation for conflicts
+- [x] Booking creation
+- [x] Block reserved time slots
+- [x] Prevent double-booking
+- [x] Show unavailable times to customers
+- [x] Backend validation for conflicts
+- [x] Customer side Booking cancellation
+- [x] My bookings (upcoming/history)
 
 ---
 
