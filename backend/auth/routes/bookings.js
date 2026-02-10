@@ -70,4 +70,66 @@ router.post("/", requireAuth, async (req, res, next) => {
   }
 });
 
+// Cancel my booking (customer)
+router.patch("/:publicId/cancel", requireAuth, async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const userId = req.user.id;
+    const publicId = req.params.publicId;
+
+    await client.query("BEGIN");
+
+    // Lock the booking row to prevent race conditions
+    const b = await client.query(
+      `
+      SELECT id, status
+      FROM bookings
+      WHERE public_id = $1 AND customer_user_id = $2
+      FOR UPDATE
+      `,
+      [publicId, userId]
+    );
+
+    if (b.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ ok: false, message: "Booking not found" });
+    }
+
+    const booking = b.rows[0];
+
+    // Only allow cancel if not already completed/cancelled
+    if (booking.status === "completed") {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ ok: false, message: "Completed bookings cannot be cancelled" });
+    }
+    if (booking.status === "cancelled") {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ ok: false, message: "Booking is already cancelled" });
+    }
+
+    const updated = await client.query(
+      `
+      UPDATE bookings
+      SET status = 'cancelled',
+          cancelled_at = now(),
+          updated_at = now()
+      WHERE id = $1
+      RETURNING public_id, status, cancelled_at
+      `,
+      [booking.id]
+    );
+
+    await addEvent(client, booking.id, userId, "cancelled", {});
+
+    await client.query("COMMIT");
+
+    return res.json({ ok: true, booking: updated.rows[0] });
+  } catch (e) {
+    try { await client.query("ROLLBACK"); } catch {}
+    next(e);
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;

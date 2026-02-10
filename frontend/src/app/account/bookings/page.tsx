@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { getMyBookings, type BookingCard } from "../../../lib/api/bookings";
+import { cancelBooking, getMyBookings, type BookingCard } from "../../../lib/api/bookings";
 
 function formatBookingTimeRange(startsAt: string, endsAt: string) {
   const s = new Date(startsAt);
@@ -34,7 +34,17 @@ function StatusPill({ status }: { status: BookingCard["status"] }) {
   );
 }
 
-function BookingCardUI({ b }: { b: BookingCard }) {
+function BookingCardUI({
+  b,
+  onCancel,
+  cancelling,
+}: {
+  b: BookingCard;
+  onCancel?: (publicId: string) => void;
+  cancelling?: boolean;
+}) {
+  const canCancel = b.status === "pending" || b.status === "accepted" || b.status === "assigned";
+
   return (
     <div className="rounded-2xl border p-4 space-y-2" style={{ borderColor: "rgb(var(--border))" }}>
       <div className="flex items-start justify-between gap-3">
@@ -51,8 +61,23 @@ function BookingCardUI({ b }: { b: BookingCard }) {
         <StatusPill status={b.status} />
       </div>
 
-      <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-        Booking ID: <span className="font-mono">{b.public_id}</span>
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+          Booking ID: <span className="font-mono">{b.public_id}</span>
+        </div>
+
+        {canCancel && onCancel ? (
+          <button
+            type="button"
+            className="rounded-lg border px-3 py-1 text-xs font-semibold hover:opacity-90 disabled:opacity-60"
+            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+            onClick={() => onCancel(b.public_id)}
+            disabled={!!cancelling}
+            title="Cancel booking"
+          >
+            {cancelling ? "Cancelling…" : "Cancel"}
+          </button>
+        ) : null}
       </div>
     </div>
   );
@@ -65,7 +90,33 @@ export default function BookingsPage() {
   const [upcoming, setUpcoming] = useState<BookingCard[]>([]);
   const [history, setHistory] = useState<BookingCard[]>([]);
 
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+
   const hasAny = useMemo(() => upcoming.length > 0 || history.length > 0, [upcoming.length, history.length]);
+
+  async function refresh() {
+    const res = await getMyBookings();
+    setUpcoming(res.upcoming || []);
+    setHistory(res.history || []);
+  }
+
+  async function onCancelBooking(publicId: string) {
+    const ok = confirm("Cancel this booking?");
+    if (!ok) return;
+
+    try {
+      setCancellingId(publicId);
+      setErr(null);
+
+      await cancelBooking(publicId);
+      await refresh();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to cancel booking";
+      setErr(msg);
+    } finally {
+      setCancellingId(null);
+    }
+  }
 
   useEffect(() => {
     let alive = true;
@@ -128,9 +179,7 @@ export default function BookingsPage() {
       {!loading && !hasAny ? (
         <div className="rounded-2xl border p-6 text-sm space-y-3" style={{ borderColor: "rgb(var(--border))" }}>
           <div className="font-semibold">No bookings yet</div>
-          <div style={{ color: "rgb(var(--muted))" }}>
-            Book your first service and it’ll show up here.
-          </div>
+          <div style={{ color: "rgb(var(--muted))" }}>Book your first service and it’ll show up here.</div>
 
           <Link
             href="/book"
@@ -145,7 +194,16 @@ export default function BookingsPage() {
       {!loading && upcoming.length > 0 ? (
         <section className="space-y-3">
           <h3 className="text-base font-semibold">Upcoming</h3>
-          <div className="grid gap-3">{upcoming.map((b) => <BookingCardUI key={b.public_id} b={b} />)}</div>
+          <div className="grid gap-3">
+            {upcoming.map((b) => (
+              <BookingCardUI
+                key={b.public_id}
+                b={b}
+                onCancel={onCancelBooking}
+                cancelling={cancellingId === b.public_id}
+              />
+            ))}
+          </div>
         </section>
       ) : null}
 

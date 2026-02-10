@@ -78,4 +78,19 @@ export function createBooking(input: CreateBookingInput) {
     method: "POST",
     body: JSON.stringify(input),
   });
+};
+
+export type CancelBookingResponse = {
+  ok: boolean;
+  booking: {
+    public_id: string;
+    status: string;
+    cancelled_at: string | null;
+  };
+};
+
+export function cancelBooking(publicId: string) {
+  return jsonFetch<CancelBookingResponse>(`/bookings/${publicId}/cancel`, {
+    method: "PATCH",
+  });
 }
