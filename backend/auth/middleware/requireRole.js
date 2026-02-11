@@ -1,22 +1,24 @@
-const { pool } = require("../src/db");
+// middleware/requireRole.js
+function requireRole(...allowedRoles) {
+  return (req, res, next) => {
+    // requireAuth must run first and set req.user
+    const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
+    const primary = req.user?.user_role;
 
-function requireRole(...roles) {
-  return async (req, res, next) => {
-    try {
-      const userId = req.user?.id;
-      if (!userId) return res.status(401).json({ ok: false, message: "Not authenticated" });
+    // allow if primary matches OR any role matches
+    const ok =
+      (primary && allowedRoles.includes(primary)) ||
+      roles.some((r) => allowedRoles.includes(r));
 
-      const r = await pool.query(`SELECT role FROM user_roles WHERE user_id = $1`, [userId]);
-      const userRoles = new Set(r.rows.map((x) => x.role));
-
-      const allowed = roles.some((role) => userRoles.has(role));
-      if (!allowed) return res.status(403).json({ ok: false, message: "Forbidden" });
-
-      req.user.roles = Array.from(userRoles);
-      next();
-    } catch (e) {
-      next(e);
+    if (!req.user?.id) {
+      return res.status(401).json({ ok: false, message: "Not authenticated" });
     }
+
+    if (!ok) {
+      return res.status(403).json({ ok: false, message: "Forbidden" });
+    }
+
+    return next();
   };
 }
 

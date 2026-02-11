@@ -11,7 +11,15 @@ import AdminJobHistoryPage from "./admin/jobhistory/page";
 import AdminCustomersPage from "../account/admin/customers/page";
 import { me, type MeResponse } from "../../lib/api/auth";
 
-type Role = "customer" | "technician" | "admin";
+type AppRole = "customer" | "technician" | "admin";
+type ApiUserRole = "customer" | "worker" | "admin";
+
+type AuthedUser = MeResponse["user"] & {
+  // your /auth/me returns these now
+  user_role?: ApiUserRole;
+  roles?: ApiUserRole[]; // could be string[] in your type; we treat it safely
+};
+
 type TabKey =
   | "account"
   | "bookings"
@@ -22,11 +30,18 @@ type TabKey =
 
 type Tab = { key: TabKey; label: string };
 
-function normalizeRole(user: any): Role {
-  // adjust here if your backend uses a different field name
-  const r = (user?.role || user?.user_type || "customer") as string;
-  if (r === "admin") return "admin";
-  if (r === "technician" || r === "worker") return "technician";
+function normalizeRole(user: AuthedUser | null): AppRole {
+  // Prefer primary role
+  const primary = user?.user_role;
+
+  if (primary === "admin") return "admin";
+  if (primary === "worker") return "technician";
+  if (primary === "customer") return "customer";
+
+  // Fallback to roles array (just in case)
+  const roles = user?.roles ?? [];
+  if (roles.includes("admin")) return "admin";
+  if (roles.includes("worker")) return "technician";
   return "customer";
 }
 
@@ -34,7 +49,7 @@ export default function AccountShellPage() {
   const router = useRouter();
 
   const [data, setData] = useState<MeResponse | null>(null);
-  const [role, setRole] = useState<Role>("customer");
+  const [role, setRole] = useState<AppRole>("customer");
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -45,7 +60,7 @@ export default function AccountShellPage() {
     ];
 
     // technician portal tab (technician + admin)
-    if (role === "technician" || role === "admin") {
+    if (role === "technician") {
       base.push({ key: "tech", label: "Technician" });
     }
 
@@ -79,16 +94,9 @@ export default function AccountShellPage() {
 
         setData(res);
 
-        const r = normalizeRole(res.user);
+        // ✅ role gate based on user_role/roles from backend
+        const r = normalizeRole(res.user as AuthedUser);
         setRole(r);
-
-        // if current active tab is not allowed, reset to account
-        // (ex: user logs in as customer but activeTab was admin)
-        // we can do this after role set:
-        // (small delay: useMemo depends on role)
-        setTimeout(() => {
-          // no-op; active tab will be validated by rendering below
-        }, 0);
       } catch (e: unknown) {
         if (!alive) return;
         const msg = e instanceof Error ? e.message : "Not logged in";
@@ -122,7 +130,6 @@ export default function AccountShellPage() {
           </div>
         ) : null}
 
-        {/* Button group tabs */}
         <div className="inline-flex rounded-lg shadow-sm -space-x-px" role="group">
           {tabs.map((t, idx) => (
             <TabButton
@@ -158,7 +165,6 @@ export default function AccountShellPage() {
   );
 }
 
-/** reusable tab button (button-group style) */
 function TabButton({
   label,
   active,
