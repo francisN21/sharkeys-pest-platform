@@ -157,9 +157,24 @@ router.post("/login", async (req, res, next) => {
     const normalizedEmail = normalizeEmail(email);
 
     const r = await pool.query(
-      `SELECT id, public_id, email, password_hash, email_verified_at, first_name, last_name
-       FROM users
-       WHERE email = $1`,
+      `
+      SELECT
+        u.id,
+        u.public_id,
+        u.email,
+        u.password_hash,
+        u.email_verified_at,
+        u.first_name,
+        u.last_name,
+        u.phone,
+        u.account_type,
+        u.address,
+        COALESCE(array_agg(ur.role) FILTER (WHERE ur.role IS NOT NULL), '{}'::text[]) AS roles
+      FROM users u
+      LEFT JOIN user_roles ur ON ur.user_id = u.id
+      WHERE u.email = $1
+      GROUP BY u.id
+      `,
       [normalizedEmail]
     );
 
@@ -181,6 +196,10 @@ router.post("/login", async (req, res, next) => {
       expires: new Date(expiresAt),
     });
 
+    // Pick a primary role for convenience (admin > worker > customer)
+    const roles = user.roles || [];
+    const user_role = roles.includes("admin") ? "admin" : roles.includes("worker") ? "worker" : "customer";
+
     return res.status(200).json({
       ok: true,
       user: {
@@ -188,7 +207,12 @@ router.post("/login", async (req, res, next) => {
         email: user.email,
         first_name: user.first_name,
         last_name: user.last_name,
+        phone: user.phone,
+        account_type: user.account_type,
+        address: user.address,
         email_verified_at: user.email_verified_at,
+        roles,       // ['customer'] or ['admin', ...]
+        user_role,   // 'admin' | 'worker' | 'customer'
       },
       session: { expiresAt },
     });
@@ -227,9 +251,23 @@ router.get("/me", requireAuth, async (req, res, next) => {
     }
 
     const u = await pool.query(
-      `SELECT public_id, email, first_name, last_name, phone, account_type, address, email_verified_at, created_at
-       FROM users
-       WHERE id = $1`,
+      `
+      SELECT
+        u.public_id,
+        u.email,
+        u.first_name,
+        u.last_name,
+        u.phone,
+        u.account_type,
+        u.address,
+        u.email_verified_at,
+        u.created_at,
+        COALESCE(array_agg(ur.role) FILTER (WHERE ur.role IS NOT NULL), '{}'::text[]) AS roles
+      FROM users u
+      LEFT JOIN user_roles ur ON ur.user_id = u.id
+      WHERE u.id = $1
+      GROUP BY u.id
+      `,
       [userId]
     );
 
@@ -237,9 +275,17 @@ router.get("/me", requireAuth, async (req, res, next) => {
       return res.status(401).json({ ok: false, message: "Not authenticated" });
     }
 
+    const user = u.rows[0];
+    const roles = user.roles || [];
+    const user_role = roles.includes("admin") ? "admin" : roles.includes("worker") ? "worker" : "customer";
+
     return res.json({
       ok: true,
-      user: u.rows[0],
+      user: {
+        ...user,
+        roles,
+        user_role,
+      },
       session: { expiresAt: getAuthExpiresAt(req) },
     });
   } catch (err) {

@@ -1,4 +1,4 @@
-export default function CompletedJobsPage() {
+export default function AdminJobHistoryPage() {
   return (
     <div className="mx-auto max-w-xl px-4 py-12">
       <h1 className="text-2xl font-semibold">Employee</h1>
