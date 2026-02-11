@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import Navbar from "../../components/Navbar";
 import AccountPage from "./profile/page";
 import BookingsPage from "./bookings/page";
-import TechnicianPage from "./technician/page";
-import AdminJobsPage from "./admin/jobs/page";
-import AdminCompletedJobsPage from "./admin/completedjobs/page";
-import AdminCustomersPage from "./admin/customers/page"; // create this
+import TechnicianPage from "../account/technician/page";
+import AdminJobsPage from "../account/admin/jobs/page";
+import AdminJobHistoryPage from "./admin/jobhistory/page";
+import AdminCustomersPage from "../account/admin/customers/page";
 import { me, type MeResponse } from "../../lib/api/auth";
 
 type Role = "customer" | "technician" | "admin";
@@ -18,7 +18,7 @@ type TabKey =
   | "tech"
   | "admin_customers"
   | "admin_jobs"
-  | "admin_completed";
+  | "admin_jobhistory";
 
 type Tab = { key: TabKey; label: string };
 
@@ -54,7 +54,7 @@ export default function AccountShellPage() {
       base.push(
         { key: "admin_customers", label: "Customers" },
         { key: "admin_jobs", label: "Jobs" },
-        { key: "admin_completed", label: "Completed" }
+        { key: "admin_jobhistory", label: "Completed" }
       );
     }
 
@@ -149,7 +149,7 @@ export default function AccountShellPage() {
 
               {role === "admin" && activeTab === "admin_customers" && <AdminCustomersPage />}
               {role === "admin" && activeTab === "admin_jobs" && <AdminJobsPage />}
-              {role === "admin" && activeTab === "admin_completed" && <AdminCompletedJobsPage />}
+              {role === "admin" && activeTab === "admin_jobhistory" && <AdminJobHistoryPage />}
             </>
           )}
         </div>
