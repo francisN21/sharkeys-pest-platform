@@ -107,10 +107,10 @@ router.patch("/:publicId/cancel", requireAuth, requireRole("admin"), async (req,
   }
 });
 
-router.post("/:id/accept", requireAuth, requireRole("admin"), async (req, res, next) => {
+router.patch("/:publicId/accept", requireAuth, requireRole("admin"), async (req, res, next) => {
   const client = await pool.connect();
   try {
-    const bookingPublicId = req.params.id;
+    const bookingPublicId = req.params.publicId;
     const adminId = req.user.id;
 
     await client.query("BEGIN");
@@ -135,7 +135,8 @@ router.post("/:id/accept", requireAuth, requireRole("admin"), async (req, res, n
       `
       UPDATE bookings
       SET status = 'accepted',
-          accepted_at = now()
+          accepted_at = now(),
+          updated_at = now()
       WHERE id = $1
       RETURNING public_id, status, accepted_at
       `,
@@ -155,15 +156,15 @@ router.post("/:id/accept", requireAuth, requireRole("admin"), async (req, res, n
 });
 
 const assignSchema = z.object({
-  workerUserIds: z.array(z.number().int().positive()).min(1),
+  workerUserId: z.number().int().positive(),
 });
 
-router.post("/:id/assign", requireAuth, requireRole("admin"), async (req, res, next) => {
+router.patch("/:publicId/assign", requireAuth, requireRole("admin"), async (req, res, next) => {
   const client = await pool.connect();
   try {
-    const bookingPublicId = req.params.id;
+    const bookingPublicId = req.params.publicId;
     const adminId = req.user.id;
-    const { workerUserIds } = assignSchema.parse(req.body);
+    const { workerUserId } = assignSchema.parse(req.body);
 
     await client.query("BEGIN");
 
@@ -184,36 +185,38 @@ router.post("/:id/assign", requireAuth, requireRole("admin"), async (req, res, n
       return res.status(409).json({ ok: false, message: "Booking must be accepted first" });
     }
 
-    // Confirm each worker has worker role
+    // Confirm worker has worker role (DB role value is 'worker', not 'technician')
     const w = await client.query(
-      `SELECT user_id FROM user_roles WHERE role = 'worker' AND user_id = ANY($1::bigint[])`,
-      [workerUserIds]
+      `SELECT 1 FROM user_roles WHERE role = 'worker' AND user_id = $1`,
+      [workerUserId]
     );
-    const okWorkers = new Set(w.rows.map((x) => Number(x.user_id)));
-    const invalid = workerUserIds.filter((id) => !okWorkers.has(id));
-
-    if (invalid.length) {
+    if (w.rowCount === 0) {
       await client.query("ROLLBACK");
-      return res.status(400).json({ ok: false, message: `Invalid worker id(s): ${invalid.join(", ")}` });
+      return res.status(400).json({ ok: false, message: "Invalid technician (workerUserId)" });
     }
 
-    for (const workerId of workerUserIds) {
-      await client.query(
-        `
-        INSERT INTO booking_assignments (booking_id, worker_user_id, assigned_by_user_id)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (booking_id, worker_user_id) DO NOTHING
-        `,
-        [booking.id, workerId, adminId]
-      );
-    }
+    // If you're using booking_assignments (recommended), store assignment there
+    await client.query(
+      `
+      INSERT INTO booking_assignments (booking_id, worker_user_id, assigned_by_user_id)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (booking_id, worker_user_id) DO NOTHING
+      `,
+      [booking.id, workerUserId, adminId]
+    );
 
     const updated = await client.query(
-      `UPDATE bookings SET status = 'assigned' WHERE id = $1 RETURNING public_id, status`,
+      `
+      UPDATE bookings
+      SET status = 'assigned',
+          updated_at = now()
+      WHERE id = $1
+      RETURNING public_id, status
+      `,
       [booking.id]
     );
 
-    await addEvent(client, booking.id, adminId, "assigned", { workerUserIds });
+    await addEvent(client, booking.id, adminId, "assigned", { workerUserId });
 
     await client.query("COMMIT");
     res.json({ ok: true, booking: updated.rows[0] });
