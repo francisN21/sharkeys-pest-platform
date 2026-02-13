@@ -27,7 +27,7 @@ function resolveUrl(path: string) {
   return path.startsWith("http") ? path : `${API_BASE}${path}`;
 }
 
-async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
+export async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(resolveUrl(path), {
     ...init,
     headers: {

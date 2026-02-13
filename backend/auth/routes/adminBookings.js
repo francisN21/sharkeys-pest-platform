@@ -14,6 +14,99 @@ async function addEvent(client, bookingId, actorUserId, eventType, metadata = {}
   );
 }
 
+router.get("/", requireAuth, requireRole("admin"), async (req, res, next) => {
+  const status = String(req.query.status || "pending");
+
+  try {
+    const q = await pool.query(
+      `
+      SELECT
+        b.public_id,
+        b.status,
+        b.starts_at,
+        b.ends_at,
+        b.address,
+        b.created_at,
+        b.accepted_at,
+        b.completed_at,
+        b.cancelled_at,
+        s.title AS service_title,
+        b.assigned_worker_user_id,
+
+        cu.public_id AS customer_public_id,
+        cu.first_name AS customer_first_name,
+        cu.last_name AS customer_last_name,
+        cu.phone AS customer_phone,
+        cu.email AS customer_email,
+        cu.address AS customer_address,
+        cu.account_type AS customer_account_type
+      FROM bookings b
+      JOIN services s ON s.id = b.service_id
+      JOIN users cu ON cu.id = b.customer_user_id
+      WHERE b.status = $1
+      ORDER BY b.created_at DESC
+      LIMIT 200
+      `,
+      [status]
+    );
+
+    res.json({ ok: true, bookings: q.rows });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.patch("/:publicId/cancel", requireAuth, requireRole("admin"), async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const lock = await client.query(
+      `SELECT id, status FROM bookings WHERE public_id = $1 FOR UPDATE`,
+      [req.params.publicId]
+    );
+
+    if (lock.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ ok: false, message: "Booking not found" });
+    }
+
+    const b = lock.rows[0];
+
+    // already done?
+    if (b.status === "completed") {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ ok: false, message: "Completed bookings cannot be cancelled" });
+    }
+    if (b.status === "cancelled") {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ ok: false, message: "Booking is already cancelled" });
+    }
+
+    const updated = await client.query(
+      `
+      UPDATE bookings
+      SET status = 'cancelled',
+          cancelled_at = now(),
+          updated_at = now()
+      WHERE id = $1
+      RETURNING public_id, status, cancelled_at
+      `,
+      [b.id]
+    );
+
+    await addEvent(client, b.id, req.user.id, "cancelled_by_admin", {});
+    await client.query("COMMIT");
+
+    return res.json({ ok: true, booking: updated.rows[0] });
+  } catch (e) {
+    try { await client.query("ROLLBACK"); } catch {}
+    next(e);
+  } finally {
+    client.release();
+  }
+});
+
 router.post("/:id/accept", requireAuth, requireRole("admin"), async (req, res, next) => {
   const client = await pool.connect();
   try {
@@ -129,6 +222,31 @@ router.post("/:id/assign", requireAuth, requireRole("admin"), async (req, res, n
     next(e);
   } finally {
     client.release();
+  }
+});
+
+router.get("/technicians", requireAuth, requireRole("admin"), async (req, res, next) => {
+  try {
+    const r = await pool.query(
+      `
+      SELECT
+        u.id,
+        u.public_id,
+        u.first_name,
+        u.last_name,
+        u.phone,
+        u.email
+      FROM users u
+      JOIN user_roles ur ON ur.user_id = u.id
+      WHERE ur.role = 'worker'
+      ORDER BY u.last_name ASC, u.first_name ASC
+      LIMIT 200
+      `
+    );
+
+    res.json({ ok: true, technicians: r.rows });
+  } catch (e) {
+    next(e);
   }
 });
 
