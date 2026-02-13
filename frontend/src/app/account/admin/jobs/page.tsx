@@ -6,9 +6,9 @@ import {
   adminCancelBooking,
   getAdminBookings,
   type AdminBookingRow,
-  adminListTechnicians, // ✅ add this in your api file (see note below)
-  adminAssignBooking, // ✅ add this in your api file (see note below)
-  type TechnicianRow, // ✅ add this in your api file (see note below)
+  adminListTechnicians,
+  adminAssignBooking,
+  type TechnicianRow,
 } from "../../../../lib/api/adminBookings";
 
 function formatRange(startsAt: string, endsAt: string) {
@@ -26,6 +26,11 @@ function formatCreated(ts: string) {
   const d = new Date(ts);
   if (Number.isNaN(d.getTime())) return ts;
   return d.toLocaleString();
+}
+
+function formatNotes(notes: string | null) {
+  const n = (notes ?? "").trim();
+  return n.length ? n : null;
 }
 
 function formatElapsedSince(ts: string) {
@@ -289,6 +294,17 @@ export default function AdminJobsPage() {
                         Created: {formatCreated(b.created_at)} • SLA:{" "}
                         <span className="font-semibold">{formatElapsedSince(b.created_at)}</span>
                       </div>
+                      {formatNotes(b.notes) ? (
+                        <div className="mt-2 rounded-xl border p-3 text-sm"
+                            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}>
+                            <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+                            Customer Notes:
+                            </div>
+                            <div className="mt-1 whitespace-pre-wrap break-words">
+                            {b.notes}
+                            </div>
+                        </div>
+                      ) : null}
                     </div>
 
                     <span className="rounded-full border px-2 py-1 text-xs" style={{ borderColor: "rgb(var(--border))" }}>
@@ -382,6 +398,17 @@ export default function AdminJobsPage() {
                             Created: {formatCreated(b.created_at)} • SLA:{" "}
                             <span className="font-semibold">{formatElapsedSince(b.created_at)}</span>
                           </div>
+                                                {formatNotes(b.notes) ? (
+                        <div className="mt-2 rounded-xl border p-3 text-sm"
+                            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}>
+                            <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+                            Customer Notes:
+                            </div>
+                            <div className="mt-1 whitespace-pre-wrap break-words">
+                            {b.notes}
+                            </div>
+                        </div>
+                      ) : null}
                         </div>
 
                       <span className="rounded-full border px-2 py-1 text-xs" style={{ borderColor: "rgb(var(--border))" }}>

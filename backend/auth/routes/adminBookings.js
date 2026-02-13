@@ -30,6 +30,7 @@ router.get("/", requireAuth, requireRole("admin"), async (req, res, next) => {
         b.accepted_at,
         b.completed_at,
         b.cancelled_at,
+        b.notes,
         s.title AS service_title,
         b.assigned_worker_user_id,
 
