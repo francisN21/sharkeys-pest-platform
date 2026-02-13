@@ -398,7 +398,7 @@ export default function AdminJobsPage() {
                             Created: {formatCreated(b.created_at)} • SLA:{" "}
                             <span className="font-semibold">{formatElapsedSince(b.created_at)}</span>
                           </div>
-                                                {formatNotes(b.notes) ? (
+                        {formatNotes(b.notes) ? (
                         <div className="mt-2 rounded-xl border p-3 text-sm"
                             style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}>
                             <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>

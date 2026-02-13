@@ -33,21 +33,26 @@ app.use(
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 
-const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:3000";
+const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN;
+const LOCAL_ORIGIN = process.env.LOCAL_ORIGIN;
+const allowedOrigins = [
+  FRONTEND_ORIGIN,
+  LOCAL_ORIGIN,
+];
 app.use(
   cors({
-    origin: FRONTEND_ORIGIN,
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true); // allow Postman, curl, etc.
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      } else {
+        return callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
   })
 );
-
-if (process.env.NODE_ENV !== "test") {
-  app.use(
-    pinoHttp({
-      redact: ["req.headers.authorization", "req.headers.cookie"],
-    })
-  );
-}
 
 const { suspiciousInputLogger } = require("../middleware/suspiciousInputLogger");
 app.use(suspiciousInputLogger);
