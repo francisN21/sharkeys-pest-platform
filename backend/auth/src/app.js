@@ -17,6 +17,7 @@ const servicesRouter = require("../routes/services");
 const bookingsRouter = require("../routes/bookings");
 const bookingsMeRouter = require("../routes/bookingsMe");
 const adminBookingsRouter = require("../routes/adminBookings");
+const adminCustomersRouter = require("../routes/adminCustomers");
 const workerBookingsRouter = require("../routes/workerBookings");
 
 
@@ -76,6 +77,7 @@ app.use("/services", servicesRouter);
 app.use("/bookings", bookingsRouter);
 app.use("/bookings", bookingsMeRouter);
 app.use("/admin/bookings", adminBookingsRouter);
+app.use("/admin/customers", adminCustomersRouter);
 app.use("/worker/bookings", workerBookingsRouter);
 
 app.use(notFound);
