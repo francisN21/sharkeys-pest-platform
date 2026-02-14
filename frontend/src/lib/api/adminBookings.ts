@@ -26,6 +26,41 @@ export type AdminListBookingsResponse = {
   bookings: AdminBookingRow[];
 };
 
+export type AdminCompletedBookingsResponse = {
+  ok: boolean;
+  bookings: AdminBookingRow[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  filter: { year: number | null; month: number | null; day: number | null };
+  q: string;
+};
+
+export type AdminCompletedFiltersResponse =
+  | { ok: boolean; years: number[] }
+  | { ok: boolean; months: number[] }
+  | { ok: boolean; days: number[] };
+
+export function adminListCompletedBookings(params: {
+  page?: number;
+  pageSize?: number; // 30..100
+  year?: number;
+  month?: number;
+  day?: number;
+  q?: string;
+}) {
+  const qs = new URLSearchParams();
+  if (params.page) qs.set("page", String(params.page));
+  if (params.pageSize) qs.set("pageSize", String(params.pageSize));
+  if (params.year) qs.set("year", String(params.year));
+  if (params.month) qs.set("month", String(params.month));
+  if (params.day) qs.set("day", String(params.day));
+  if (params.q) qs.set("q", params.q);
+
+  return jsonFetch<AdminCompletedBookingsResponse>(`/admin/bookings/completed?${qs.toString()}`);
+}
+
 export type TechnicianRow = {
   id: number;
   public_id: string;
@@ -78,4 +113,11 @@ export async function adminAssignBooking(
       body: JSON.stringify({ workerUserId }),
     }
   );
+}
+
+export function adminGetCompletedFilters(params: { year?: number; month?: number }) {
+  const qs = new URLSearchParams();
+  if (params.year) qs.set("year", String(params.year));
+  if (params.month) qs.set("month", String(params.month));
+  return jsonFetch<AdminCompletedFiltersResponse>(`/admin/bookings/completed/filters?${qs.toString()}`);
 }
