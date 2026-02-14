@@ -112,15 +112,65 @@ Collected during signup or onboarding:
 
 ## Phase 4 – Business Owner View (Admin)
 
-- [ ] Owner dashboard
-- [ ] View all scheduled appointments
-- [ ] Filter by date / service type
-- [ ] Appointment details view
-- [ ] Status tracking (Scheduled / Completed / Cancelled)
+### Admin – Job Management
+#### Pending Jobs
+- [x] View pending bookings
+- [x] Accept booking
+- [x] Cancel booking
+- [x] SLA timer display
+- [x] Customer notes display
+
+#### Accepted Jobs
+- [x] Assign technician dropdown
+- [x] Assign booking endpoint
+- [x] Technician list from DB
+- [x] Cancel booking
+
+#### Completed Jobs
+- [x] Pagination (default 30)
+- [x] Incremental page size (+10 up to 100)
+- [x] Prev / Next paging
+- [x] Search (name, address, notes, email, service title)
+- [x] Filter by: Year, Month, Day
+- [x] Show: Technician who completed job, Completion timestamp
+- [x] Event-based completion tracking
+- [x] Stable ordering by completed_at DESC
+
+### Admin – Customer Management
+#### Completed Jobs
+- [x] Customer list page
+- [x] Role filtering (customers only)
+- [x] Show: Name, Account Type, Phone, Email, Address
+- [x] Aggregated Stats per Customer: Open bookings, Completed Bookings, Cancelled Bookings.
 
 ---
 
-## Phase 5 – Google Integration
+## Phase 5 – Technician Portal
+
+- [x] Assigned jobs tab
+- [x] Mark job as completed
+- [x] Verification that technician is assigned
+- [x] Job history tab
+- [x] Pagination (30 per page)
+- [x] Status segregation
+- [x] Shared JobCard design consistency
+
+---
+
+## Phase 6 – Account Page (Production Ready)
+### Customer / Technician / Admin Account Page
+- [x] Personalized greeting ("Hi, FirstName")
+- [x] Joined date (renamed from Created)
+- [x] Editable fields: First Name, Last Name, Phone, Address, Account Type
+- [x] Edit icon toggle (only show form when editing)
+- [x] Type-safe forms (no any)
+- [x] Update via PATCH /auth/me
+- [x] Reactive UI update after save
+- [x] Removed debug JSON for production
+
+---
+
+## Phase 7 – Google Integration
 
 ### Google Sign-In (OIDC)
 - [ ] “Continue with Google” login
@@ -139,7 +189,7 @@ Collected during signup or onboarding:
 
 ---
 
-## Phase 6 – Email Notifications
+## Phase 8 – Email Notifications
 
 Using a dedicated business email account.
 
@@ -151,7 +201,7 @@ Using a dedicated business email account.
 
 ---
 
-## Phase 7 – UX & Quality Improvements
+## Phase 9 – UX & Quality Improvements
 
 - [ ] Loading states
 - [ ] Error handling UI
@@ -161,7 +211,7 @@ Using a dedicated business email account.
 
 ---
 
-## Phase 8 – Production Hardening & Security
+## Phase 10 – Production Hardening & Security
 
 - [ ] CSRF protection strategy (cookie auth)
 - [ ] Secure cookie flags
@@ -172,7 +222,7 @@ Using a dedicated business email account.
 
 ---
 
-## Phase 9 – Future Enhancements (Optional)
+## Phase 11 – Future Enhancements (Optional)
 
 - [ ] Online payments
 - [ ] Recurring services
