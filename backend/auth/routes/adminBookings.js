@@ -297,6 +297,10 @@ function buildCompletedRange({ year, month, day }) {
  *  - pageSize (default 30, max 100)
  *  - year, month, day (optional)
  *  - q (search string optional)
+ *
+ * Adds:
+ *  - completed_event_at (from booking_events)
+ *  - completed_by_* (technician who marked it complete)
  */
 router.get("/completed", requireAuth, requireRole("admin"), async (req, res, next) => {
   try {
@@ -317,7 +321,7 @@ router.get("/completed", requireAuth, requireRole("admin"), async (req, res, nex
     }
 
     if (q && q.length > 0) {
-      // search across common fields
+      // search across common fields (+ technician who completed it)
       where.push(`
         (
           b.public_id::text ILIKE $${p}
@@ -330,6 +334,12 @@ router.get("/completed", requireAuth, requireRole("admin"), async (req, res, nex
           OR cu.email ILIKE $${p}
           OR COALESCE(cu.phone,'') ILIKE $${p}
           OR COALESCE(cu.address,'') ILIKE $${p}
+
+          OR COALESCE(wu.first_name,'') ILIKE $${p}
+          OR COALESCE(wu.last_name,'') ILIKE $${p}
+          OR (COALESCE(wu.first_name,'') || ' ' || COALESCE(wu.last_name,'')) ILIKE $${p}
+          OR COALESCE(wu.email,'') ILIKE $${p}
+          OR COALESCE(wu.phone,'') ILIKE $${p}
         )
       `);
       params.push(`%${q}%`);
@@ -338,13 +348,25 @@ router.get("/completed", requireAuth, requireRole("admin"), async (req, res, nex
 
     const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
-    // total count
+    // total count (include same joins because WHERE might reference wu.*)
     const countRes = await pool.query(
       `
       SELECT COUNT(*)::int AS total
       FROM bookings b
       JOIN services s ON s.id = b.service_id
       JOIN users cu ON cu.id = b.customer_user_id
+
+      LEFT JOIN LATERAL (
+        SELECT be.actor_user_id, be.created_at AS completed_event_at
+        FROM booking_events be
+        WHERE be.booking_id = b.id
+          AND be.event_type IN ('completed','completed_by_worker')
+        ORDER BY be.created_at DESC
+        LIMIT 1
+      ) ce ON true
+
+      LEFT JOIN users wu ON wu.id = ce.actor_user_id
+
       ${whereSql}
       `,
       params
@@ -378,10 +400,31 @@ router.get("/completed", requireAuth, requireRole("admin"), async (req, res, nex
         cu.phone AS customer_phone,
         cu.email AS customer_email,
         cu.address AS customer_address,
-        cu.account_type AS customer_account_type
+        cu.account_type AS customer_account_type,
+
+        ce.completed_event_at,
+        wu.id AS completed_by_user_id,
+        wu.public_id AS completed_by_public_id,
+        wu.first_name AS completed_by_first_name,
+        wu.last_name AS completed_by_last_name,
+        wu.phone AS completed_by_phone,
+        wu.email AS completed_by_email
+
       FROM bookings b
       JOIN services s ON s.id = b.service_id
       JOIN users cu ON cu.id = b.customer_user_id
+
+      LEFT JOIN LATERAL (
+        SELECT be.actor_user_id, be.created_at AS completed_event_at
+        FROM booking_events be
+        WHERE be.booking_id = b.id
+          AND be.event_type IN ('completed','completed_by_worker')
+        ORDER BY be.created_at DESC
+        LIMIT 1
+      ) ce ON true
+
+      LEFT JOIN users wu ON wu.id = ce.actor_user_id
+
       ${whereSql}
       ORDER BY b.completed_at DESC NULLS LAST
       LIMIT $${p++}

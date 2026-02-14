@@ -6,12 +6,13 @@ export type AdminBookingRow = {
   starts_at: string;
   ends_at: string;
   address: string;
+  notes: string | null;
   created_at: string;
   accepted_at: string | null;
   completed_at: string | null;
   cancelled_at: string | null;
   service_title: string;
-  notes: string | null;
+  //Customer Data
   customer_public_id: string;
   customer_first_name: string;
   customer_last_name: string;
@@ -19,6 +20,16 @@ export type AdminBookingRow = {
   customer_email: string;
   customer_address: string | null;
   customer_account_type: string | null;
+
+  //technincian Data
+  completed_event_at?: string | null;
+
+  completed_by_user_id?: number | null;
+  completed_by_public_id?: string | null;
+  completed_by_first_name?: string | null;
+  completed_by_last_name?: string | null;
+  completed_by_phone?: string | null;
+  completed_by_email?: string | null;
 };
 
 export type AdminListBookingsResponse = {

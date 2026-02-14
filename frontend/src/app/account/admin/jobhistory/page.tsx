@@ -46,6 +46,20 @@ function formatNotes(notes: string | null) {
   return n.length ? n : null;
 }
 
+function formatCompletedBy(b: AdminBookingRow) {
+  const fn = (b.completed_by_first_name ?? "").trim();
+  const ln = (b.completed_by_last_name ?? "").trim();
+  const name = [fn, ln].filter(Boolean).join(" ");
+  const completedAt = b.completed_at ?? b.completed_event_at ?? null;
+  return { name: name || null, completedAt };
+}
+
+function formatDateTime(ts: string) {
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return ts;
+  return d.toLocaleString();
+}
+
 export default function AdminCompletedJobsTab() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -123,6 +137,7 @@ export default function AdminCompletedJobsTab() {
         if (alive) setLoading(false);
       }
     })();
+
     return () => {
       alive = false;
     };
@@ -144,7 +159,6 @@ export default function AdminCompletedJobsTab() {
       setDays([]);
       await loadMonths(year);
     })().catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year]);
 
   // when month changes → reset day and load days
@@ -165,10 +179,7 @@ export default function AdminCompletedJobsTab() {
   const canPrev = page > 1;
   const canNext = page < totalPages;
 
-  const sorted = useMemo(() => {
-    // backend already orders by completed_at desc; keep stable
-    return rows;
-  }, [rows]);
+  const sorted = useMemo(() => rows, [rows]);
 
   return (
     <div className="space-y-6">
@@ -251,9 +262,10 @@ export default function AdminCompletedJobsTab() {
             <button
               type="button"
               onClick={async () => {
-                setQApplied(qInput.trim());
+                const next = qInput.trim();
+                setQApplied(next);
                 setPage(1);
-                await refresh({ page: 1, q: qInput.trim() });
+                await refresh({ page: 1, q: next });
               }}
               className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
               style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
@@ -273,7 +285,6 @@ export default function AdminCompletedJobsTab() {
             <button
               type="button"
               onClick={async () => {
-                // apply filters
                 setPage(1);
                 await refresh({ page: 1 });
               }}
@@ -344,66 +355,91 @@ export default function AdminCompletedJobsTab() {
       {!loading && sorted.length > 0 ? (
         <section className="space-y-3">
           <div className="grid gap-3">
-            {sorted.map((b) => (
-              <div
-                key={b.public_id}
-                className="rounded-2xl border p-4 space-y-3"
-                style={{ borderColor: "rgb(var(--border))" }}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold truncate">{b.service_title}</div>
-                    <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
-                      {formatRange(b.starts_at, b.ends_at)}
-                    </div>
+            {sorted.map((b) => {
+              const meta = formatCompletedBy(b);
 
-                    <div className="mt-2 text-sm">
-                      <div className="font-semibold">
-                        {b.customer_first_name} {b.customer_last_name}
-                        <span className="ml-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                          ({b.customer_account_type || "—"})
-                        </span>
+              return (
+                <div
+                  key={b.public_id}
+                  className="rounded-2xl border p-4 space-y-3"
+                  style={{ borderColor: "rgb(var(--border))" }}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold truncate">{b.service_title}</div>
+                      <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
+                        {formatRange(b.starts_at, b.ends_at)}
                       </div>
 
-                      <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                        Phone: {b.customer_phone || "—"} • Email: {b.customer_email}
-                      </div>
-
-                      <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                        Location: {b.address || b.customer_address || "—"}
-                      </div>
-                    </div>
-
-                    <div className="mt-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                      Booking ID: <span className="font-mono">{b.public_id}</span>
-                    </div>
-                    <div className="mt-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                      Created: {formatCreated(b.created_at)} • SLA:{" "}
-                      <span className="font-semibold">{formatElapsedSince(b.created_at)}</span>
-                    </div>
-
-                    {formatNotes(b.notes) ? (
-                      <div
-                        className="mt-2 rounded-xl border p-3 text-sm"
-                        style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-                      >
-                        <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-                          Customer Notes:
+                      <div className="mt-2 text-sm">
+                        <div className="font-semibold">
+                          {b.customer_first_name} {b.customer_last_name}
+                          <span className="ml-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                            ({b.customer_account_type || "—"})
+                          </span>
                         </div>
-                        <div className="mt-1 whitespace-pre-wrap break-words">{b.notes}</div>
-                      </div>
-                    ) : null}
-                  </div>
 
-                  <span className="rounded-full border px-2 py-1 text-xs" style={{ borderColor: "rgb(var(--border))" }}>
-                    Completed
-                  </span>
+                        <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
+                          Phone: {b.customer_phone || "—"} • Email: {b.customer_email}
+                        </div>
+
+                        <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
+                          Location: {b.address || b.customer_address || "—"}
+                        </div>
+                      </div>
+
+                      <div className="mt-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                        Booking ID: <span className="font-mono">{b.public_id}</span>
+                      </div>
+                      <div className="mt-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                        Created: {formatCreated(b.created_at)} • SLA:{" "}
+                        <span className="font-semibold">{formatElapsedSince(b.created_at)}</span>
+                      </div>
+
+                      {formatNotes(b.notes) ? (
+                        <div
+                          className="mt-2 rounded-xl border p-3 text-sm"
+                          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                        >
+                          <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+                            Customer Notes:
+                          </div>
+                          <div className="mt-1 whitespace-pre-wrap break-words">{b.notes}</div>
+                        </div>
+                      ) : null}
+
+                      {meta.name || meta.completedAt ? (
+                        <div
+                          className="mt-2 rounded-xl border p-3 text-sm"
+                          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                        >
+                          <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+                            Completed By:
+                          </div>
+                          <div className="mt-1">
+                            <div className="font-semibold">
+                              {meta.name ?? "—"}
+                              {b.completed_by_phone ? (
+                                <span style={{ color: "rgb(var(--muted))" }}> • {b.completed_by_phone}</span>
+                              ) : null}
+                            </div>
+                            <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                              Completed at: {meta.completedAt ? formatDateTime(meta.completedAt) : "—"}
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <span className="rounded-full border px-2 py-1 text-xs" style={{ borderColor: "rgb(var(--border))" }}>
+                      Completed
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
-          {/* Prev/Next */}
           {totalPages > 1 ? (
             <div className="flex items-center justify-between pt-2">
               <button
