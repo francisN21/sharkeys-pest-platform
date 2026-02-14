@@ -142,7 +142,9 @@ export default function AdminJobsPage() {
   }
 
   async function onCancel(publicId: string) {
-    const ok = confirm("Cancel (delete) this booking?\n\nThis will mark it as cancelled (recommended) instead of hard deleting.");
+    const ok = confirm(
+      "Cancel (delete) this booking?\n\nThis will mark it as cancelled (recommended) instead of hard deleting."
+    );
     if (!ok) return;
 
     try {
@@ -201,7 +203,6 @@ export default function AdminJobsPage() {
             Sort by
           </label>
 
-          {/* ✅ Fixes "Unexpected any" by not using `as any` */}
           <select
             value={sortBy}
             onChange={(e) => {
@@ -256,6 +257,7 @@ export default function AdminJobsPage() {
           <div className="grid gap-3">
             {sortedPending.map((b) => {
               const busy = busyId === b.public_id;
+              const notes = formatNotes(b.notes); // ✅ only change
 
               return (
                 <div
@@ -294,15 +296,16 @@ export default function AdminJobsPage() {
                         Created: {formatCreated(b.created_at)} • SLA:{" "}
                         <span className="font-semibold">{formatElapsedSince(b.created_at)}</span>
                       </div>
-                      {formatNotes(b.notes) ? (
-                        <div className="mt-2 rounded-xl border p-3 text-sm"
-                            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}>
-                            <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+
+                      {notes ? (
+                        <div
+                          className="mt-2 rounded-xl border p-3 text-sm"
+                          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                        >
+                          <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
                             Customer Notes:
-                            </div>
-                            <div className="mt-1 whitespace-pre-wrap break-words">
-                            {b.notes}
-                            </div>
+                          </div>
+                          <div className="mt-1 whitespace-pre-wrap break-words">{notes}</div>
                         </div>
                       ) : null}
                     </div>
@@ -360,6 +363,7 @@ export default function AdminJobsPage() {
             <div className="grid gap-3">
               {sortedAccepted.map((b) => {
                 const busy = busyId === b.public_id;
+                const notes = formatNotes(b.notes); // ✅ only change
 
                 return (
                   <div
@@ -391,25 +395,26 @@ export default function AdminJobsPage() {
                           </div>
                         </div>
 
-                          <div className="mt-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                            Booking ID: <span className="font-mono">{b.public_id}</span>
-                          </div>
-                          <div className="mt-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                            Created: {formatCreated(b.created_at)} • SLA:{" "}
-                            <span className="font-semibold">{formatElapsedSince(b.created_at)}</span>
-                          </div>
-                        {formatNotes(b.notes) ? (
-                        <div className="mt-2 rounded-xl border p-3 text-sm"
-                            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}>
+                        <div className="mt-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                          Booking ID: <span className="font-mono">{b.public_id}</span>
+                        </div>
+                        <div className="mt-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                          Created: {formatCreated(b.created_at)} • SLA:{" "}
+                          <span className="font-semibold">{formatElapsedSince(b.created_at)}</span>
+                        </div>
+
+                        {notes ? (
+                          <div
+                            className="mt-2 rounded-xl border p-3 text-sm"
+                            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                          >
                             <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-                            Customer Notes:
+                              Customer Notes:
                             </div>
-                            <div className="mt-1 whitespace-pre-wrap break-words">
-                            {b.notes}
-                            </div>
-                        </div>
-                      ) : null}
-                        </div>
+                            <div className="mt-1 whitespace-pre-wrap break-words">{notes}</div>
+                          </div>
+                        ) : null}
+                      </div>
 
                       <span className="rounded-full border px-2 py-1 text-xs" style={{ borderColor: "rgb(var(--border))" }}>
                         Accepted

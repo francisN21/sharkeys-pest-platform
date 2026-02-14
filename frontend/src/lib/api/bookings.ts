@@ -6,6 +6,7 @@ export type BookingCard = {
   starts_at: string;
   ends_at: string;
   address: string;
+  notes: string | null;
   created_at?: string;
   completed_at?: string | null;
   cancelled_at?: string | null;
@@ -88,6 +89,16 @@ export type CancelBookingResponse = {
     cancelled_at: string | null;
   };
 };
+
+export function updateMyBooking(
+  publicId: string,
+  payload: { starts_at?: string; ends_at?: string; notes?: string | null }
+) {
+  return jsonFetch<{ ok: boolean; booking?: BookingCard }>(`/bookings/${publicId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
 
 export function cancelBooking(publicId: string) {
   return jsonFetch<CancelBookingResponse>(`/bookings/${publicId}/cancel`, {

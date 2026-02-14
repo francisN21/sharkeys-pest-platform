@@ -20,6 +20,7 @@ router.get("/me", requireAuth, async (req, res, next) => {
              b.starts_at,
              b.ends_at,
              b.address,
+             b.notes,
              b.created_at,
              b.completed_at,
              b.cancelled_at,
@@ -34,7 +35,6 @@ router.get("/me", requireAuth, async (req, res, next) => {
 
     const upcoming = [];
     const history = [];
-    console.log("This is from bookingsMe.js","AUTH:", req.auth, "USER:", req.user);
     for (const row of r.rows) {
       if (row.status === "completed" || row.status === "cancelled") history.push(row);
       else upcoming.push(row);
