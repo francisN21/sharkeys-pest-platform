@@ -15,30 +15,20 @@ type AppRole = "customer" | "technician" | "admin";
 type ApiUserRole = "customer" | "worker" | "admin";
 
 type AuthedUser = MeResponse["user"] & {
-  // your /auth/me returns these now
   user_role?: ApiUserRole;
-  roles?: ApiUserRole[]; // could be string[] in your type; we treat it safely
+  roles?: ApiUserRole[];
 };
 
-type TabKey =
-  | "account"
-  | "bookings"
-  | "tech"
-  | "admin_customers"
-  | "admin_jobs"
-  | "admin_jobhistory";
-
+type TabKey = "account" | "bookings" | "tech" | "admin_customers" | "admin_jobs" | "admin_jobhistory";
 type Tab = { key: TabKey; label: string };
 
 function normalizeRole(user: AuthedUser | null): AppRole {
-  // Prefer primary role
   const primary = user?.user_role;
 
   if (primary === "admin") return "admin";
   if (primary === "worker") return "technician";
   if (primary === "customer") return "customer";
 
-  // Fallback to roles array (just in case)
   const roles = user?.roles ?? [];
   if (roles.includes("admin")) return "admin";
   if (roles.includes("worker")) return "technician";
@@ -54,25 +44,27 @@ export default function AccountShellPage() {
   const [loading, setLoading] = useState(true);
 
   const tabs: Tab[] = useMemo(() => {
-    const base: Tab[] = [
-      { key: "account", label: "Account" },
-      { key: "bookings", label: "Bookings" },
-    ];
+    // Always show Account
+    const base: Tab[] = [{ key: "account", label: "Account" }];
 
-    // technician portal tab (technician + admin)
+    // Customer only
+    if (role === "customer") {
+      base.push({ key: "bookings", label: "Bookings" });
+      return base;
+    }
+
+    // Technician only
     if (role === "technician") {
       base.push({ key: "tech", label: "Technician" });
+      return base;
     }
 
-    // admin tabs
-    if (role === "admin") {
-      base.push(
-        { key: "admin_customers", label: "Customers" },
-        { key: "admin_jobs", label: "Jobs" },
-        { key: "admin_jobhistory", label: "Completed" }
-      );
-    }
-
+    // Admin only
+    base.push(
+      { key: "admin_customers", label: "Customers" },
+      { key: "admin_jobs", label: "Jobs" },
+      { key: "admin_jobhistory", label: "Completed" }
+    );
     return base;
   }, [role]);
 
@@ -94,7 +86,6 @@ export default function AccountShellPage() {
 
         setData(res);
 
-        // ✅ role gate based on user_role/roles from backend
         const r = normalizeRole(res.user as AuthedUser);
         setRole(r);
       } catch (e: unknown) {
@@ -150,9 +141,10 @@ export default function AccountShellPage() {
           ) : (
             <>
               {activeTab === "account" && <AccountPage />}
-              {activeTab === "bookings" && <BookingsPage />}
 
-              {(role === "technician" || role === "admin") && activeTab === "tech" && <TechnicianPage />}
+              {role === "customer" && activeTab === "bookings" && <BookingsPage />}
+
+              {role === "technician" && activeTab === "tech" && <TechnicianPage />}
 
               {role === "admin" && activeTab === "admin_customers" && <AdminCustomersPage />}
               {role === "admin" && activeTab === "admin_jobs" && <AdminJobsPage />}
