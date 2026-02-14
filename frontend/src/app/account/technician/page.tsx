@@ -59,10 +59,25 @@ export default function WorkerJobsPage() {
 
   const [sortBy, setSortBy] = useState<"created" | "scheduled">("scheduled");
 
-  async function refresh() {
-    const [a, h] = await Promise.all([workerListAssignedBookings(), workerListJobHistory()]);
+  // ✅ pagination (history only)
+  const HISTORY_PAGE_SIZE = 30;
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotalPages, setHistoryTotalPages] = useState(1);
+  const [historyTotal, setHistoryTotal] = useState(0);
+
+  async function refresh(opts?: { historyPage?: number }) {
+    const pageToLoad = opts?.historyPage ?? historyPage;
+
+    const [a, h] = await Promise.all([
+      workerListAssignedBookings(),
+      workerListJobHistory(pageToLoad, HISTORY_PAGE_SIZE),
+    ]);
+
     setAssignedRows(a.bookings || []);
     setHistoryRows(h.bookings || []);
+    setHistoryPage(h.page || pageToLoad);
+    setHistoryTotalPages(h.totalPages || 1);
+    setHistoryTotal(h.total || 0);
   }
 
   useEffect(() => {
@@ -72,7 +87,8 @@ export default function WorkerJobsPage() {
       try {
         setLoading(true);
         setErr(null);
-        await refresh();
+        await refresh({ historyPage: 1 });
+        if (!alive) return;
       } catch (e: unknown) {
         if (!alive) return;
         setErr(e instanceof Error ? e.message : "Failed to load jobs");
@@ -84,7 +100,18 @@ export default function WorkerJobsPage() {
     return () => {
       alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ✅ when switching to history, load current page
+  useEffect(() => {
+    if (tab !== "history") return;
+    // no need to setLoading global; keep it light
+    refresh().catch((e: unknown) => {
+      setErr(e instanceof Error ? e.message : "Failed to load history");
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
   const sortedAssigned = useMemo(() => {
     const copy = [...assignedRows];
@@ -98,10 +125,10 @@ export default function WorkerJobsPage() {
     return copy;
   }, [assignedRows, sortBy]);
 
+  // History is already ordered by backend (completed_at DESC), but keep your existing sort behavior if you want:
   const sortedHistory = useMemo(() => {
     const copy = [...historyRows];
     copy.sort((a, b) => {
-      // history: newest first (completed_at is not in AdminBookingRow UI currently, so keep it simple)
       const at = new Date(a.created_at).getTime();
       const bt = new Date(b.created_at).getTime();
       return bt - at;
@@ -116,8 +143,11 @@ export default function WorkerJobsPage() {
     try {
       setBusyId(publicId);
       setErr(null);
+
       await workerCompleteBooking(publicId);
-      await refresh();
+
+      // ✅ after completing, refresh assigned + history page 1
+      await refresh({ historyPage: 1 });
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to complete job");
     } finally {
@@ -126,6 +156,9 @@ export default function WorkerJobsPage() {
   }
 
   const rows = tab === "assigned" ? sortedAssigned : sortedHistory;
+
+  const canPrev = historyPage > 1;
+  const canNext = historyPage < historyTotalPages;
 
   return (
     <div className="space-y-6">
@@ -212,7 +245,16 @@ export default function WorkerJobsPage() {
 
       {!loading && rows.length > 0 ? (
         <section className="space-y-3">
-          <h3 className="text-base font-semibold">{tab === "assigned" ? "Assigned" : "Job History"}</h3>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-base font-semibold">{tab === "assigned" ? "Assigned" : "Job History"}</h3>
+
+            {/* ✅ History meta */}
+            {tab === "history" ? (
+              <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                Showing {historyRows.length} of {historyTotal} • Page {historyPage} / {historyTotalPages}
+              </div>
+            ) : null}
+          </div>
 
           <div className="grid gap-3">
             {rows.map((b) => {
@@ -292,6 +334,45 @@ export default function WorkerJobsPage() {
               );
             })}
           </div>
+
+          {/* ✅ Pagination controls for history */}
+          {tab === "history" && historyTotalPages > 1 ? (
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!canPrev) return;
+                  const nextPage = historyPage - 1;
+                  setHistoryPage(nextPage);
+                  await refresh({ historyPage: nextPage });
+                }}
+                disabled={!canPrev || !!busyId}
+                className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+                style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+              >
+                Prev
+              </button>
+
+              <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                Page {historyPage} of {historyTotalPages}
+              </div>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!canNext) return;
+                  const nextPage = historyPage + 1;
+                  setHistoryPage(nextPage);
+                  await refresh({ historyPage: nextPage });
+                }}
+                disabled={!canNext || !!busyId}
+                className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+                style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+              >
+                Next
+              </button>
+            </div>
+          ) : null}
         </section>
       ) : null}
     </div>

@@ -69,6 +69,30 @@ router.get("/assigned", requireAuth, requireRole("worker"), async (req, res, nex
  */
 router.get("/history", requireAuth, requireRole("worker"), async (req, res, next) => {
   try {
+    const pageSize = Math.max(1, Math.min(30, Number(req.query.pageSize ?? 30))); // max 30
+    const page = Math.max(1, Number(req.query.page ?? 1));
+    const offset = (page - 1) * pageSize;
+
+    // total count
+    const countRes = await pool.query(
+      `
+      SELECT COUNT(*)::int AS total
+      FROM bookings b
+      WHERE b.status = 'completed'
+        AND EXISTS (
+          SELECT 1
+          FROM booking_assignments ba
+          WHERE ba.booking_id = b.id
+            AND ba.worker_user_id = $1
+        )
+      `,
+      [req.user.id]
+    );
+
+    const total = countRes.rows[0]?.total ?? 0;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+    // page data
     const q = await pool.query(
       `
       SELECT
@@ -102,12 +126,20 @@ router.get("/history", requireAuth, requireRole("worker"), async (req, res, next
             AND ba.worker_user_id = $1
         )
       ORDER BY b.completed_at DESC NULLS LAST, b.starts_at DESC
-      LIMIT 200
+      LIMIT $2
+      OFFSET $3
       `,
-      [req.user.id]
+      [req.user.id, pageSize, offset]
     );
 
-    res.json({ ok: true, bookings: q.rows });
+    res.json({
+      ok: true,
+      bookings: q.rows,
+      page,
+      pageSize,
+      total,
+      totalPages,
+    });
   } catch (e) {
     next(e);
   }
