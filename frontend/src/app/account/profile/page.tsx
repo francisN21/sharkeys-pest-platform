@@ -185,6 +185,7 @@ export default function ProfilePage() {
 
       setData((prev) => (prev ? { ...prev, user: res.user } : prev));
       setOkMsg("Profile updated.");
+      router.refresh();
       setEditing(false);
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to update profile");

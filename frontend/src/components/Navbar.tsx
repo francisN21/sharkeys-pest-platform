@@ -2,10 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import ThemeToggle from "../components/ThemeToggle";
 import { useAuth } from "./AuthProvider";
+import { me as apiMe } from "../lib/api/auth";
+
 type NavItem = { label: string; href: string };
 
 const NAV: NavItem[] = [
@@ -14,6 +16,12 @@ const NAV: NavItem[] = [
   { label: "About", href: "#about" },
   { label: "Contact", href: "#contact" },
 ];
+
+type NavbarUser = {
+  email: string;
+  first_name?: string | null;
+  last_name?: string | null;
+};
 
 function getInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -40,9 +48,19 @@ export default function Navbar() {
 
   const menuRef = useRef<HTMLDivElement | null>(null);
   const accountRef = useRef<HTMLDivElement | null>(null);
+  const hamburgerRef = useRef<HTMLButtonElement | null>(null);
 
-  const isAuthed = !!user;
-  const name = useMemo(() => (user ? displayName(user) : ""), [user]);
+  /**
+   * ✅ Local "resolved user" fallback:
+   * If AuthProvider doesn't update after login (cookie is set but context is stale),
+   * Navbar will call /auth/me and update itself without a hard reload.
+   */
+  const [resolvedUser, setResolvedUser] = useState<NavbarUser | null>(null);
+
+  const effectiveUser = (user as NavbarUser | null) ?? resolvedUser;
+  const isAuthed = !!effectiveUser;
+
+  const name = useMemo(() => (effectiveUser ? displayName(effectiveUser) : ""), [effectiveUser]);
   const initials = useMemo(() => (name ? getInitials(name) : "U"), [name]);
 
   // Close dropdowns when navigating
@@ -51,10 +69,61 @@ export default function Navbar() {
     setAccountOpen(false);
   }, [pathname]);
 
+  // ✅ Only show section nav items on landing page "/"
+  const showLandingNav = pathname === "/";
+
+  // ✅ Re-check /auth/me when:
+  // - auth context says "not authed"
+  // - or page changes (e.g., login -> /account)
+  // - or window regains focus
+  useEffect(() => {
+    let cancelled = false;
+
+    async function refreshMe() {
+      try {
+        const res = await apiMe();
+        if (cancelled) return;
+        if (res?.ok && res.user) {
+          setResolvedUser(res.user as NavbarUser);
+        } else {
+          setResolvedUser(null);
+        }
+      } catch {
+        if (!cancelled) setResolvedUser(null);
+      }
+    }
+
+    // If AuthProvider has a user, trust it and sync local
+    if (!loading && user) {
+      setResolvedUser(user as NavbarUser);
+      return;
+    }
+
+    // If AuthProvider says not loading and no user, try resolving from cookie session
+    if (!loading && !user) {
+      refreshMe();
+    }
+
+    function onFocus() {
+      // When user comes back to tab, re-check session cookie
+      if (!loading && !user) refreshMe();
+    }
+
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [loading, user, pathname]);
+
   // Close on outside click
   useEffect(() => {
     function onDown(e: MouseEvent) {
       const t = e.target as Node;
+
+      // ✅ Don’t treat hamburger button clicks as “outside click”
+      if (hamburgerRef.current && hamburgerRef.current.contains(t)) return;
 
       if (menuOpen && menuRef.current && !menuRef.current.contains(t)) {
         setMenuOpen(false);
@@ -105,6 +174,8 @@ export default function Navbar() {
     try {
       await logout();
     } finally {
+      // ✅ keep navbar consistent immediately
+      setResolvedUser(null);
       router.push("/login");
     }
   }
@@ -136,23 +207,27 @@ export default function Navbar() {
           </div>
         </Link>
 
-        {/* Desktop nav */}
-        <nav className="hidden items-center gap-6 md:flex">
-          {NAV.map((n) => (
-            <a
-              key={n.href}
-              href={n.href}
-              className="text-sm hover:opacity-90"
-              style={{ color: "rgb(var(--muted))" }}
-              onClick={(e) => {
-                e.preventDefault();
-                onNavClick(n.href);
-              }}
-            >
-              {n.label}
-            </a>
-          ))}
-        </nav>
+        {/* Desktop nav (ONLY on "/") */}
+        {showLandingNav ? (
+          <nav className="hidden items-center gap-6 md:flex">
+            {NAV.map((n) => (
+              <a
+                key={n.href}
+                href={n.href}
+                className="text-sm hover:opacity-90"
+                style={{ color: "rgb(var(--muted))" }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  onNavClick(n.href);
+                }}
+              >
+                {n.label}
+              </a>
+            ))}
+          </nav>
+        ) : (
+          <div className="hidden md:block" />
+        )}
 
         {/* Right actions */}
         <div className="flex items-center gap-3">
@@ -176,15 +251,13 @@ export default function Navbar() {
             </Link>
 
             {!loading && !isAuthed ? (
-              <>
-                <Link
-                  href="/login"
-                  className="rounded-xl px-3 py-2 text-sm font-medium hover:opacity-90"
-                  style={{ color: "rgb(var(--muted))" }}
-                >
-                  Sign in
-                </Link>
-              </>
+              <Link
+                href="/login"
+                className="rounded-xl px-3 py-2 text-sm font-medium hover:opacity-90"
+                style={{ color: "rgb(var(--muted))" }}
+              >
+                Sign in
+              </Link>
             ) : null}
 
             {!loading && isAuthed ? (
@@ -243,6 +316,7 @@ export default function Navbar() {
 
           {/* Hamburger (mobile) */}
           <button
+            ref={hamburgerRef}
             type="button"
             className="md:hidden rounded-xl border p-2 hover:opacity-90"
             style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
@@ -286,29 +360,33 @@ export default function Navbar() {
         >
           <div ref={menuRef} className="mx-auto max-w-6xl px-4 py-4 space-y-4">
             {/* Theme toggle inside mobile panel */}
-            <div className="flex items-center justify-between rounded-xl border p-3"
+            <div
+              className="flex items-center justify-between rounded-xl border p-3"
               style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
             >
               <div className="text-sm font-semibold">Theme</div>
               <ThemeToggle />
             </div>
 
-            <div className="grid gap-2">
-              {NAV.map((n) => (
-                <a
-                  key={n.href}
-                  href={n.href}
-                  className="rounded-xl px-3 py-3 text-sm font-semibold hover:opacity-90"
-                  style={{ background: "rgb(var(--card))", color: "rgb(var(--fg))" }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onNavClick(n.href);
-                  }}
-                >
-                  {n.label}
-                </a>
-              ))}
-            </div>
+            {/* Landing page section links ONLY on "/" */}
+            {showLandingNav ? (
+              <div className="grid gap-2">
+                {NAV.map((n) => (
+                  <a
+                    key={n.href}
+                    href={n.href}
+                    className="rounded-xl px-3 py-3 text-sm font-semibold hover:opacity-90"
+                    style={{ background: "rgb(var(--card))", color: "rgb(var(--fg))" }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onNavClick(n.href);
+                    }}
+                  >
+                    {n.label}
+                  </a>
+                ))}
+              </div>
+            ) : null}
 
             {/* Book a Service ALWAYS */}
             <Link
