@@ -1,3 +1,4 @@
+// routes/me.js
 const express = require("express");
 const { z } = require("zod");
 const { pool } = require("../src/db");
@@ -29,6 +30,47 @@ const updateMeSchema = z
   })
   .strict();
 
+/**
+ * ✅ Helper: fetch user + roles in the same shape as /auth/me
+ * (so Profile UI can safely rely on roles/user_role after PATCH as well)
+ */
+async function fetchUserWithRoles(userId) {
+  const u = await pool.query(
+    `
+    SELECT
+      u.public_id,
+      u.email,
+      u.first_name,
+      u.last_name,
+      u.phone,
+      u.account_type,
+      u.address,
+      u.email_verified_at,
+      u.created_at,
+      COALESCE(array_agg(ur.role) FILTER (WHERE ur.role IS NOT NULL), '{}'::text[]) AS roles
+    FROM users u
+    LEFT JOIN user_roles ur ON ur.user_id = u.id
+    WHERE u.id = $1
+    GROUP BY u.id
+    `,
+    [userId]
+  );
+
+  const user = u.rows[0] || null;
+  if (!user) return null;
+
+  const roles = user.roles || [];
+  const user_role = roles.includes("superuser")
+    ? "superuser"
+    : roles.includes("admin")
+    ? "admin"
+    : roles.includes("worker")
+    ? "worker"
+    : "customer";
+
+  return { ...user, roles, user_role };
+}
+
 router.patch("/me", requireAuth, async (req, res, next) => {
   try {
     const userId = req.auth?.userId;
@@ -36,16 +78,12 @@ router.patch("/me", requireAuth, async (req, res, next) => {
 
     const patch = updateMeSchema.parse(req.body);
 
-    // If nothing provided, do nothing but still return current
+    // If nothing provided, do nothing but still return current (✅ now includes roles)
     const keys = Object.keys(patch);
     if (keys.length === 0) {
-      const cur = await pool.query(
-        `SELECT public_id, email, email_verified_at, first_name, last_name, phone, account_type, address, created_at
-         FROM users
-         WHERE id = $1`,
-        [userId]
-      );
-      return res.json({ ok: true, user: cur.rows[0] });
+      const cur = await fetchUserWithRoles(userId);
+      if (!cur) return res.status(401).json({ ok: false, message: "Not authenticated" });
+      return res.json({ ok: true, user: cur });
     }
 
     const fields = [];
@@ -75,18 +113,22 @@ router.patch("/me", requireAuth, async (req, res, next) => {
 
     values.push(userId);
 
-    const updated = await pool.query(
+    // Keep your existing UPDATE as-is (fast)
+    await pool.query(
       `
       UPDATE users
       SET ${fields.join(", ")},
           updated_at = now()
       WHERE id = $${p}
-      RETURNING public_id, email, email_verified_at, first_name, last_name, phone, account_type, address, created_at
       `,
       values
     );
 
-    res.json({ ok: true, user: updated.rows[0] });
+    // ✅ Return same shape as /auth/me (includes roles/user_role)
+    const updated = await fetchUserWithRoles(userId);
+    if (!updated) return res.status(401).json({ ok: false, message: "Not authenticated" });
+
+    res.json({ ok: true, user: updated });
   } catch (e) {
     next(e);
   }

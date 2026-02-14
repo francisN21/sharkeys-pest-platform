@@ -15,6 +15,20 @@ type FormState = {
   account_type: AccountType;
 };
 
+/**
+ * ✅ Local augmentation type (no `any`)
+ * Keeps your existing MeResponse "as-is" and just describes the optional fields
+ * we know the backend can send (roles/user_role).
+ */
+type MeUserWithRoles = AccountUser & {
+  roles?: string[] | null;
+  user_role?: string | null;
+};
+
+type MeResponseWithRoles = MeResponse & {
+  user?: MeUserWithRoles;
+};
+
 function displayName(u: AccountUser) {
   const first = (u.first_name ?? "").trim();
   const last = (u.last_name ?? "").trim();
@@ -88,6 +102,19 @@ function buildDiffPayload(form: FormState, user: AccountUser): UpdateMePayload {
   return payload;
 }
 
+/** ✅ superuser-only Owner Dashboard button gate (no `any`) */
+function isSuperUser(res: MeResponse | null) {
+  if (!res) return false;
+
+  // "as-is" approach: treat incoming response as possibly containing roles
+  const withRoles = res as MeResponseWithRoles;
+
+  const rolesRaw = withRoles.user?.roles ?? null;
+  if (!rolesRaw || !Array.isArray(rolesRaw)) return false;
+
+  return rolesRaw.map((r) => String(r).trim().toLowerCase()).includes("superuser");
+}
+
 export default function ProfilePage() {
   const router = useRouter();
 
@@ -101,6 +128,8 @@ export default function ProfilePage() {
   const [editing, setEditing] = useState(false);
 
   const user = data?.user ?? null;
+
+  const isSU = useMemo(() => isSuperUser(data), [data]);
 
   const [form, setForm] = useState<FormState>({
     first_name: "",
@@ -183,7 +212,12 @@ export default function ProfilePage() {
       const res = await updateMe(payload);
       if (!res?.ok || !res.user) throw new Error("Failed to update profile");
 
-      setData((prev) => (prev ? { ...prev, user: res.user } : prev));
+      // ✅ keep any extra fields on data.user (roles/user_role) if present
+      setData((prev) => {
+        if (!prev) return prev;
+        return { ...prev, user: { ...(prev.user as AccountUser), ...(res.user as AccountUser) } };
+      });
+
       setOkMsg("Profile updated.");
       router.refresh();
       setEditing(false);
@@ -211,42 +245,60 @@ export default function ProfilePage() {
           </p>
         </div>
 
-        {/* Edit toggle */}
-        <button
-          type="button"
-          onClick={() => {
-            if (!editing) {
-              setErr(null);
-              setOkMsg(null);
-              setEditing(true);
-            } else {
-              onCancelEdit();
-            }
-          }}
-          className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-          style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-          disabled={loading || !user || saving}
-          title={editing ? "Cancel editing" : "Edit profile"}
-        >
-          {/* simple inline pencil icon */}
-          <span className="inline-flex items-center gap-2">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path
-                d="M12 20h9"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
-              <path
-                d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinejoin="round"
-              />
-            </svg>
-            {editing ? "Cancel" : "Edit"}
-          </span>
-        </button>
+        {/* ✅ Owner Dashboard (superuser only) + Edit toggle */}
+        <div className="flex items-center gap-2">
+          {isSU ? (
+            <button
+              type="button"
+              onClick={() => router.push("/owner-dashboard")}
+              className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+              style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+              disabled={loading || !user || saving}
+              title="Open Owner Dashboard"
+            >
+              <span className="inline-flex items-center gap-2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M4 19V5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M4 19H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M8 16V11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M12 16V7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M16 16V9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+                Owner Dashboard
+              </span>
+            </button>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={() => {
+              if (!editing) {
+                setErr(null);
+                setOkMsg(null);
+                setEditing(true);
+              } else {
+                onCancelEdit();
+              }
+            }}
+            className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+            disabled={loading || !user || saving}
+            title={editing ? "Cancel editing" : "Edit profile"}
+          >
+            <span className="inline-flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 20h9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <path
+                  d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              {editing ? "Cancel" : "Edit"}
+            </span>
+          </button>
+        </div>
       </div>
 
       {err ? (
@@ -270,7 +322,6 @@ export default function ProfilePage() {
         </div>
       ) : user ? (
         <section className="space-y-4">
-          {/* Hero */}
           <div
             className="rounded-2xl border p-5 sm:p-6"
             style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
@@ -292,10 +343,10 @@ export default function ProfilePage() {
               <Pill label={user.email_verified_at ? "Verified" : "Not verified"} />
               <Pill label={`Joined ${formatDate(user.created_at)}`} />
               {user.account_type ? <Pill label={formatAccountType(user.account_type)} /> : null}
+              {isSU ? <Pill label="Superuser" /> : null}
             </div>
           </div>
 
-          {/* Profile details: view vs edit */}
           <div
             className="rounded-2xl border p-5 sm:p-6 space-y-4"
             style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
@@ -361,7 +412,9 @@ export default function ProfilePage() {
                   <Field label="Account type">
                     <select
                       value={form.account_type}
-                      onChange={(e) => setForm((p) => ({ ...p, account_type: (e.target.value as AccountType) ?? "" }))}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, account_type: (e.target.value as AccountType) ?? "" }))
+                      }
                       className="w-full rounded-lg border px-3 py-2 text-sm"
                       style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
                     >
@@ -410,24 +463,12 @@ export default function ProfilePage() {
             )}
           </div>
 
-          {/* Read-only misc */}
           <div className="grid gap-3 sm:grid-cols-2">
             <Info label="Email" value={user.email} />
             <Info label="Email verified" value={user.email_verified_at ? "Yes" : "No"} />
             <Info label="Joined" value={formatDateTime(user.created_at)} />
             <Info label="Public ID" value={user.public_id ?? "—"} mono />
           </div>
-
-          {/* Helper hint */}
-          {/* <div
-            className="rounded-2xl border p-4 text-sm"
-            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-          >
-            <div className="font-semibold">Need to update something?</div>
-            <div className="mt-1" style={{ color: "rgb(var(--muted))" }}>
-              If any of your details are incorrect, you can edit them here. For role or access changes, contact support or your administrator.
-            </div>
-          </div> */}
         </section>
       ) : (
         <div

@@ -60,6 +60,7 @@ export type MeResponse = {
     created_at: string;
   };
   session?: { expiresAt: string };
+  roles?: string[];
 };
 // Payload for the update user account page
 export type UpdateMePayload = {

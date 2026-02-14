@@ -1,11 +1,15 @@
 BEGIN;
 
+-- ============================================================
 -- Extensions
+-- ============================================================
 CREATE EXTENSION IF NOT EXISTS citext;
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 
+-- ============================================================
 -- updated_at trigger helper
+-- ============================================================
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -14,7 +18,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- USERS (create + upgrade)
+-- ============================================================
+-- USERS
+-- ============================================================
 CREATE TABLE IF NOT EXISTS users (
   id BIGSERIAL PRIMARY KEY,
   public_id UUID NOT NULL DEFAULT gen_random_uuid(),
@@ -33,6 +39,7 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- upgrade safety (idempotent)
 ALTER TABLE users
   ADD COLUMN IF NOT EXISTS public_id UUID,
   ADD COLUMN IF NOT EXISTS first_name TEXT,
@@ -65,7 +72,9 @@ BEGIN
   END IF;
 END$$;
 
+-- ============================================================
 -- OAUTH IDENTITIES
+-- ============================================================
 CREATE TABLE IF NOT EXISTS oauth_identities (
   id BIGSERIAL PRIMARY KEY,
   user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -75,7 +84,9 @@ CREATE TABLE IF NOT EXISTS oauth_identities (
   UNIQUE (provider, provider_subject)
 );
 
+-- ============================================================
 -- SESSIONS
+-- ============================================================
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
   user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -85,7 +96,9 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions(user_id);
 
+-- ============================================================
 -- EMAIL TOKENS
+-- ============================================================
 CREATE TABLE IF NOT EXISTS email_tokens (
   id BIGSERIAL PRIMARY KEY,
   user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -97,13 +110,43 @@ CREATE TABLE IF NOT EXISTS email_tokens (
 );
 CREATE INDEX IF NOT EXISTS email_tokens_user_type_idx ON email_tokens(user_id, type);
 
--- USER ROLES (admin / worker / customer)
+-- ============================================================
+-- USER ROLES (customer / admin / worker / superuser)
+-- ============================================================
 CREATE TABLE IF NOT EXISTS user_roles (
   user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  role TEXT NOT NULL CHECK (role IN ('customer','admin','worker')),
+  role TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (user_id, role)
 );
+
+-- upgrade role check safely (handles previously auto-named checks)
+DO $$
+DECLARE
+  c_name text;
+BEGIN
+  -- drop any existing CHECK that looks like the old role list
+  SELECT conname INTO c_name
+  FROM pg_constraint
+  WHERE conrelid = 'user_roles'::regclass
+    AND contype = 'c'
+    AND pg_get_constraintdef(oid) ILIKE '%role%in%';
+
+  IF c_name IS NOT NULL THEN
+    EXECUTE format('ALTER TABLE user_roles DROP CONSTRAINT %I', c_name);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'user_roles'::regclass
+      AND conname = 'user_roles_role_chk'
+  ) THEN
+    ALTER TABLE user_roles
+      ADD CONSTRAINT user_roles_role_chk
+      CHECK (role IN ('customer','admin','worker','superuser'));
+  END IF;
+END$$;
+
 CREATE INDEX IF NOT EXISTS user_roles_role_idx ON user_roles(role);
 CREATE INDEX IF NOT EXISTS user_roles_user_idx ON user_roles(user_id);
 
@@ -118,7 +161,9 @@ EXCEPTION WHEN others THEN
   NULL;
 END$$;
 
+-- ============================================================
 -- SERVICES
+-- ============================================================
 CREATE TABLE IF NOT EXISTS services (
   id BIGSERIAL PRIMARY KEY,
   public_id UUID NOT NULL DEFAULT gen_random_uuid(),
@@ -165,7 +210,9 @@ BEGIN
   END IF;
 END$$;
 
+-- ============================================================
 -- BOOKINGS
+-- ============================================================
 CREATE TABLE IF NOT EXISTS bookings (
   id BIGSERIAL PRIMARY KEY,
   public_id UUID NOT NULL DEFAULT gen_random_uuid(),
@@ -221,7 +268,9 @@ BEGIN
   END IF;
 END$$;
 
+-- ============================================================
 -- BOOKING ASSIGNMENTS
+-- ============================================================
 CREATE TABLE IF NOT EXISTS booking_assignments (
   id BIGSERIAL PRIMARY KEY,
   booking_id BIGINT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
@@ -233,7 +282,9 @@ CREATE TABLE IF NOT EXISTS booking_assignments (
 CREATE INDEX IF NOT EXISTS idx_booking_assignments_worker
   ON booking_assignments (worker_user_id, assigned_at DESC);
 
+-- ============================================================
 -- BOOKING EVENTS
+-- ============================================================
 CREATE TABLE IF NOT EXISTS booking_events (
   id BIGSERIAL PRIMARY KEY,
   booking_id BIGINT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
@@ -244,5 +295,99 @@ CREATE TABLE IF NOT EXISTS booking_events (
 );
 CREATE INDEX IF NOT EXISTS idx_booking_events_booking_time
   ON booking_events (booking_id, created_at DESC);
+
+-- ============================================================
+-- SITE ACCESS METRICS (events + daily uniques)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS site_access_events (
+  id BIGSERIAL PRIMARY KEY,
+  occurred_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+  path TEXT NOT NULL,
+  method TEXT NOT NULL DEFAULT 'GET',
+  status_code INT NULL,
+
+  user_id BIGINT NULL REFERENCES users(id) ON DELETE SET NULL,
+  session_id TEXT NULL REFERENCES sessions(id) ON DELETE SET NULL,
+
+  ip INET NULL,
+  ip_hash BYTEA NOT NULL, -- digest(ip::text, 'sha256')
+  user_agent TEXT NULL,
+  referer TEXT NULL,
+
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS idx_site_access_events_time
+  ON site_access_events (occurred_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_site_access_events_path_time
+  ON site_access_events (path, occurred_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_site_access_events_user_time
+  ON site_access_events (user_id, occurred_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_site_access_events_iphash_time
+  ON site_access_events (ip_hash, occurred_at DESC);
+
+CREATE TABLE IF NOT EXISTS site_unique_visitors_daily (
+  day DATE NOT NULL,
+  ip_hash BYTEA NOT NULL,
+  first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (day, ip_hash)
+);
+
+CREATE INDEX IF NOT EXISTS idx_site_unique_visitors_daily_day
+  ON site_unique_visitors_daily (day);
+
+-- ============================================================
+-- ONE-TIME BOOKING SURVEY (where did you hear about us?)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS booking_survey_responses (
+  id BIGSERIAL PRIMARY KEY,
+
+  -- one survey per customer (ever)
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  booking_id BIGINT NULL REFERENCES bookings(id) ON DELETE SET NULL,
+
+  heard_from TEXT NOT NULL,
+  referrer_name TEXT NULL,
+  other_text TEXT NULL,
+
+  submitted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+  UNIQUE (user_id)
+);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'booking_survey_heard_from_chk') THEN
+    ALTER TABLE booking_survey_responses
+      ADD CONSTRAINT booking_survey_heard_from_chk
+      CHECK (heard_from IN ('facebook','instagram','google','linkedin','referral','other'));
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'booking_survey_referrer_required_chk') THEN
+    ALTER TABLE booking_survey_responses
+      ADD CONSTRAINT booking_survey_referrer_required_chk
+      CHECK (
+        (heard_from <> 'referral') OR (referrer_name IS NOT NULL AND length(btrim(referrer_name)) > 0)
+      );
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'booking_survey_other_required_chk') THEN
+    ALTER TABLE booking_survey_responses
+      ADD CONSTRAINT booking_survey_other_required_chk
+      CHECK (
+        (heard_from <> 'other') OR (other_text IS NOT NULL AND length(btrim(other_text)) > 0)
+      );
+  END IF;
+END$$;
+
+CREATE INDEX IF NOT EXISTS idx_booking_survey_heard_from
+  ON booking_survey_responses (heard_from);
+
+CREATE INDEX IF NOT EXISTS idx_booking_survey_submitted_at
+  ON booking_survey_responses (submitted_at DESC);
 
 COMMIT;
