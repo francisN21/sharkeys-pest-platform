@@ -13,6 +13,7 @@ const { errorHandler } = require("../middleware/errorHandler");
 const { pool } = require("./db");
 
 // Service routes pipeline
+const meRouter = require("../routes/me");
 const servicesRouter = require("../routes/services");
 const bookingsRouter = require("../routes/bookings");
 const bookingsMeRouter = require("../routes/bookingsMe");
@@ -72,6 +73,7 @@ app.get("/health/db", async (req, res, next) => {
 });
 
 app.use("/auth", authRouter);
+app.use("/auth", meRouter);
 // Service routes pipeline
 app.use("/services", servicesRouter);
 app.use("/bookings", bookingsRouter);

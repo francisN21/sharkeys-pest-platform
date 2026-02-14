@@ -61,6 +61,14 @@ export type MeResponse = {
   };
   session?: { expiresAt: string };
 };
+// Payload for the update user account page
+export type UpdateMePayload = {
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
+  address?: string;
+  account_type?: "residential" | "business";
+};
 
 export type AuthOkResponse = { ok: boolean; message?: string };
 
@@ -68,17 +76,17 @@ export function signup(payload: SignupValues) {
   return jsonFetch<AuthOkResponse>("/auth/signup", {
     method: "POST",
     body: JSON.stringify({
-      // ✅ new schema
-      firstName: payload.firstName,
-      lastName: payload.lastName,
+      // ✅ backend schema (snake_case)
+      first_name: payload.firstName,
+      last_name: payload.lastName,
 
       email: payload.email,
-      phone: payload.phone,
+      phone: payload.phone ?? null,
       password: payload.password,
 
       // optional fields
-      accountType: payload.accountType,
-      address: payload.address,
+      account_type: payload.accountType ?? null,
+      address: payload.address ?? null,
     }),
   });
 }
@@ -86,6 +94,13 @@ export function signup(payload: SignupValues) {
 export function login(payload: LoginValues) {
   return jsonFetch<AuthOkResponse>("/auth/login", {
     method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateMe(payload: UpdateMePayload) {
+  return jsonFetch<{ ok: boolean; user: MeResponse["user"] }>("/auth/me", {
+    method: "PATCH",
     body: JSON.stringify(payload),
   });
 }

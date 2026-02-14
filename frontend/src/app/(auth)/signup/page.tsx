@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import AuthTextField from "../../../components/forms/AuthTextField";
@@ -9,6 +10,8 @@ import { signupSchema, type SignupValues } from "../../../lib/validators/auth";
 import { signup } from "../../../lib/api/auth";
 
 export default function SignupPage() {
+  const router = useRouter();
+
   const [serverError, setServerError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
 
@@ -29,7 +32,11 @@ export default function SignupPage() {
     setOkMsg(null);
 
     await signup(values);
+
+    // optional: show success briefly (kept), then redirect
     setOkMsg("Account created! You’re now signed in.");
+    router.replace("/account"); // ✅ change to "/login" if you prefer
+    router.refresh();
   }
 
   return (
@@ -41,24 +48,16 @@ export default function SignupPage() {
         </p>
       </div>
 
-      {serverError && (
-        <div className="rounded-xl border p-3 text-sm border-red-500">
-          {serverError}
-        </div>
-      )}
+      {serverError && <div className="rounded-xl border p-3 text-sm border-red-500">{serverError}</div>}
 
-      {okMsg && (
-        <div className="rounded-xl border p-3 text-sm border-green-500">
-          {okMsg}
-        </div>
-      )}
+      {okMsg && <div className="rounded-xl border p-3 text-sm border-green-500">{okMsg}</div>}
 
       <form
         className="space-y-4"
         onSubmit={handleSubmit(async (v) => {
           try {
             await onSubmit(v);
-          } catch (e) {
+          } catch (e: unknown) {
             setServerError(e instanceof Error ? e.message : "Signup failed");
           }
         })}
@@ -97,10 +96,7 @@ export default function SignupPage() {
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <label className="text-sm font-semibold">Account type (optional)</label>
-            <select
-              className="w-full rounded-xl border px-3 py-2 text-sm"
-              {...register("accountType")}
-            >
+            <select className="w-full rounded-xl border px-3 py-2 text-sm" {...register("accountType")}>
               <option value="residential">Residential</option>
               <option value="business">Business</option>
             </select>
@@ -114,12 +110,7 @@ export default function SignupPage() {
           />
         </div>
 
-        <AuthTextField
-          label="Password"
-          type="password"
-          error={errors.password?.message}
-          {...register("password")}
-        />
+        <AuthTextField label="Password" type="password" error={errors.password?.message} {...register("password")} />
 
         <AuthTextField
           label="Confirm password"
@@ -130,9 +121,7 @@ export default function SignupPage() {
 
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" className="mt-1" {...register("agree")} />
-          <span style={{ color: "rgb(var(--muted))" }}>
-            I agree to the terms (optional)
-          </span>
+          <span style={{ color: "rgb(var(--muted))" }}>I agree to the terms (optional)</span>
         </label>
 
         <button
