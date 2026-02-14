@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import AuthTextField from "../../../components/forms/AuthTextField";
 import { signupSchema, type SignupValues } from "../../../lib/validators/auth";
 import { signup } from "../../../lib/api/auth";
+import { notifyAuthChanged } from "../../../components/AuthProvider";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -33,10 +34,9 @@ export default function SignupPage() {
 
     await signup(values);
 
-    // optional: show success briefly (kept), then redirect
     setOkMsg("Account created! You’re now signed in.");
-    router.replace("/account"); // ✅ change to "/login" if you prefer
-    router.refresh();
+    notifyAuthChanged();
+    router.push("/account");
   }
 
   return (

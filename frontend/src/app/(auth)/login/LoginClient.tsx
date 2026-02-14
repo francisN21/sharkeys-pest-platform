@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import AuthTextField from "../../../components/forms/AuthTextField";
 import { loginSchema, type LoginValues } from "../../../lib/validators/auth";
 import { login } from "../../../lib/api/auth";
+import { notifyAuthChanged } from "../../../components/AuthProvider";
 
 export default function LoginClient() {
   const [serverError, setServerError] = useState<string | null>(null);
@@ -27,8 +28,8 @@ export default function LoginClient() {
 
     try {
       await login(values);
+      notifyAuthChanged();
       router.push("/account");
-      router.refresh(); // optional: ensures server components re-render with new auth state
     } catch (e: unknown) {
       if (e instanceof Error) setServerError(e.message);
       else setServerError("Login failed");
