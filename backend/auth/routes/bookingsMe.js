@@ -12,7 +12,6 @@ router.get("/me", requireAuth, async (req, res, next) => {
     if (!userId) {
       return res.status(401).json({ ok: false, message: "Not authenticated" });
     }
-
     const r = await pool.query(
       `
       SELECT b.public_id,
@@ -39,6 +38,12 @@ router.get("/me", requireAuth, async (req, res, next) => {
       if (row.status === "completed" || row.status === "cancelled") history.push(row);
       else upcoming.push(row);
     }
+    
+    history.sort((a, b) => {
+      const at = new Date(a.completed_at ?? a.cancelled_at ?? a.starts_at).getTime();
+      const bt = new Date(b.completed_at ?? b.cancelled_at ?? b.starts_at).getTime();
+    return bt - at;
+    });
 
     res.json({ ok: true, upcoming, history });
   } catch (e) {
