@@ -19,6 +19,20 @@ export type MyBookingsResponse = {
   history: BookingCard[];
 };
 
+export type CreateBookingResponse = {
+  ok: boolean;
+  booking?: {
+    id?: string;
+    public_id: string;
+    status: string;
+    starts_at: string;
+    ends_at: string;
+    address: string;
+    created_at: string;
+  };
+};
+
+
 const API_BASE = process.env.NEXT_PUBLIC_AUTH_API_BASE;
 
 function resolveUrl(path: string) {
@@ -62,24 +76,20 @@ export type CreateBookingInput = {
   notes?: string;
 };
 
-export type CreateBookingResponse = {
-  ok: boolean;
-  booking: {
-    public_id: string;
-    status: string;
-    starts_at: string;
-    ends_at: string;
-    address: string;
-    created_at: string;
-  };
-};
 
-export function createBooking(input: CreateBookingInput) {
+
+export async function createBooking(payload: {
+  servicePublicId: string;
+  startsAt: string;
+  endsAt: string;
+  address: string;
+  notes?: string;
+}) {
   return jsonFetch<CreateBookingResponse>("/bookings", {
     method: "POST",
-    body: JSON.stringify(input),
+    body: JSON.stringify(payload),
   });
-};
+}
 
 export type CancelBookingResponse = {
   ok: boolean;
@@ -105,3 +115,4 @@ export function cancelBooking(publicId: string) {
     method: "PATCH",
   });
 }
+

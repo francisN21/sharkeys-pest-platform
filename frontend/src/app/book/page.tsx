@@ -7,6 +7,9 @@ import { getServices, type Service } from "../../lib/api/services";
 import { createBooking } from "../../lib/api/bookings";
 import { me, type MeResponse } from "../../lib/api/auth";
 
+import BookingSurveyModal from "../../components/BookingSurveyModal";
+import { surveyNeeded, submitSurvey, type SurveyCode } from "../../lib/api/survey";
+
 /**
  * Convert a datetime-local string (e.g. "2026-02-08T14:30") to ISO string.
  * Treats input as local time.
@@ -54,6 +57,15 @@ export default function BookPage() {
   const [serviceAddress, setServiceAddress] = useState(""); // only used when checkbox is ON
 
   const [notes, setNotes] = useState("");
+
+  // ✅ Survey modal state
+  const [surveyOpen, setSurveyOpen] = useState(false);
+  const [surveySubmitting, setSurveySubmitting] = useState(false);
+  const [createdBookingPublicId, setCreatedBookingPublicId] = useState<string | null>(null);
+
+  const [surveyHeardFrom, setSurveyHeardFrom] = useState<SurveyCode | "">("");
+  const [surveyReferrerName, setSurveyReferrerName] = useState("");
+  const [surveyOtherText, setSurveyOtherText] = useState("");
 
   const selectedService = useMemo(
     () => services.find((s) => s.public_id === servicePublicId) || null,
@@ -141,6 +153,53 @@ export default function BookPage() {
     };
   }, [router]);
 
+  async function openSurveyIfNeeded() {
+    try {
+      const r = await surveyNeeded();
+      if (r?.ok && r.needed) {
+        setSurveyOpen(true);
+      } else {
+        router.push("/account");
+      }
+    } catch {
+      // If survey check fails, don't block the user
+      router.push("/account");
+    }
+  }
+
+  async function onSubmitSurvey() {
+    if (!surveyHeardFrom) return;
+
+    // Simple validation for conditional fields
+    if (surveyHeardFrom === "other" && surveyOtherText.trim().length < 2) {
+      setError("Please specify 'Other' (at least 2 characters).");
+      return;
+    }
+    if (surveyHeardFrom === "referred" && surveyReferrerName.trim().length < 2) {
+      setError("Please enter a name (at least 2 characters).");
+      return;
+    }
+
+    try {
+      setSurveySubmitting(true);
+      setError(null);
+
+      await submitSurvey({
+        bookingPublicId: createdBookingPublicId ?? undefined,
+        heard_from: surveyHeardFrom,
+        referrer_name: surveyHeardFrom === "referred" ? surveyReferrerName.trim() : undefined,
+        other_text: surveyHeardFrom === "other" ? surveyOtherText.trim() : undefined,
+      });
+
+      setSurveyOpen(false);
+      router.push("/account");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to submit survey");
+    } finally {
+      setSurveySubmitting(false);
+    }
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSuccessMsg(null);
@@ -151,8 +210,6 @@ export default function BookPage() {
     if (!computedEndsAtIso) return setError("Could not compute end time.");
 
     // Address rules:
-    // - If checkbox is OFF, we require user.address to exist.
-    // - If checkbox is ON, we require serviceAddress input.
     if (!useDifferentAddress) {
       if (defaultAddress.length < 5) {
         return setError("Your account has no saved address. Please use a different address.");
@@ -168,7 +225,7 @@ export default function BookPage() {
     try {
       setLoadingSubmit(true);
 
-      await createBooking({
+      const created = await createBooking({
         servicePublicId,
         startsAt: startsAtIso,
         endsAt: computedEndsAtIso,
@@ -176,8 +233,14 @@ export default function BookPage() {
         notes: notes.trim() ? notes.trim() : undefined,
       });
 
-      setSuccessMsg("Booking created! Redirecting to your account…");
-      setTimeout(() => router.push("/account"), 700);
+      // ✅ store booking pid (optional, but best)
+      const bookingPid = created?.booking?.public_id ?? null;
+      setCreatedBookingPublicId(bookingPid);
+
+      setSuccessMsg("Booking created!");
+
+      // ✅ open survey if needed
+      await openSurveyIfNeeded();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to create booking";
       setError(msg);
@@ -406,6 +469,21 @@ export default function BookPage() {
           )}
         </div>
       </section>
+
+      {/* ✅ Survey Modal */}
+      <BookingSurveyModal
+        open={surveyOpen}
+        onClose={() => setSurveyOpen(false)}
+        onSkip={() => router.push("/account")}
+        heardFrom={surveyHeardFrom}
+        setHeardFrom={setSurveyHeardFrom}
+        referrerName={surveyReferrerName}
+        setReferrerName={setSurveyReferrerName}
+        otherText={surveyOtherText}
+        setOtherText={setSurveyOtherText}
+        submitting={surveySubmitting}
+        onSubmit={onSubmitSurvey}
+      />
     </main>
   );
 }

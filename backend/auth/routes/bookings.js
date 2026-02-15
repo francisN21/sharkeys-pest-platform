@@ -59,7 +59,18 @@ router.post("/", requireAuth, async (req, res, next) => {
     );
 
     const booking = created.rows[0];
-
+    return res.status(201).json({
+      ok: true,
+      booking: {
+        id: booking.id,
+        public_id: booking.public_id,
+        status: booking.status,
+        starts_at: booking.starts_at,
+        ends_at: booking.ends_at,
+        address: booking.address,
+        created_at: booking.created_at,
+      },
+    });
     await addEvent(client, booking.id, userId, "created", {});
 
     await client.query("COMMIT");
