@@ -6,6 +6,7 @@ import { me, type MeResponse } from "../../lib/api/auth";
 import Navbar from "../../components/Navbar";
 import TrafficOverview from "../../components/su-dashboard/TrafficOverview";
 import BookingsOverview from "../../components/su-dashboard/BookingsOverview";
+import CustomersOverview from "../../components/su-dashboard/CustomersOverview";
 
 type MeUserWithRoles = NonNullable<MeResponse["user"]> & {
   roles?: string[] | null;
@@ -109,6 +110,13 @@ export default function OwnerDashboardPage() {
             style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
         >
             <BookingsOverview />
+        </div>
+
+                <div
+            className="rounded-2xl border p-6"
+            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+        >
+            <CustomersOverview />
         </div>
         </div>
       </main>  

@@ -74,6 +74,29 @@ export type BookingsMonthlyRow = {
   cancelled_count: number;
 };
 
+export type CustomersAllTime = {
+  customers_all_time: number;
+  residential_all_time: number;
+  business_all_time: number;
+  unknown_all_time: number;
+  residential_percent: number;
+  business_percent: number;
+};
+
+export type CustomersInRange = {
+  new_customers_in_range: number;
+  new_residential_in_range: number;
+  new_business_in_range: number;
+  new_unknown_in_range: number;
+};
+
+export type CustomersMetricsResponse = {
+  ok: boolean;
+  range: { start: string; end_exclusive: string; days: number };
+  all_time: CustomersAllTime;
+  in_range: CustomersInRange;
+};
+
 export function getTrafficMetrics(days = 30) {
   return jsonFetch<TrafficMetricsResponse>(`/admin/metrics/traffic?days=${encodeURIComponent(days)}`, {
     method: "GET",
@@ -96,4 +119,15 @@ export function getBookingsMetrics(range?: { start?: string; end?: string }) {
   const path = qs ? `/admin/metrics/bookings?${qs}` : `/admin/metrics/bookings`;
 
   return jsonFetch<BookingsMetricsResponse>(path, { method: "GET" });
+}
+
+export function getCustomersMetrics(range?: { start?: string; end?: string }) {
+  const params = new URLSearchParams();
+  if (range?.start) params.set("start", range.start);
+  if (range?.end) params.set("end", range.end);
+
+  const qs = params.toString();
+  const path = qs ? `/admin/metrics/customers?${qs}` : `/admin/metrics/customers`;
+
+  return jsonFetch<CustomersMetricsResponse>(path, { method: "GET" });
 }

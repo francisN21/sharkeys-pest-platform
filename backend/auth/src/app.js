@@ -24,7 +24,8 @@ const workerBookingsRouter = require("../routes/workerBookings");
 // Metrics routes pipeline
 const trafficRouter = require("../routes/adminMetricsTraffic");
 const adminMetricsBookingsRouter = require("../routes/adminMetricsBookings");
-
+const adminMetricsCustomersRouter = require("../routes/adminMetricsCustomers");
+const adminMetricsSurveyRouter = require("../routes/adminMetricsSurvey");
 
 
 
@@ -90,9 +91,10 @@ app.use("/auth", authRouter);
 app.use("/auth", meRouter);
 
 // Metrics Routes Pipeline
-
 app.use(trafficRouter);
 app.use(adminMetricsBookingsRouter);
+app.use(adminMetricsCustomersRouter);
+app.use(adminMetricsSurveyRouter);
 
 
 // Service routes pipeline
