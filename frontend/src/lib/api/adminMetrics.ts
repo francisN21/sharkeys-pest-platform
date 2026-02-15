@@ -97,6 +97,25 @@ export type CustomersMetricsResponse = {
   in_range: CustomersInRange;
 };
 
+export type SurveyCountRow = {
+  code: string;   // linkedin | google | instagram | facebook | referred | other
+  label: string;  // display label
+  count: number;
+};
+
+export type SurveyTopOtherRow = {
+  val: string;   // normalized "other" text
+  count: number;
+};
+
+export type SurveyMetricsResponse = {
+  ok: boolean;
+  range: { start: string; end_exclusive: string; days: number };
+  total_responses: number;
+  counts: SurveyCountRow[];
+  top_other: SurveyTopOtherRow[];
+};
+
 export function getTrafficMetrics(days = 30) {
   return jsonFetch<TrafficMetricsResponse>(`/admin/metrics/traffic?days=${encodeURIComponent(days)}`, {
     method: "GET",
@@ -130,4 +149,30 @@ export function getCustomersMetrics(range?: { start?: string; end?: string }) {
   const path = qs ? `/admin/metrics/customers?${qs}` : `/admin/metrics/customers`;
 
   return jsonFetch<CustomersMetricsResponse>(path, { method: "GET" });
+}
+
+export function getSurveyMetrics(range?: { start?: string; end?: string }) {
+  const params = new URLSearchParams();
+  if (range?.start) params.set("start", range.start);
+  if (range?.end) params.set("end", range.end);
+
+  const qs = params.toString();
+  const path = qs ? `/admin/metrics/survey?${qs}` : `/admin/metrics/survey`;
+
+  return jsonFetch<SurveyMetricsResponse>(path, { method: "GET" });
+}
+
+export function downloadCompletedBookingsCsv(range?: { start?: string; end?: string }) {
+  const params = new URLSearchParams();
+  if (range?.start) params.set("start", range.start);
+  if (range?.end) params.set("end", range.end);
+
+  const qs = params.toString();
+  const path = qs ? `/admin/metrics/bookings/export?${qs}` : `/admin/metrics/bookings/export`;
+
+  // IMPORTANT: this is a file download, not jsonFetch
+  return fetch(resolveUrl(path), {
+    method: "GET",
+    credentials: "include",
+  });
 }

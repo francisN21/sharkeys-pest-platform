@@ -41,7 +41,7 @@ router.get("/admin/metrics/survey", requireAuth, async (req, res, next) => {
     const ok = await requireSuperUserByDb(userId);
     if (!ok) return res.status(403).json({ ok: false, message: "Forbidden" });
 
-    // ✅ Default range: last 30 days rolling ending today (exclusive)
+    // ✅ Default: last 30 days rolling ending today (exclusive)
     const now = new Date();
     const endDefault = toISODateOnlyLocal(now);
     const startDefault = toISODateOnlyLocal(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
@@ -61,41 +61,70 @@ router.get("/admin/metrics/survey", requireAuth, async (req, res, next) => {
       return res.status(400).json({ ok: false, message: `Range too large (max ${maxDays} days)` });
     }
 
-    // Counts by source_code (include zeros for active sources)
+    // Your table: booking_survey_responses(user_id, heard_from, referrer_name, other_text, submitted_at)
+    // We want fixed categories: linkedin/google/instagram/facebook/referred/other
     const countsRes = await pool.query(
       `
       WITH params AS (
-        SELECT $1::date AS start_date, $2::date AS end_date
+        SELECT $1::timestamptz AS start_ts,
+               $2::timestamptz AS end_ts
+      ),
+      defs AS (
+        SELECT * FROM (VALUES
+          ('linkedin'::text, 'LinkedIn'::text, 10::int),
+          ('google'::text, 'Google'::text, 20::int),
+          ('instagram'::text, 'Instagram'::text, 30::int),
+          ('facebook'::text, 'Facebook'::text, 40::int),
+          ('referred'::text, 'Referred'::text, 50::int),
+          ('other'::text, 'Other'::text, 60::int)
+        ) AS v(code, label, sort_order)
+      ),
+      normalized AS (
+        SELECT
+          CASE
+            WHEN heard_from IS NULL THEN 'other'
+            WHEN lower(trim(heard_from)) IN ('linkedin') THEN 'linkedin'
+            WHEN lower(trim(heard_from)) IN ('google') THEN 'google'
+            WHEN lower(trim(heard_from)) IN ('instagram','ig') THEN 'instagram'
+            WHEN lower(trim(heard_from)) IN ('facebook','fb') THEN 'facebook'
+            WHEN lower(trim(heard_from)) IN ('referred','referral','word of mouth','word-of-mouth') THEN 'referred'
+            WHEN lower(trim(heard_from)) IN ('other') THEN 'other'
+            ELSE 'other'
+          END AS code,
+          other_text
+        FROM booking_survey_responses r, params p
+        WHERE r.submitted_at >= p.start_ts
+          AND r.submitted_at <  p.end_ts
       )
       SELECT
-        s.code,
-        s.label,
-        COALESCE(COUNT(r.*), 0)::int AS count
-      FROM survey_sources s
-      LEFT JOIN booking_survey_responses r
-        ON r.source_code = s.code
-       AND r.created_at >= (SELECT start_date FROM params)
-       AND r.created_at <  (SELECT end_date   FROM params)
-      WHERE s.is_active = true
-      GROUP BY s.code, s.label, s.sort_order
-      ORDER BY s.sort_order ASC, s.code ASC
+        d.code,
+        d.label,
+        COALESCE(COUNT(n.*), 0)::int AS count
+      FROM defs d
+      LEFT JOIN normalized n ON n.code = d.code
+      GROUP BY d.code, d.label, d.sort_order
+      ORDER BY d.sort_order ASC
       `,
-      [startDate, endDate]
+      [`${startDate}T00:00:00Z`, `${endDate}T00:00:00Z`]
     );
 
-    // Top 3 other_text suggestions (normalized)
     const otherRes = await pool.query(
       `
       WITH params AS (
-        SELECT $1::date AS start_date, $2::date AS end_date
+        SELECT $1::timestamptz AS start_ts,
+               $2::timestamptz AS end_ts
       ),
       cleaned AS (
         SELECT
           lower(trim(regexp_replace(coalesce(other_text,''), '\\s+', ' ', 'g'))) AS val
         FROM booking_survey_responses r, params p
-        WHERE r.source_code = 'other'
-          AND r.created_at >= p.start_date
-          AND r.created_at <  p.end_date
+        WHERE r.submitted_at >= p.start_ts
+          AND r.submitted_at <  p.end_ts
+          AND (
+            heard_from IS NULL
+            OR lower(trim(heard_from)) = 'other'
+            OR lower(trim(heard_from)) NOT IN ('linkedin','google','instagram','facebook','referred')
+          )
       )
       SELECT val, COUNT(*)::int AS count
       FROM cleaned
@@ -108,18 +137,19 @@ router.get("/admin/metrics/survey", requireAuth, async (req, res, next) => {
       ORDER BY count DESC, val ASC
       LIMIT 3
       `,
-      [startDate, endDate]
+      [`${startDate}T00:00:00Z`, `${endDate}T00:00:00Z`]
     );
 
     const counts = countsRes.rows || [];
     const total = counts.reduce((sum, r) => sum + Number(r.count || 0), 0);
 
+    // ✅ We intentionally do NOT expose referrer_name
     return res.json({
       ok: true,
       range: { start: startDate, end_exclusive: endDate, days: diffDays },
       total_responses: total,
-      counts, // [{code,label,count}]
-      top_other: otherRes.rows || [], // [{val,count}] (no referred names included)
+      counts,
+      top_other: otherRes.rows || [],
     });
   } catch (e) {
     next(e);

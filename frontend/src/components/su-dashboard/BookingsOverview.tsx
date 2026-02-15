@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getBookingsMetrics, type BookingsMetricsResponse } from "../../lib/api/adminMetrics";
+import { getBookingsMetrics, type BookingsMetricsResponse, downloadCompletedBookingsCsv } from "../../lib/api/adminMetrics";
 
 function fmt(n: number) {
   return Number.isFinite(n) ? n.toLocaleString() : "0";
@@ -29,7 +29,7 @@ function dateOnlyEndExclusiveFromMonthEnd(monthValue: string) {
   // returns YYYY-MM-DD for the *day after* month end (exclusive end date)
   if (!/^\d{4}-\d{2}$/.test(monthValue)) return null;
   const [y, m] = monthValue.split("-").map(Number);
-  const firstOfNext = new Date(Date.UTC(y, m, 1)); // month is 1-based; Date.UTC expects 0-based, but using "m" gives next month automatically
+  const firstOfNext = new Date(Date.UTC(y, m, 1)); // next month
   const yyyy = firstOfNext.getUTCFullYear();
   const mm = String(firstOfNext.getUTCMonth() + 1).padStart(2, "0");
   const dd = String(firstOfNext.getUTCDate()).padStart(2, "0");
@@ -41,6 +41,15 @@ function dateOnlyToday() {
   const yyyy = now.getFullYear();
   const mm = String(now.getMonth() + 1).padStart(2, "0");
   const dd = String(now.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function dateOnlyDaysAgo(days: number) {
+  const now = new Date();
+  const d = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
 
@@ -60,22 +69,40 @@ export default function BookingsOverview() {
   // rolling default uses TODAY as end_exclusive (not end of month)
   const [useRolling90End, setUseRolling90End] = useState<boolean>(true);
 
+  // ✅ Advanced mode: day-level range + export
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
+  const [advStart, setAdvStart] = useState<string>(() => dateOnlyDaysAgo(90));
+  const [advEnd, setAdvEnd] = useState<string>(() => dateOnlyToday()); // exclusive end
+  const [exporting, setExporting] = useState<boolean>(false);
+
   const [data, setData] = useState<BookingsMetricsResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  function reset90d() {
+    // resets BOTH month controls + advanced controls back to default 90d rolling to today
+    setFromMonth(defaultStartMonth);
+    setToMonth(defaultEndMonth);
+    setUseRolling90End(true);
+    setAdvStart(dateOnlyDaysAgo(90));
+    setAdvEnd(dateOnlyToday());
+  }
+
   // Build query range
   const range = useMemo(() => {
+    // If advanced is enabled, use day-level controls
+    if (showAdvanced) {
+      return { start: advStart || undefined, end: advEnd || undefined };
+    }
+
     const start = dateOnlyFromMonthStart(fromMonth) ?? undefined;
 
     // If rolling end is enabled, end_exclusive = today (rolling)
     // else end_exclusive = day after end month
-    const end = useRolling90End
-      ? dateOnlyToday()
-      : (dateOnlyEndExclusiveFromMonthEnd(toMonth) ?? undefined);
+    const end = useRolling90End ? dateOnlyToday() : (dateOnlyEndExclusiveFromMonthEnd(toMonth) ?? undefined);
 
     return { start, end };
-  }, [fromMonth, toMonth, useRolling90End]);
+  }, [showAdvanced, advStart, advEnd, fromMonth, toMonth, useRolling90End]);
 
   // Fetch on range change
   useEffect(() => {
@@ -111,6 +138,34 @@ export default function BookingsOverview() {
     return series.reduce((m, r) => Math.max(m, Number(r.created_count || 0)), 0);
   }, [series]);
 
+  async function onExportCompletedCsv() {
+    try {
+      setExporting(true);
+
+      const res = await downloadCompletedBookingsCsv(range);
+      if (!res.ok) throw new Error(`Export failed (${res.status})`);
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+
+      const s = range.start || "start";
+      const e = range.end || "end";
+      a.download = `completed_bookings_${s}_to_${e}.csv`;
+
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Failed to export CSV");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <section className="space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -121,48 +176,138 @@ export default function BookingsOverview() {
           </div>
         </div>
 
-        {/* Month/year range controls */}
+        {/* Controls + actions */}
         <div className="flex flex-wrap items-end gap-2">
-          <div className="space-y-1">
-            <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-              From
-            </div>
-            <input
-              type="month"
-              value={fromMonth}
-              onChange={(e) => setFromMonth(e.target.value)}
-              className="rounded-xl border px-3 py-2 text-sm"
-              style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-            />
-          </div>
-
-          <div className="space-y-1">
-            <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-              To
-            </div>
-            <input
-              type="month"
-              value={toMonth}
-              onChange={(e) => setToMonth(e.target.value)}
-              className="rounded-xl border px-3 py-2 text-sm"
-              style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-              disabled={useRolling90End}
-              title={useRolling90End ? "Disabled because Rolling end is ON" : "Select end month"}
-            />
-          </div>
-
-          <label className="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm"
+          <button
+            type="button"
+            onClick={reset90d}
+            className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
             style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+            title="Reset to last 90 days (rolling to today)"
           >
-            <input
-              type="checkbox"
-              checked={useRolling90End}
-              onChange={(e) => setUseRolling90End(e.target.checked)}
-            />
-            Rolling end (today)
-          </label>
+            Reset 90d
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((v) => !v)}
+            className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
+            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+            title="Advanced date range + CSV export"
+          >
+            {showAdvanced ? "Hide advanced" : "Advanced"}
+          </button>
         </div>
       </div>
+
+      {/* Month/year range controls (hide while advanced is on) */}
+      {!showAdvanced ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+            Tip: Use month range for quick rollups. Turn on Advanced for day-level range + export.
+          </div>
+
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="space-y-1">
+              <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+                From
+              </div>
+              <input
+                type="month"
+                value={fromMonth}
+                onChange={(e) => setFromMonth(e.target.value)}
+                className="rounded-xl border px-3 py-2 text-sm"
+                style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+                To
+              </div>
+              <input
+                type="month"
+                value={toMonth}
+                onChange={(e) => setToMonth(e.target.value)}
+                className="rounded-xl border px-3 py-2 text-sm"
+                style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                disabled={useRolling90End}
+                title={useRolling90End ? "Disabled because Rolling end is ON" : "Select end month"}
+              />
+            </div>
+
+            <label
+              className="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm"
+              style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+            >
+              <input
+                type="checkbox"
+                checked={useRolling90End}
+                onChange={(e) => setUseRolling90End(e.target.checked)}
+              />
+              Rolling end (today)
+            </label>
+          </div>
+        </div>
+      ) : (
+        // Advanced controls
+        <div
+          className="rounded-2xl border p-5 space-y-3"
+          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-sm font-semibold">Advanced</div>
+              <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                Day-level range + export completed bookings to CSV for owner auditing.
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="space-y-1">
+                <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+                  Start
+                </div>
+                <input
+                  type="date"
+                  value={advStart}
+                  onChange={(e) => setAdvStart(e.target.value)}
+                  className="rounded-xl border px-3 py-2 text-sm"
+                  style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+                  End (exclusive)
+                </div>
+                <input
+                  type="date"
+                  value={advEnd}
+                  onChange={(e) => setAdvEnd(e.target.value)}
+                  className="rounded-xl border px-3 py-2 text-sm"
+                  style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={onExportCompletedCsv}
+                className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+                style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                disabled={exporting || loading}
+                title="Export completed bookings in this date range"
+              >
+                {exporting ? "Exporting…" : "Export Completed CSV"}
+              </button>
+            </div>
+          </div>
+
+          <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+            Export includes: service, time range, customer name/type, phone/email, address, booking id, created, notes, completed by, completed at.
+          </div>
+        </div>
+      )}
 
       {data?.range ? (
         <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
