@@ -10,6 +10,7 @@ const pinoHttp = require("pino-http");
 const authRouter = require("../routes/auth");
 const { notFound } = require("../middleware/notFound");
 const { errorHandler } = require("../middleware/errorHandler");
+const { trackSiteAccess } = require("../middleware/trackSiteAccess");
 const { pool } = require("./db");
 
 // Service routes pipeline
@@ -22,6 +23,8 @@ const adminCustomersRouter = require("../routes/adminCustomers");
 const workerBookingsRouter = require("../routes/workerBookings");
 
 
+
+
 const app = express();
 
 app.set("trust proxy", 1);
@@ -31,6 +34,8 @@ app.use(
     contentSecurityPolicy: false,
   })
 );
+
+
 
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
@@ -71,6 +76,16 @@ app.get("/health/db", async (req, res, next) => {
     next(e);
   }
 });
+
+app.use(trackSiteAccess({
+  excludePrefixes: ["/_next", "/static", "/assets"],
+  excludePaths: ["/health", "/favicon.ico"],
+}));
+
+// Metrics Routes Pipeline
+// const trafficRouter = require("../routes/adminMetricsTraffic");
+const trafficRouter = require("../routes/adminMetricsTraffic");
+app.use(trafficRouter);
 
 app.use("/auth", authRouter);
 app.use("/auth", meRouter);

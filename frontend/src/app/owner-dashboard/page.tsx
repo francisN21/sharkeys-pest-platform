@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { me, type MeResponse } from "../../lib/api/auth";
 import Navbar from "../../components/Navbar";
+import TrafficOverview from "../../components/su-dashboard/TrafficOverview";
 
 type MeUserWithRoles = NonNullable<MeResponse["user"]> & {
   roles?: string[] | null;
@@ -103,6 +104,7 @@ export default function OwnerDashboardPage() {
             style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
         >
             Next: we’ll wire the metrics API + modular components here.
+            <TrafficOverview days={30} />
         </div>
         </div>
       </main>  
