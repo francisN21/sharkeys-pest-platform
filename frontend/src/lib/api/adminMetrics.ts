@@ -51,8 +51,49 @@ export type TrafficMetricsResponse = {
   daily: TrafficDailyRow[];
 };
 
+export type BookingsTotals = {
+  bookings_in_range: number;
+  completed_in_range: number;
+  cancelled_in_range: number;
+
+  pending_in_range: number;
+  accepted_in_range: number;
+  assigned_in_range: number;
+
+  bookings_all_time: number;
+  completed_all_time: number;
+  cancelled_all_time: number;
+
+  completion_rate_percent: number;
+};
+
+export type BookingsMonthlyRow = {
+  month_start: string; // YYYY-MM-01
+  created_count: number;
+  completed_count: number;
+  cancelled_count: number;
+};
+
 export function getTrafficMetrics(days = 30) {
   return jsonFetch<TrafficMetricsResponse>(`/admin/metrics/traffic?days=${encodeURIComponent(days)}`, {
     method: "GET",
   });
+}
+
+export type BookingsMetricsResponse = {
+  ok: boolean;
+  range: { start: string; end_exclusive: string; days: number };
+  totals: BookingsTotals;
+  monthly: BookingsMonthlyRow[];
+};
+
+export function getBookingsMetrics(range?: { start?: string; end?: string }) {
+  const params = new URLSearchParams();
+  if (range?.start) params.set("start", range.start);
+  if (range?.end) params.set("end", range.end);
+
+  const qs = params.toString();
+  const path = qs ? `/admin/metrics/bookings?${qs}` : `/admin/metrics/bookings`;
+
+  return jsonFetch<BookingsMetricsResponse>(path, { method: "GET" });
 }

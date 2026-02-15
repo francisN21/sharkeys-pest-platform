@@ -21,6 +21,9 @@ const bookingsMeRouter = require("../routes/bookingsMe");
 const adminBookingsRouter = require("../routes/adminBookings");
 const adminCustomersRouter = require("../routes/adminCustomers");
 const workerBookingsRouter = require("../routes/workerBookings");
+// Metrics routes pipeline
+const trafficRouter = require("../routes/adminMetricsTraffic");
+const adminMetricsBookingsRouter = require("../routes/adminMetricsBookings");
 
 
 
@@ -82,13 +85,16 @@ app.use(trackSiteAccess({
   excludePaths: ["/health", "/favicon.ico"],
 }));
 
-// Metrics Routes Pipeline
-// const trafficRouter = require("../routes/adminMetricsTraffic");
-const trafficRouter = require("../routes/adminMetricsTraffic");
-app.use(trafficRouter);
-
+// Main Auth pipeline
 app.use("/auth", authRouter);
 app.use("/auth", meRouter);
+
+// Metrics Routes Pipeline
+
+app.use(trafficRouter);
+app.use(adminMetricsBookingsRouter);
+
+
 // Service routes pipeline
 app.use("/services", servicesRouter);
 app.use("/bookings", bookingsRouter);

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { me, type MeResponse } from "../../lib/api/auth";
 import Navbar from "../../components/Navbar";
 import TrafficOverview from "../../components/su-dashboard/TrafficOverview";
+import BookingsOverview from "../../components/su-dashboard/BookingsOverview";
 
 type MeUserWithRoles = NonNullable<MeResponse["user"]> & {
   roles?: string[] | null;
@@ -18,8 +19,6 @@ type MeResponseWithRoles = MeResponse & {
 
 function isSuperUser(res: MeResponse | null) {
   if (!res) return false;
-
-  // "as-is" safe cast (won’t break old code)
   const withRoles = res as MeResponseWithRoles;
 
   const roles = (withRoles.user?.roles ?? withRoles.roles ?? [])
@@ -103,8 +102,13 @@ export default function OwnerDashboardPage() {
             className="rounded-2xl border p-6"
             style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
         >
-            Next: we’ll wire the metrics API + modular components here.
             <TrafficOverview days={30} />
+        </div>
+        <div
+            className="rounded-2xl border p-6"
+            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+        >
+            <BookingsOverview />
         </div>
         </div>
       </main>  
