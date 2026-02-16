@@ -10,7 +10,7 @@ import AdminJobsPage from "../account/admin/jobs/page";
 import AdminJobHistoryPage from "./admin/jobhistory/page";
 import AdminCustomersPage from "../account/admin/customers/page";
 import { me, type MeResponse } from "../../lib/api/auth";
-import TechBookingsPage from "./techbookings/page"; // ✅ mounted
+import TechBookingsPage from "./techbookings/page";
 
 type AppRole = "customer" | "technician" | "admin";
 type ApiUserRole = "customer" | "worker" | "admin";
@@ -70,7 +70,7 @@ export default function AccountShellPage() {
       { key: "admin_customers", label: "Customers" },
       { key: "admin_jobs", label: "Jobs" },
       { key: "admin_jobhistory", label: "Completed" },
-      { key: "admin_tech_bookings", label: "Tech Bookings" } // ✅ new
+      { key: "admin_tech_bookings", label: "Tech Bookings" }
     );
 
     return base;
@@ -156,7 +156,7 @@ export default function AccountShellPage() {
               {role === "admin" && activeTab === "admin_customers" && <AdminCustomersPage />}
               {role === "admin" && activeTab === "admin_jobs" && <AdminJobsPage />}
               {role === "admin" && activeTab === "admin_jobhistory" && <AdminJobHistoryPage />}
-              {role === "admin" && activeTab === "admin_tech_bookings" && <TechBookingsPage />}{/* ✅ */}
+              {role === "admin" && activeTab === "admin_tech_bookings" && <TechBookingsPage />}
             </>
           )}
         </div>

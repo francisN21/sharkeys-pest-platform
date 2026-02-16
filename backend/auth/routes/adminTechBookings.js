@@ -1,6 +1,7 @@
 // backend/auth/routes/adminTechBookings.js
 const express = require("express");
 const { pool } = require("../src/db");
+const { z } = require("zod");
 const { requireAuth } = require("../middleware/requireAuth");
 
 const router = express.Router();
@@ -10,6 +11,17 @@ async function requireAdminOrSuperUserByDb(userId) {
   const roles = rolesRes.rows.map((r) => String(r.role || "").trim().toLowerCase()).filter(Boolean);
   return roles.includes("admin") || roles.includes("superuser");
 }
+
+const reassignSchema = z.object({
+  worker_user_id: z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]).transform((v) => Number(v)),
+});
+
+async function requireAdminOrSuperByDb(userId) {
+  const rolesRes = await pool.query(`SELECT role FROM user_roles WHERE user_id = $1`, [userId]);
+  const roles = rolesRes.rows.map((r) => String(r.role));
+  return roles.includes("admin") || roles.includes("superuser");
+}
+
 
 router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
   try {
@@ -106,6 +118,74 @@ router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
     return res.json({ ok: true, technicians: techs, generated_at: new Date().toISOString() });
   } catch (e) {
     next(e);
+  }
+});
+
+
+
+
+router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const userId = req.user?.id ?? req.auth?.userId ?? null;
+    if (!userId) return res.status(401).json({ ok: false, message: "Not authenticated" });
+
+    const ok = await requireAdminOrSuperByDb(userId);
+    if (!ok) return res.status(403).json({ ok: false, message: "Forbidden" });
+
+    const bookingPublicId = req.params.publicId;
+    const { worker_user_id } = reassignSchema.parse(req.body);
+
+    await client.query("BEGIN");
+
+    // lock booking
+    const bRes = await client.query(
+      `SELECT id, status FROM bookings WHERE public_id = $1 FOR UPDATE`,
+      [bookingPublicId]
+    );
+    if (bRes.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ ok: false, message: "Booking not found" });
+    }
+
+    const booking = bRes.rows[0];
+    if (booking.status === "completed" || booking.status === "cancelled") {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ ok: false, message: "Cannot reassign a completed/cancelled booking" });
+    }
+
+    // confirm target tech is a worker
+    const techRes = await client.query(
+      `SELECT 1 FROM user_roles WHERE user_id = $1 AND role = 'worker' LIMIT 1`,
+      [worker_user_id]
+    );
+    if (techRes.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ ok: false, message: "Target user is not a technician" });
+    }
+
+    // insert new assignment row
+    await client.query(
+      `INSERT INTO booking_assignments (booking_id, worker_user_id, assigned_by_user_id)
+       VALUES ($1, $2, $3)`,
+      [booking.id, worker_user_id, userId]
+    );
+
+    // keep booking status consistent
+    if (booking.status !== "assigned") {
+      await client.query(
+        `UPDATE bookings SET status = 'assigned', updated_at = now() WHERE id = $1`,
+        [booking.id]
+      );
+    }
+
+    await client.query("COMMIT");
+    return res.json({ ok: true });
+  } catch (e) {
+    try { await client.query("ROLLBACK"); } catch {}
+    next(e);
+  } finally {
+    client.release();
   }
 });
 

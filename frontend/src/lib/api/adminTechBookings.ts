@@ -1,4 +1,4 @@
-// src/lib/api/adminTechBookings.ts
+// frontend/src/lib/api/adminTechBookings.ts
 type ApiErrorShape = { message?: string; error?: string; ok?: boolean };
 
 const API_BASE = process.env.NEXT_PUBLIC_AUTH_API_BASE;
@@ -46,7 +46,7 @@ export type TechBookingRow = {
 };
 
 export type TechRow = {
-  user_id: string | number;
+  user_id: number;                // ✅ make it a number
   public_id: string | null;
   email: string | null;
   first_name: string | null;
@@ -65,10 +65,9 @@ export function getAdminTechBookings() {
   return jsonFetch<AdminTechBookingsResponse>("/admin/tech-bookings", { method: "GET" });
 }
 
-// Re-use your existing assign endpoint pattern (same one your admin bookings table uses)
-export function assignBookingAdmin(bookingPublicId: string, workerUserId: string) {
-  return jsonFetch<{ ok: boolean }>(`/admin/bookings/${encodeURIComponent(bookingPublicId)}/assign`, {
-    method: "PATCH",
-    body: JSON.stringify({ workerUserId }),
+export function reassignBooking(publicId: string, workerUserId: number) {
+  return jsonFetch<{ ok: boolean }>(`/admin/tech-bookings/${encodeURIComponent(publicId)}/reassign`, {
+    method: "POST",
+    body: JSON.stringify({ worker_user_id: workerUserId }), // ✅ matches backend zod schema
   });
 }
