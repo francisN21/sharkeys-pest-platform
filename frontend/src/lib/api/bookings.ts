@@ -11,6 +11,22 @@ export type BookingCard = {
   completed_at?: string | null;
   cancelled_at?: string | null;
   service_title: string;
+
+
+  assigned_worker_public_id?: string | null;
+  assigned_worker_first_name?: string | null;
+  assigned_worker_last_name?: string | null;
+  assigned_worker_phone?: string | null;
+  assigned_worker_email?: string | null;
+  assigned_at?: string | null;
+
+
+  completed_by_public_id?: string | null;
+  completed_by_first_name?: string | null;
+  completed_by_last_name?: string | null;
+  completed_by_phone?: string | null;
+  completed_by_email?: string | null;
+  completed_event_at?: string | null;
 };
 
 export type MyBookingsResponse = {

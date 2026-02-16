@@ -39,9 +39,9 @@ function StatusPill({ status }: { status: BookingCard["status"] }) {
   );
 }
 
-function formatNotes(notes: string | null) {
-  const n = (notes ?? "").trim();
-  return n.length ? n : null;
+function normalizeText(v: string | null | undefined) {
+  const s = String(v ?? "").trim();
+  return s.length ? s : null;
 }
 
 // Convert ISO string -> value for <input type="datetime-local" />
@@ -64,6 +64,181 @@ function fromDateTimeLocalValue(v: string) {
   return d.toISOString();
 }
 
+/**
+ * Optional fields (non-breaking):
+ * We read them safely without changing existing imports/types.
+ */
+type PersonLite = {
+  name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  role?: string | null;
+};
+
+type BookingCardWithOps = BookingCard & {
+  assigned_to?: PersonLite | null;
+  completed_by?: PersonLite | null;
+
+  assigned_to_name?: string | null;
+  assigned_to_phone?: string | null;
+  assigned_to_email?: string | null;
+
+  completed_by_name?: string | null;
+  completed_by_phone?: string | null;
+  completed_by_email?: string | null;
+
+  // new backend fields (optional) - safe, won’t break old code
+  assigned_worker_first_name?: string | null;
+  assigned_worker_last_name?: string | null;
+  assigned_worker_phone?: string | null;
+  assigned_worker_email?: string | null;
+
+  completed_by_first_name?: string | null;
+  completed_by_last_name?: string | null;
+
+
+  completed_at?: string | null;
+};
+
+function fullName(first?: string | null, last?: string | null) {
+  const f = normalizeText(first);
+  const l = normalizeText(last);
+  const s = `${f ?? ""} ${l ?? ""}`.trim();
+  return s.length ? s : null;
+}
+
+function pickAssigned(b: BookingCardWithOps): PersonLite | null {
+  const obj = b.assigned_to ?? null;
+
+  const name =
+    normalizeText(obj?.name ?? b.assigned_to_name) ??
+    fullName(b.assigned_worker_first_name, b.assigned_worker_last_name);
+
+  const phone = normalizeText(obj?.phone ?? b.assigned_to_phone ?? b.assigned_worker_phone);
+  const email = normalizeText(obj?.email ?? b.assigned_to_email ?? b.assigned_worker_email);
+  const role = normalizeText(obj?.role);
+
+  if (!name && !phone && !email && !role) return null;
+  return { name, phone, email, role };
+}
+
+function pickCompleted(b: BookingCardWithOps): PersonLite | null {
+  const obj = b.completed_by ?? null;
+
+  const name =
+    normalizeText(obj?.name ?? b.completed_by_name) ??
+    fullName(b.completed_by_first_name, b.completed_by_last_name);
+
+  const phone = normalizeText(obj?.phone ?? b.completed_by_phone);
+  const email = normalizeText(obj?.email ?? b.completed_by_email);
+  const role = normalizeText(obj?.role);
+
+  if (!name && !phone && !email && !role) return null;
+  return { name, phone, email, role };
+}
+
+function PersonRow({
+  title,
+  person,
+  showEvenIfEmpty,
+  footer,
+}: {
+  title: string;
+  person: PersonLite | null;
+  showEvenIfEmpty?: boolean;
+  footer?: React.ReactNode;
+}) {
+  if (!person && !showEvenIfEmpty && !footer) return null;
+
+  const name = normalizeText(person?.name);
+  const phone = normalizeText(person?.phone);
+  const email = normalizeText(person?.email);
+  const role = normalizeText(person?.role);
+
+  const hasAny = !!(name || phone || email || role);
+
+  return (
+    <div
+      className="rounded-xl border p-3 text-sm"
+      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+    >
+      <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+        {title}
+      </div>
+
+      {hasAny ? (
+        <div className="mt-1">
+          <div className="font-semibold">{name ?? "—"}</div>
+          <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+            {role ? `${role} • ` : ""}
+            {phone ?? "—"}
+            {email ? ` • ${email}` : ""}
+          </div>
+        </div>
+      ) : (
+        <div className="mt-1" style={{ color: "rgb(var(--muted))" }}>
+          —
+        </div>
+      )}
+
+      {footer ? <div className="mt-2">{footer}</div> : null}
+    </div>
+  );
+}
+
+function NotesBlock({
+  editing,
+  canEditNotes,
+  notesLocal,
+  setNotesLocal,
+  saving,
+  notesPretty,
+  status,
+}: {
+  editing: boolean;
+  canEditNotes: boolean;
+  notesLocal: string;
+  setNotesLocal: (v: string) => void;
+  saving: boolean;
+  notesPretty: string;
+  status: BookingCard["status"];
+}) {
+  return editing && canEditNotes ? (
+    <div
+      className="mt-2 rounded-xl border p-3 text-sm space-y-2"
+      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+    >
+      <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+        Notes:
+      </div>
+      <textarea
+        value={notesLocal}
+        onChange={(e) => setNotesLocal(e.target.value)}
+        rows={3}
+        className="w-full rounded-lg border px-3 py-2 text-sm"
+        style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+        placeholder="Add notes for the technician (gate code, pets, parking, etc.)"
+        disabled={saving}
+      />
+      <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+        {status === "accepted"
+          ? "Schedule is locked because your booking was accepted. You can still update notes."
+          : "You can update schedule and notes while pending."}
+      </div>
+    </div>
+  ) : (
+    <div
+      className="mt-2 rounded-xl border p-3 text-sm"
+      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+    >
+      <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+        Notes:
+      </div>
+      <div className="mt-1 whitespace-pre-wrap break-words">{notesPretty}</div>
+    </div>
+  );
+}
+
 function BookingCardUI({
   b,
   onCancel,
@@ -75,6 +250,8 @@ function BookingCardUI({
   cancelling?: boolean;
   onSaved?: () => void;
 }) {
+  const bb = b as BookingCardWithOps;
+
   const canCancel = b.status === "pending" || b.status === "accepted" || b.status === "assigned";
 
   const canEdit = b.status === "pending" || b.status === "accepted";
@@ -149,6 +326,12 @@ function BookingCardUI({
     setNotesLocal(b.notes ?? "");
   }
 
+  const assigned = pickAssigned(bb);
+  const completed = pickCompleted(bb);
+
+  const notesPretty = normalizeText(b.notes) ?? "—";
+  const completedAtPretty = bb.completed_at ? new Date(bb.completed_at).toLocaleString() : null;
+
   return (
     <div className="rounded-2xl border p-4 space-y-2" style={{ borderColor: "rgb(var(--border))" }}>
       <div className="flex items-start justify-between gap-3">
@@ -209,41 +392,33 @@ function BookingCardUI({
         <StatusPill status={b.status} />
       </div>
 
-      {/* Notes */}
-      {editing && canEditNotes ? (
-        <div
-          className="mt-2 rounded-xl border p-3 text-sm space-y-2"
-          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-        >
-          <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-            Notes:
-          </div>
-          <textarea
-            value={notesLocal}
-            onChange={(e) => setNotesLocal(e.target.value)}
-            rows={3}
-            className="w-full rounded-lg border px-3 py-2 text-sm"
-            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-            placeholder="Add notes for the technician (gate code, pets, parking, etc.)"
-            disabled={saving}
-          />
-          <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-            {b.status === "accepted"
-              ? "Schedule is locked because your booking was accepted. You can still update notes."
-              : "You can update schedule and notes while pending."}
-          </div>
-        </div>
-      ) : formatNotes(b.notes) ? (
-        <div
-          className="mt-2 rounded-xl border p-3 text-sm"
-          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-        >
-          <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-            Notes:
-          </div>
-          <div className="mt-1 whitespace-pre-wrap break-words">{b.notes}</div>
-        </div>
-      ) : null}
+      {/* Notes (ALWAYS show) */}
+      <NotesBlock
+        editing={editing}
+        canEditNotes={canEditNotes}
+        notesLocal={notesLocal}
+        setNotesLocal={setNotesLocal}
+        saving={saving}
+        notesPretty={notesPretty}
+        status={b.status}
+      />
+
+      {/* Assigned To */}
+      {b.status !== "completed" ? <PersonRow title="Assigned To:" person={assigned} /> : null}
+
+      {/* Completed By */}
+      <PersonRow
+        title="Completed By:"
+        person={completed}
+        showEvenIfEmpty={!!completedAtPretty}
+        footer={
+          completedAtPretty ? (
+            <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+              Completed at: {completedAtPretty}
+            </div>
+          ) : null
+        }
+      />
 
       {localErr ? (
         <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(239 68 68)" }}>
@@ -318,16 +493,28 @@ export default function BookingsPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
+  const [pending, setPending] = useState<BookingCard[]>([]);
   const [upcoming, setUpcoming] = useState<BookingCard[]>([]);
   const [history, setHistory] = useState<BookingCard[]>([]);
 
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
-  const hasAny = useMemo(() => upcoming.length > 0 || history.length > 0, [upcoming.length, history.length]);
+  const hasAny = useMemo(
+    () => pending.length > 0 || upcoming.length > 0 || history.length > 0,
+    [pending.length, upcoming.length, history.length]
+  );
+
+  function splitUpcoming(list: BookingCard[]) {
+    const p = list.filter((b) => b.status === "pending");
+    const u = list.filter((b) => b.status !== "pending");
+    return { p, u };
+  }
 
   async function refresh() {
     const res = await getMyBookings();
-    setUpcoming(res.upcoming || []);
+    const split = splitUpcoming(res.upcoming || []);
+    setPending(split.p);
+    setUpcoming(split.u);
     setHistory(res.history || []);
   }
 
@@ -360,7 +547,9 @@ export default function BookingsPage() {
         const res = await getMyBookings();
         if (!alive) return;
 
-        setUpcoming(res.upcoming || []);
+        const split = splitUpcoming(res.upcoming || []);
+        setPending(split.p);
+        setUpcoming(split.u);
         setHistory(res.history || []);
       } catch (e: unknown) {
         if (!alive) return;
@@ -382,7 +571,7 @@ export default function BookingsPage() {
         <div>
           <h2 className="text-xl font-bold">Bookings</h2>
           <p className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-            Your upcoming appointments and booking history.
+            Your pending requests, upcoming appointments, and booking history.
           </p>
         </div>
 
@@ -420,6 +609,23 @@ export default function BookingsPage() {
             Book a Service
           </Link>
         </div>
+      ) : null}
+
+      {!loading && pending.length > 0 ? (
+        <section className="space-y-3">
+          <h3 className="text-base font-semibold">Pending</h3>
+          <div className="grid gap-3">
+            {pending.map((b) => (
+              <BookingCardUI
+                key={b.public_id}
+                b={b}
+                onCancel={onCancelBooking}
+                cancelling={cancellingId === b.public_id}
+                onSaved={refresh}
+              />
+            ))}
+          </div>
+        </section>
       ) : null}
 
       {!loading && upcoming.length > 0 ? (

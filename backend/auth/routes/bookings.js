@@ -13,6 +13,7 @@ const createBookingSchema = z.object({
   address: z.string().min(5),
   notes: z.string().max(2000).optional(),
 });
+
 // New Update booking schema
 const updateBookingSchema = z.object({
   starts_at: z.string().datetime().optional(), // ISO string
@@ -28,6 +29,11 @@ async function addEvent(client, bookingId, actorUserId, eventType, metadata = {}
   );
 }
 
+/**
+ * POST /bookings
+ * Creates booking (pending) + logs event + commits.
+ * IMPORTANT: Do not return before COMMIT, or the row may not persist.
+ */
 router.post("/", requireAuth, async (req, res, next) => {
   const client = await pool.connect();
   try {
@@ -53,12 +59,20 @@ router.post("/", requireAuth, async (req, res, next) => {
       `
       INSERT INTO bookings (customer_user_id, service_id, starts_at, ends_at, address, notes)
       VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id, public_id, status, starts_at, ends_at, address, created_at
+      RETURNING id, public_id, status, starts_at, ends_at, address, notes, created_at
       `,
       [userId, serviceId, startsAt, endsAt, address, notes || null]
     );
 
     const booking = created.rows[0];
+
+    // ✅ keep event log (your old working behavior)
+    await addEvent(client, booking.id, userId, "created", {});
+
+    await client.query("COMMIT");
+
+    // ✅ keep your newer response shape (explicit fields),
+    // while also not breaking any old callers expecting `booking` object.
     return res.status(201).json({
       ok: true,
       booking: {
@@ -68,16 +82,13 @@ router.post("/", requireAuth, async (req, res, next) => {
         starts_at: booking.starts_at,
         ends_at: booking.ends_at,
         address: booking.address,
+        notes: booking.notes ?? null,
         created_at: booking.created_at,
       },
     });
-    await addEvent(client, booking.id, userId, "created", {});
-
-    await client.query("COMMIT");
-
-    res.status(201).json({ ok: true, booking });
   } catch (e) {
     try { await client.query("ROLLBACK"); } catch {}
+
     // DB-level double-booking protection
     if (e && e.code === "23P01") {
       return res.status(409).json({ ok: false, message: "Time slot unavailable" });
@@ -129,17 +140,14 @@ router.patch("/:publicId", requireAuth, requireRole("customer"), async (req, res
     }
 
     // If pending and schedule fields provided, validate them
-    let startsAt = null;
-    let endsAt = null;
-
     if (booking.status === "pending" && wantsScheduleChange) {
       if (!payload.starts_at || !payload.ends_at) {
         await client.query("ROLLBACK");
         return res.status(400).json({ ok: false, message: "Both starts_at and ends_at are required to change schedule" });
       }
 
-      startsAt = new Date(payload.starts_at);
-      endsAt = new Date(payload.ends_at);
+      const startsAt = new Date(payload.starts_at);
+      const endsAt = new Date(payload.ends_at);
 
       if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
         await client.query("ROLLBACK");
@@ -175,9 +183,7 @@ router.patch("/:publicId", requireAuth, requireRole("customer"), async (req, res
       return res.json({ ok: true });
     }
 
-    // updated_at trigger exists, but keep explicit if you prefer:
     sets.push(`updated_at = now()`);
-
     params.push(booking.id);
 
     const upd = await client.query(
@@ -189,6 +195,9 @@ router.patch("/:publicId", requireAuth, requireRole("customer"), async (req, res
       `,
       params
     );
+
+    // Optional: event log for edits (safe)
+    // await addEvent(client, booking.id, userId, "updated", payload);
 
     await client.query("COMMIT");
     return res.json({ ok: true, booking: upd.rows[0] });
