@@ -10,6 +10,7 @@ import AdminJobsPage from "../account/admin/jobs/page";
 import AdminJobHistoryPage from "./admin/jobhistory/page";
 import AdminCustomersPage from "../account/admin/customers/page";
 import { me, type MeResponse } from "../../lib/api/auth";
+import TechBookingsPage from "./techbookings/page"; // ✅ mounted
 
 type AppRole = "customer" | "technician" | "admin";
 type ApiUserRole = "customer" | "worker" | "admin";
@@ -19,7 +20,15 @@ type AuthedUser = MeResponse["user"] & {
   roles?: ApiUserRole[];
 };
 
-type TabKey = "account" | "bookings" | "tech" | "admin_customers" | "admin_jobs" | "admin_jobhistory";
+type TabKey =
+  | "account"
+  | "bookings"
+  | "tech"
+  | "admin_customers"
+  | "admin_jobs"
+  | "admin_jobhistory"
+  | "admin_tech_bookings";
+
 type Tab = { key: TabKey; label: string };
 
 function normalizeRole(user: AuthedUser | null): AppRole {
@@ -44,27 +53,26 @@ export default function AccountShellPage() {
   const [loading, setLoading] = useState(true);
 
   const tabs: Tab[] = useMemo(() => {
-    // Always show Account
     const base: Tab[] = [{ key: "account", label: "Account" }];
 
-    // Customer only
     if (role === "customer") {
       base.push({ key: "bookings", label: "Bookings" });
       return base;
     }
 
-    // Technician only
     if (role === "technician") {
       base.push({ key: "tech", label: "Technician" });
       return base;
     }
 
-    // Admin only
+    // Admin (includes superuser)
     base.push(
       { key: "admin_customers", label: "Customers" },
       { key: "admin_jobs", label: "Jobs" },
-      { key: "admin_jobhistory", label: "Completed" }
+      { key: "admin_jobhistory", label: "Completed" },
+      { key: "admin_tech_bookings", label: "Tech Bookings" } // ✅ new
     );
+
     return base;
   }, [role]);
 
@@ -103,7 +111,6 @@ export default function AccountShellPage() {
     };
   }, [router]);
 
-  // keep activeTab valid when role/tabs change
   useEffect(() => {
     if (!tabs.find((t) => t.key === activeTab)) {
       setActiveTab("account");
@@ -149,6 +156,7 @@ export default function AccountShellPage() {
               {role === "admin" && activeTab === "admin_customers" && <AdminCustomersPage />}
               {role === "admin" && activeTab === "admin_jobs" && <AdminJobsPage />}
               {role === "admin" && activeTab === "admin_jobhistory" && <AdminJobHistoryPage />}
+              {role === "admin" && activeTab === "admin_tech_bookings" && <TechBookingsPage />}{/* ✅ */}
             </>
           )}
         </div>

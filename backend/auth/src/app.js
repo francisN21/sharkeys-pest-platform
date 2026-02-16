@@ -21,6 +21,7 @@ const bookingsMeRouter = require("../routes/bookingsMe");
 const adminBookingsRouter = require("../routes/adminBookings");
 const adminCustomersRouter = require("../routes/adminCustomers");
 const workerBookingsRouter = require("../routes/workerBookings");
+const adminTechBookingsRouter = require("../routes/adminTechBookings");
 // Metrics routes pipeline
 const trafficRouter = require("../routes/adminMetricsTraffic");
 const adminMetricsBookingsRouter = require("../routes/adminMetricsBookings");
@@ -98,6 +99,7 @@ app.use(adminMetricsCustomersRouter);
 app.use(adminMetricsSurveyRouter);
 app.use(bookingSurveyRouter);
 app.use(adminMetricsBookingsExportRouter);
+app.use(adminTechBookingsRouter);
 
 
 
@@ -108,6 +110,7 @@ app.use("/bookings", bookingsMeRouter);
 app.use("/admin/bookings", adminBookingsRouter);
 app.use("/admin/customers", adminCustomersRouter);
 app.use("/worker/bookings", workerBookingsRouter);
+
 
 app.use(notFound);
 app.use(errorHandler);
