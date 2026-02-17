@@ -6,53 +6,42 @@ const { requireAuth } = require("../middleware/requireAuth");
 
 const router = express.Router();
 
-async function requireAdminOrSuperUserByDb(userId) {
+async function requireAdminOrSuperByDb(userId) {
   const rolesRes = await pool.query(`SELECT role FROM user_roles WHERE user_id = $1`, [userId]);
-  const roles = rolesRes.rows.map((r) => String(r.role || "").trim().toLowerCase()).filter(Boolean);
+  const roles = rolesRes.rows
+    .map((r) => String(r.role || "").trim().toLowerCase())
+    .filter(Boolean);
   return roles.includes("admin") || roles.includes("superuser");
 }
 
 const reassignSchema = z.object({
-  worker_user_id: z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]).transform((v) => Number(v)),
+  worker_user_id: z
+    .union([z.number().int().positive(), z.string().regex(/^\d+$/)])
+    .transform((v) => Number(v)),
 });
-
-async function requireAdminOrSuperByDb(userId) {
-  const rolesRes = await pool.query(`SELECT role FROM user_roles WHERE user_id = $1`, [userId]);
-  const roles = rolesRes.rows.map((r) => String(r.role));
-  return roles.includes("admin") || roles.includes("superuser");
-}
-
 
 router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
   try {
     const userId = req.user?.id ?? req.auth?.userId ?? null;
     if (!userId) return res.status(401).json({ ok: false, message: "Not authenticated" });
 
-    const ok = await requireAdminOrSuperUserByDb(userId);
+    const ok = await requireAdminOrSuperByDb(userId);
     if (!ok) return res.status(403).json({ ok: false, message: "Forbidden" });
 
     // 1) tech list (workers)
     const techRes = await pool.query(
-        `
-        SELECT u.id AS user_id, u.public_id, u.email, u.first_name, u.last_name, u.phone
-        FROM users u
-        JOIN user_roles ur ON ur.user_id = u.id
-        WHERE ur.role = 'worker'
-        ORDER BY u.last_name NULLS LAST, u.first_name NULLS LAST, u.email
-        `
+      `
+      SELECT u.id AS user_id, u.public_id, u.email, u.first_name, u.last_name, u.phone
+      FROM users u
+      JOIN user_roles ur ON ur.user_id = u.id
+      WHERE ur.role = 'worker'
+      ORDER BY u.last_name NULLS LAST, u.first_name NULLS LAST, u.email
+      `
     );
 
-    // 2) assigned bookings with latest assignment per booking
+    // 2) assigned bookings (current assignment only)
     const assignedRes = await pool.query(
       `
-      WITH latest_assignment AS (
-        SELECT DISTINCT ON (ba.booking_id)
-          ba.booking_id,
-          ba.worker_user_id,
-          ba.assigned_at
-        FROM booking_assignments ba
-        ORDER BY ba.booking_id, ba.assigned_at DESC
-      )
       SELECT
         b.public_id,
         b.status,
@@ -68,21 +57,21 @@ router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
         cu.phone      AS customer_phone,
         cu.account_type AS customer_account_type,
 
-        la.worker_user_id
+        ba.worker_user_id
 
       FROM bookings b
+      JOIN booking_assignments ba ON ba.booking_id = b.id
       JOIN services s ON s.id = b.service_id
       JOIN users cu ON cu.id = b.customer_user_id
-      JOIN latest_assignment la ON la.booking_id = b.id
 
       WHERE b.status = 'assigned'
-      ORDER BY la.worker_user_id, b.starts_at ASC
+      ORDER BY ba.worker_user_id, b.starts_at ASC
       `
     );
 
     // Build lookup
     const techs = techRes.rows.map((t) => ({
-      user_id: t.user_id,
+      user_id: t.user_id, // keep as number; frontend can stringify in select if needed
       public_id: t.public_id ?? null,
       email: t.email ?? null,
       first_name: t.first_name ?? null,
@@ -120,9 +109,6 @@ router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
     next(e);
   }
 });
-
-
-
 
 router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, res, next) => {
   const client = await pool.connect();
@@ -164,10 +150,17 @@ router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, 
       return res.status(400).json({ ok: false, message: "Target user is not a technician" });
     }
 
-    // insert new assignment row
+    // ✅ UPSERT current assignment (booking_assignments has UNIQUE(booking_id))
     await client.query(
-      `INSERT INTO booking_assignments (booking_id, worker_user_id, assigned_by_user_id)
-       VALUES ($1, $2, $3)`,
+      `
+      INSERT INTO booking_assignments (booking_id, worker_user_id, assigned_by_user_id, assigned_at)
+      VALUES ($1, $2, $3, now())
+      ON CONFLICT (booking_id)
+      DO UPDATE SET
+        worker_user_id = EXCLUDED.worker_user_id,
+        assigned_by_user_id = EXCLUDED.assigned_by_user_id,
+        assigned_at = EXCLUDED.assigned_at
+      `,
       [booking.id, worker_user_id, userId]
     );
 
@@ -182,7 +175,9 @@ router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, 
     await client.query("COMMIT");
     return res.json({ ok: true });
   } catch (e) {
-    try { await client.query("ROLLBACK"); } catch {}
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
     next(e);
   } finally {
     client.release();

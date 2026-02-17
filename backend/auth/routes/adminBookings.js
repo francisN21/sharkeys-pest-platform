@@ -199,9 +199,13 @@ router.patch("/:publicId/assign", requireAuth, requireRole("admin"), async (req,
     // If you're using booking_assignments (recommended), store assignment there
     await client.query(
       `
-      INSERT INTO booking_assignments (booking_id, worker_user_id, assigned_by_user_id)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (booking_id, worker_user_id) DO NOTHING
+      INSERT INTO booking_assignments (booking_id, worker_user_id, assigned_by_user_id, assigned_at)
+      VALUES ($1, $2, $3, now())
+      ON CONFLICT ON CONSTRAINT booking_assignments_booking_id_key
+      DO UPDATE SET
+        worker_user_id = EXCLUDED.worker_user_id,
+        assigned_by_user_id = EXCLUDED.assigned_by_user_id,
+        assigned_at = EXCLUDED.assigned_at
       `,
       [booking.id, workerUserId, adminId]
     );

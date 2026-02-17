@@ -1,3 +1,4 @@
+// backend/auth/routes/workerBookings.js
 const express = require("express");
 const { pool } = require("../src/db");
 const { requireAuth } = require("../middleware/requireAuth");
@@ -42,15 +43,11 @@ router.get("/assigned", requireAuth, requireRole("worker"), async (req, res, nex
         cu.address AS customer_address,
         cu.account_type AS customer_account_type
       FROM bookings b
+      JOIN booking_assignments ba ON ba.booking_id = b.id
       JOIN services s ON s.id = b.service_id
       JOIN users cu ON cu.id = b.customer_user_id
       WHERE b.status = 'assigned'
-        AND EXISTS (
-          SELECT 1
-          FROM booking_assignments ba
-          WHERE ba.booking_id = b.id
-            AND ba.worker_user_id = $1
-        )
+        AND ba.worker_user_id = $1
       ORDER BY b.starts_at ASC
       LIMIT 200
       `,
@@ -65,7 +62,7 @@ router.get("/assigned", requireAuth, requireRole("worker"), async (req, res, nex
 
 /**
  * GET /worker/bookings/history
- * Completed bookings for this worker.
+ * Completed bookings for this worker (permanent).
  */
 router.get("/history", requireAuth, requireRole("worker"), async (req, res, next) => {
   try {
@@ -73,18 +70,13 @@ router.get("/history", requireAuth, requireRole("worker"), async (req, res, next
     const page = Math.max(1, Number(req.query.page ?? 1));
     const offset = (page - 1) * pageSize;
 
-    // total count
+    // total count (PERMANENT: completed_worker_user_id)
     const countRes = await pool.query(
       `
       SELECT COUNT(*)::int AS total
       FROM bookings b
       WHERE b.status = 'completed'
-        AND EXISTS (
-          SELECT 1
-          FROM booking_assignments ba
-          WHERE ba.booking_id = b.id
-            AND ba.worker_user_id = $1
-        )
+        AND b.completed_worker_user_id = $1
       `,
       [req.user.id]
     );
@@ -119,12 +111,7 @@ router.get("/history", requireAuth, requireRole("worker"), async (req, res, next
       JOIN services s ON s.id = b.service_id
       JOIN users cu ON cu.id = b.customer_user_id
       WHERE b.status = 'completed'
-        AND EXISTS (
-          SELECT 1
-          FROM booking_assignments ba
-          WHERE ba.booking_id = b.id
-            AND ba.worker_user_id = $1
-        )
+        AND b.completed_worker_user_id = $1
       ORDER BY b.completed_at DESC NULLS LAST, b.starts_at DESC
       LIMIT $2
       OFFSET $3
@@ -146,10 +133,8 @@ router.get("/history", requireAuth, requireRole("worker"), async (req, res, next
 });
 
 /**
- * POST /worker/bookings/:id/complete
+ * PATCH /worker/bookings/:id/complete
  * Marks an assigned booking as completed by the logged-in worker.
- *
- * (Kept as POST + param name `:id` to match your existing API.)
  */
 router.patch("/:id/complete", requireAuth, requireRole("worker"), async (req, res, next) => {
   const client = await pool.connect();
@@ -160,7 +145,7 @@ router.patch("/:id/complete", requireAuth, requireRole("worker"), async (req, re
     await client.query("BEGIN");
 
     const b = await client.query(
-      `SELECT id, status FROM bookings WHERE public_id = $1 FOR UPDATE`,
+      `SELECT id, status, completed_worker_user_id FROM bookings WHERE public_id = $1 FOR UPDATE`,
       [bookingPublicId]
     );
     if (b.rowCount === 0) {
@@ -170,17 +155,29 @@ router.patch("/:id/complete", requireAuth, requireRole("worker"), async (req, re
 
     const booking = b.rows[0];
 
+    // Idempotent: if already completed, do not mutate final audit field
+    if (booking.status === "completed") {
+      await client.query("COMMIT");
+      return res.json({ ok: true, booking: { public_id: bookingPublicId, status: "completed" } });
+    }
+
     if (booking.status !== "assigned") {
       await client.query("ROLLBACK");
       return res.status(409).json({ ok: false, message: "Booking must be assigned first" });
     }
 
-    // Ensure worker is assigned
+    // Ensure worker is currently assigned (current assignment table)
     const a = await client.query(
-      `SELECT 1 FROM booking_assignments WHERE booking_id = $1 AND worker_user_id = $2`,
-      [booking.id, workerId]
+      `SELECT worker_user_id FROM booking_assignments WHERE booking_id = $1 LIMIT 1`,
+      [booking.id]
     );
     if (a.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ ok: false, message: "This booking has no technician assignment" });
+    }
+
+    const assignedWorkerId = Number(a.rows[0].worker_user_id);
+    if (assignedWorkerId !== Number(workerId)) {
       await client.query("ROLLBACK");
       return res.status(403).json({ ok: false, message: "You are not assigned to this booking" });
     }
@@ -189,16 +186,20 @@ router.patch("/:id/complete", requireAuth, requireRole("worker"), async (req, re
       `
       UPDATE bookings
       SET status = 'completed',
-          completed_at = now(),
+          completed_at = COALESCE(completed_at, now()),
+          completed_worker_user_id = COALESCE(completed_worker_user_id, $2),
           updated_at = now()
       WHERE id = $1
-      RETURNING public_id, status, completed_at
+      RETURNING public_id, status, completed_at, completed_worker_user_id
       `,
-      [booking.id]
+      [booking.id, workerId]
     );
 
     // keep your existing event name to avoid breaking dashboards that rely on it
-    await addEvent(client, booking.id, workerId, "completed", {});
+    await addEvent(client, booking.id, workerId, "completed", {
+      completed_worker_user_id: workerId,
+    });
+
     await client.query("COMMIT");
 
     res.json({ ok: true, booking: updated.rows[0] });

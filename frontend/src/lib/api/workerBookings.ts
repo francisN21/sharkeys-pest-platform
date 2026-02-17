@@ -17,7 +17,12 @@ export type WorkerHistoryResponse = {
 
 export type WorkerCompleteBookingResponse = {
   ok: boolean;
-  booking: { public_id: string; status: "completed"; completed_at: string };
+  booking: {
+    public_id: string;
+    status: "completed";
+    completed_at?: string; // ✅ optional for idempotent response
+    completed_worker_user_id?: number; // ✅ optional if you want it
+  };
 };
 
 export function workerListAssignedBookings() {
@@ -32,7 +37,7 @@ export function workerListJobHistory(page = 1, pageSize = 30) {
   return jsonFetch<WorkerHistoryResponse>(`/worker/bookings/history?${qs.toString()}`);
 }
 
-// ✅ IMPORTANT: backend is POST /:id/complete (not PATCH)
+// backend is PATCH /worker/bookings/:id/complete
 export function workerCompleteBooking(publicId: string) {
   return jsonFetch<WorkerCompleteBookingResponse>(`/worker/bookings/${publicId}/complete`, {
     method: "PATCH",
