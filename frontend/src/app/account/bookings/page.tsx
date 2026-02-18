@@ -471,7 +471,7 @@ function BookingCardUI({
             )
           ) : null}
 
-          {canCancel && onCancel ? (
+          {!editing && canCancel && onCancel ? (
             <button
               type="button"
               className="rounded-lg border px-3 py-1 text-xs font-semibold hover:opacity-90 disabled:opacity-60"
