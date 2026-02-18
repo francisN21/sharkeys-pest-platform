@@ -50,6 +50,117 @@ function formatElapsedSince(ts: string) {
   return `${mins}m`;
 }
 
+function ConfirmAdminActionModal({
+  open,
+  title,
+  message,
+  details,
+  busy,
+  confirmLabel,
+  cancelLabel,
+  onConfirm,
+  onClose,
+}: {
+  open: boolean;
+  title: string;
+  message: string;
+  details?: React.ReactNode;
+  busy: boolean;
+  confirmLabel: string;
+  cancelLabel?: string;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* overlay */}
+      <button
+        type="button"
+        aria-label="Close"
+        className="absolute inset-0"
+        style={{ background: "rgba(0,0,0,0.55)" }}
+        onClick={onClose}
+        disabled={busy}
+      />
+
+      {/* modal */}
+      <div
+        className="relative w-full max-w-md rounded-2xl border p-4 shadow-lg"
+        style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-base font-semibold">{title}</div>
+            <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
+              {message}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="rounded-lg border px-2 py-1 text-xs font-semibold hover:opacity-90 disabled:opacity-60"
+            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+            onClick={onClose}
+            disabled={busy}
+            title="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        {details ? (
+          <div
+            className="mt-3 rounded-xl border p-3 text-sm"
+            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+          >
+            {details}
+          </div>
+        ) : null}
+
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            className="rounded-lg border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+            onClick={onClose}
+            disabled={busy}
+            title="Cancel"
+          >
+            {cancelLabel ?? "Cancel"}
+          </button>
+
+          <button
+            type="button"
+            className="rounded-lg border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+            onClick={onConfirm}
+            disabled={busy}
+            title={confirmLabel}
+          >
+            {busy ? "Working…" : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminJobsPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -66,6 +177,12 @@ export default function AdminJobsPage() {
   // technicians for dropdown
   const [techs, setTechs] = useState<TechnicianRow[]>([]);
   const [selectedTech, setSelectedTech] = useState<Record<string, number | "">>({});
+
+  // Modal state (replaces confirm())
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalKind, setModalKind] = useState<"accept" | "cancel">("accept");
+  const [modalBookingId, setModalBookingId] = useState<string | null>(null);
+  const [modalBookingTitle, setModalBookingTitle] = useState<string | null>(null);
 
   async function refresh() {
     const [p, a] = await Promise.all([getAdminBookings("pending"), getAdminBookings("accepted")]);
@@ -124,42 +241,63 @@ export default function AdminJobsPage() {
     return copy;
   }, [acceptedRows, sortBy]);
 
-  async function onAccept(publicId: string) {
-    const ok = confirm("Accept this booking?");
-    if (!ok) return;
+  function findBookingTitle(publicId: string) {
+    const all = [...pendingRows, ...acceptedRows];
+    const found = all.find((x) => x.public_id === publicId);
+    return found?.service_title ?? null;
+  }
+
+  function openAcceptModal(publicId: string) {
+    setModalKind("accept");
+    setModalBookingId(publicId);
+    setModalBookingTitle(findBookingTitle(publicId));
+    setModalOpen(true);
+  }
+
+  function openCancelModal(publicId: string) {
+    setModalKind("cancel");
+    setModalBookingId(publicId);
+    setModalBookingTitle(findBookingTitle(publicId));
+    setModalOpen(true);
+  }
+
+  function closeModal() {
+    // prevent closing while executing for that id
+    if (modalBookingId && busyId === modalBookingId) return;
+    setModalOpen(false);
+    setModalBookingId(null);
+    setModalBookingTitle(null);
+  }
+
+  async function confirmModalAction() {
+    if (!modalBookingId) return;
 
     try {
-      setBusyId(publicId);
+      setBusyId(modalBookingId);
       setErr(null);
 
-      await adminAcceptBooking(publicId);
+      if (modalKind === "accept") {
+        await adminAcceptBooking(modalBookingId);
+      } else {
+        await adminCancelBooking(modalBookingId);
+      }
+
       await refresh();
+      closeModal();
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Failed to accept booking");
+      setErr(
+        e instanceof Error
+          ? e.message
+          : modalKind === "accept"
+          ? "Failed to accept booking"
+          : "Failed to cancel booking"
+      );
     } finally {
       setBusyId(null);
     }
   }
 
-  async function onCancel(publicId: string) {
-    const ok = confirm(
-      "Cancel (delete) this booking?\n\nThis will mark it as cancelled (recommended) instead of hard deleting."
-    );
-    if (!ok) return;
-
-    try {
-      setBusyId(publicId);
-      setErr(null);
-
-      await adminCancelBooking(publicId);
-      await refresh();
-    } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Failed to cancel booking");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
+  // ✅ KEEP onAssign (was never a confirm(), so no modal needed)
   async function onAssign(publicId: string) {
     const workerUserIdStr = selectedTech[publicId] ?? "";
     if (!workerUserIdStr) {
@@ -188,8 +326,41 @@ export default function AdminJobsPage() {
     }
   }
 
+  const modalBusy = !!modalBookingId && busyId === modalBookingId;
+
+  const modalTitle = modalKind === "accept" ? "Accept this booking?" : "Cancel this booking?";
+  const modalMessage =
+    modalKind === "accept"
+      ? "This will move the booking to Accepted so it can be assigned to a technician."
+      : "This will mark it as cancelled (recommended) instead of hard deleting.";
+
+  const modalConfirmLabel = modalKind === "accept" ? "Accept" : "Cancel";
+
   return (
     <div className="space-y-6">
+      {/* Modal replaces confirm() dialogs */}
+      <ConfirmAdminActionModal
+        open={modalOpen}
+        title={modalTitle}
+        message={modalMessage}
+        busy={modalBusy}
+        confirmLabel={modalConfirmLabel}
+        cancelLabel="Close"
+        onConfirm={confirmModalAction}
+        onClose={closeModal}
+        details={
+          <div className="space-y-1">
+            <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+              Booking
+            </div>
+            <div className="font-semibold truncate">{modalBookingTitle ?? "—"}</div>
+            <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+              Booking ID: <span className="font-mono">{modalBookingId ?? "—"}</span>
+            </div>
+          </div>
+        }
+      />
+
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold">Jobs</h2>
@@ -257,7 +428,7 @@ export default function AdminJobsPage() {
           <div className="grid gap-3">
             {sortedPending.map((b) => {
               const busy = busyId === b.public_id;
-              const notes = formatNotes(b.notes); // ✅ only change
+              const notes = formatNotes(b.notes);
 
               return (
                 <div
@@ -318,7 +489,7 @@ export default function AdminJobsPage() {
                   <div className="flex items-center justify-end gap-2">
                     <button
                       type="button"
-                      onClick={() => onCancel(b.public_id)}
+                      onClick={() => openCancelModal(b.public_id)}
                       disabled={busy}
                       className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
                       style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
@@ -329,7 +500,7 @@ export default function AdminJobsPage() {
 
                     <button
                       type="button"
-                      onClick={() => onAccept(b.public_id)}
+                      onClick={() => openAcceptModal(b.public_id)}
                       disabled={busy}
                       className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
                       style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
@@ -363,7 +534,7 @@ export default function AdminJobsPage() {
             <div className="grid gap-3">
               {sortedAccepted.map((b) => {
                 const busy = busyId === b.public_id;
-                const notes = formatNotes(b.notes); // ✅ only change
+                const notes = formatNotes(b.notes);
 
                 return (
                   <div
@@ -454,7 +625,7 @@ export default function AdminJobsPage() {
 
                       <button
                         type="button"
-                        onClick={() => onCancel(b.public_id)}
+                        onClick={() => openCancelModal(b.public_id)}
                         disabled={busy}
                         className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
                         style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
