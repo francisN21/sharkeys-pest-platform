@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import ThemeToggle from "../components/ThemeToggle";
 import { useAuth } from "./AuthProvider";
@@ -11,6 +11,7 @@ import { me as apiMe } from "../lib/api/auth";
 type NavItem = { label: string; href: string };
 
 const NAV: NavItem[] = [
+  { label: "Home", href: "#home" },
   { label: "Booking", href: "#booking" },
   { label: "Services", href: "#services" },
   { label: "About", href: "#about" },
@@ -231,11 +232,6 @@ export default function Navbar() {
 
         {/* Right actions */}
         <div className="flex items-center gap-3">
-          {/* Desktop theme toggle */}
-          <div className="hidden md:block">
-            <ThemeToggle />
-          </div>
-
           {/* Desktop auth/actions */}
           <div className="hidden items-center gap-3 md:flex">
             {/* Book a Service ALWAYS */}
@@ -285,10 +281,11 @@ export default function Navbar() {
 
                 {accountOpen ? (
                   <div
-                    className="absolute right-0 mt-2 w-48 overflow-hidden rounded-2xl border shadow-sm"
+                    className="absolute right-0 mt-2 w-56 overflow-hidden rounded-2xl border shadow-sm"
                     style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
                     role="menu"
                   >
+                    {/* Account */}
                     <button
                       className="w-full px-4 py-3 text-left text-sm font-semibold hover:opacity-90"
                       style={{ color: "rgb(var(--fg))" }}
@@ -300,9 +297,26 @@ export default function Navbar() {
                     >
                       Account
                     </button>
+
+                    {/* Theme (moved into dropdown) */}
+                    <div
+                      className="flex items-center justify-between px-4 py-3 text-sm"
+                      style={{ borderTop: "1px solid rgb(var(--border))" }}
+                      role="menuitem"
+                    >
+                      <div className="font-semibold" style={{ color: "rgb(var(--fg))" }}>
+                        Theme
+                      </div>
+                      <ThemeToggle />
+                    </div>
+
+                    {/* Logout */}
                     <button
                       className="w-full px-4 py-3 text-left text-sm font-semibold hover:opacity-90"
-                      style={{ color: "rgb(var(--fg))" }}
+                      style={{
+                        color: "rgb(var(--fg))",
+                        borderTop: "1px solid rgb(var(--border))",
+                      }}
                       onClick={onLogout}
                       role="menuitem"
                     >
@@ -359,15 +373,6 @@ export default function Navbar() {
           style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.95)" }}
         >
           <div ref={menuRef} className="mx-auto max-w-6xl px-4 py-4 space-y-4">
-            {/* Theme toggle inside mobile panel */}
-            <div
-              className="flex items-center justify-between rounded-xl border p-3"
-              style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-            >
-              <div className="text-sm font-semibold">Theme</div>
-              <ThemeToggle />
-            </div>
-
             {/* Landing page section links ONLY on "/" */}
             {showLandingNav ? (
               <div className="grid gap-2">
@@ -435,6 +440,7 @@ export default function Navbar() {
                   </div>
                 </div>
 
+                {/* Order: Account -> Theme -> Logout */}
                 <button
                   className="rounded-xl border px-3 py-3 text-sm font-semibold hover:opacity-90"
                   style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
@@ -445,6 +451,14 @@ export default function Navbar() {
                 >
                   Account
                 </button>
+
+                <div
+                  className="flex items-center justify-between rounded-xl border px-3 py-3"
+                  style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                >
+                  <div className="text-sm font-semibold">Theme</div>
+                  <ThemeToggle />
+                </div>
 
                 <button
                   className="rounded-xl border px-3 py-3 text-sm font-semibold hover:opacity-90"
