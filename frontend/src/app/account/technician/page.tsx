@@ -47,6 +47,117 @@ function formatNotes(notes: string | null) {
   return n.length ? n : null;
 }
 
+function ConfirmWorkerActionModal({
+  open,
+  title,
+  message,
+  details,
+  busy,
+  confirmLabel,
+  cancelLabel,
+  onConfirm,
+  onClose,
+}: {
+  open: boolean;
+  title: string;
+  message: string;
+  details?: React.ReactNode;
+  busy: boolean;
+  confirmLabel: string;
+  cancelLabel?: string;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* overlay */}
+      <button
+        type="button"
+        aria-label="Close"
+        className="absolute inset-0"
+        style={{ background: "rgba(0,0,0,0.55)" }}
+        onClick={onClose}
+        disabled={busy}
+      />
+
+      {/* modal */}
+      <div
+        className="relative w-full max-w-md rounded-2xl border p-4 shadow-lg"
+        style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-base font-semibold">{title}</div>
+            <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
+              {message}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="rounded-lg border px-2 py-1 text-xs font-semibold hover:opacity-90 disabled:opacity-60"
+            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+            onClick={onClose}
+            disabled={busy}
+            title="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        {details ? (
+          <div
+            className="mt-3 rounded-xl border p-3 text-sm"
+            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+          >
+            {details}
+          </div>
+        ) : null}
+
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            className="rounded-lg border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+            onClick={onClose}
+            disabled={busy}
+            title="Cancel"
+          >
+            {cancelLabel ?? "Cancel"}
+          </button>
+
+          <button
+            type="button"
+            className="rounded-lg border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+            onClick={onConfirm}
+            disabled={busy}
+            title={confirmLabel}
+          >
+            {busy ? "Working…" : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function WorkerJobsPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -64,6 +175,11 @@ export default function WorkerJobsPage() {
   const [historyPage, setHistoryPage] = useState(1);
   const [historyTotalPages, setHistoryTotalPages] = useState(1);
   const [historyTotal, setHistoryTotal] = useState(0);
+
+  // Modal state (replaces confirm())
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalBookingId, setModalBookingId] = useState<string | null>(null);
+  const [modalBookingTitle, setModalBookingTitle] = useState<string | null>(null);
 
   async function refresh(opts?: { historyPage?: number }) {
     const pageToLoad = opts?.historyPage ?? historyPage;
@@ -136,18 +252,38 @@ export default function WorkerJobsPage() {
     return copy;
   }, [historyRows]);
 
-  async function onComplete(publicId: string) {
-    const ok = confirm("Mark this job as completed?");
-    if (!ok) return;
+  function findBookingTitle(publicId: string) {
+    const all = [...assignedRows, ...historyRows];
+    const found = all.find((x) => x.public_id === publicId);
+    return found?.service_title ?? null;
+  }
+
+  function openCompleteModal(publicId: string) {
+    setModalBookingId(publicId);
+    setModalBookingTitle(findBookingTitle(publicId));
+    setModalOpen(true);
+  }
+
+  function closeModal() {
+    if (modalBookingId && busyId === modalBookingId) return;
+    setModalOpen(false);
+    setModalBookingId(null);
+    setModalBookingTitle(null);
+  }
+
+  async function confirmComplete() {
+    if (!modalBookingId) return;
 
     try {
-      setBusyId(publicId);
+      setBusyId(modalBookingId);
       setErr(null);
 
-      await workerCompleteBooking(publicId);
+      await workerCompleteBooking(modalBookingId);
 
       // ✅ after completing, refresh assigned + history page 1
       await refresh({ historyPage: 1 });
+
+      closeModal();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to complete job");
     } finally {
@@ -160,8 +296,33 @@ export default function WorkerJobsPage() {
   const canPrev = historyPage > 1;
   const canNext = historyPage < historyTotalPages;
 
+  const modalBusy = !!modalBookingId && busyId === modalBookingId;
+
   return (
     <div className="space-y-6">
+      {/* Modal replaces confirm() */}
+      <ConfirmWorkerActionModal
+        open={modalOpen}
+        title="Mark this job as completed?"
+        message="This will move it to Job History."
+        busy={modalBusy}
+        confirmLabel="Mark Completed"
+        cancelLabel="Close"
+        onConfirm={confirmComplete}
+        onClose={closeModal}
+        details={
+          <div className="space-y-1">
+            <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+              Booking
+            </div>
+            <div className="font-semibold truncate">{modalBookingTitle ?? "—"}</div>
+            <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+              Booking ID: <span className="font-mono">{modalBookingId ?? "—"}</span>
+            </div>
+          </div>
+        }
+      />
+
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold">Jobs</h2>
@@ -259,6 +420,7 @@ export default function WorkerJobsPage() {
           <div className="grid gap-3">
             {rows.map((b) => {
               const busy = busyId === b.public_id;
+              const notes = formatNotes(b.notes);
 
               return (
                 <div
@@ -298,7 +460,7 @@ export default function WorkerJobsPage() {
                         <span className="font-semibold">{formatElapsedSince(b.created_at)}</span>
                       </div>
 
-                      {formatNotes(b.notes) ? (
+                      {notes ? (
                         <div
                           className="mt-2 rounded-xl border p-3 text-sm"
                           style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
@@ -306,7 +468,7 @@ export default function WorkerJobsPage() {
                           <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
                             Customer Notes:
                           </div>
-                          <div className="mt-1 whitespace-pre-wrap break-words">{b.notes}</div>
+                          <div className="mt-1 whitespace-pre-wrap break-words">{notes}</div>
                         </div>
                       ) : null}
                     </div>
@@ -320,7 +482,7 @@ export default function WorkerJobsPage() {
                     <div className="flex items-center justify-end gap-2">
                       <button
                         type="button"
-                        onClick={() => onComplete(b.public_id)}
+                        onClick={() => openCompleteModal(b.public_id)}
                         disabled={busy}
                         className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
                         style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
