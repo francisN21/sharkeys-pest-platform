@@ -96,7 +96,6 @@ type BookingCardWithOps = BookingCard & {
   completed_by_first_name?: string | null;
   completed_by_last_name?: string | null;
 
-
   completed_at?: string | null;
 };
 
@@ -235,6 +234,112 @@ function NotesBlock({
         Notes:
       </div>
       <div className="mt-1 whitespace-pre-wrap break-words">{notesPretty}</div>
+    </div>
+  );
+}
+
+function ConfirmCancelModal({
+  open,
+  bookingId,
+  serviceTitle,
+  busy,
+  onConfirm,
+  onClose,
+}: {
+  open: boolean;
+  bookingId: string | null;
+  serviceTitle: string | null;
+  busy: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* overlay */}
+      <button
+        type="button"
+        aria-label="Close"
+        className="absolute inset-0"
+        style={{ background: "rgba(0,0,0,0.55)" }}
+        onClick={onClose}
+        disabled={busy}
+      />
+
+      {/* modal */}
+      <div
+        className="relative w-full max-w-md rounded-2xl border p-4 shadow-lg"
+        style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Cancel booking confirmation"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-base font-semibold">Cancel this booking?</div>
+            <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
+              This will cancel your appointment request.
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="rounded-lg border px-2 py-1 text-xs font-semibold hover:opacity-90 disabled:opacity-60"
+            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+            onClick={onClose}
+            disabled={busy}
+            title="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="mt-3 rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}>
+          <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+            Booking
+          </div>
+          <div className="mt-1 font-semibold truncate">{serviceTitle ?? "—"}</div>
+          <div className="mt-1 text-xs" style={{ color: "rgb(var(--muted))" }}>
+            Booking ID: <span className="font-mono">{bookingId ?? "—"}</span>
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            className="rounded-lg border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+            onClick={onClose}
+            disabled={busy}
+            title="Keep booking"
+          >
+            Keep
+          </button>
+
+          <button
+            type="button"
+            className="rounded-lg border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+            onClick={onConfirm}
+            disabled={busy}
+            title="Confirm cancel"
+          >
+            {busy ? "Cancelling…" : "Yes, cancel"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -471,6 +576,7 @@ function BookingCardUI({
             )
           ) : null}
 
+          {/* Hide booking-cancel while editing */}
           {!editing && canCancel && onCancel ? (
             <button
               type="button"
@@ -499,6 +605,10 @@ export default function BookingsPage() {
 
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
+  // Modal state
+  const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
+  const [confirmCancelTitle, setConfirmCancelTitle] = useState<string | null>(null);
+
   const hasAny = useMemo(
     () => pending.length > 0 || upcoming.length > 0 || history.length > 0,
     [pending.length, upcoming.length, history.length]
@@ -518,16 +628,34 @@ export default function BookingsPage() {
     setHistory(res.history || []);
   }
 
-  async function onCancelBooking(publicId: string) {
-    const ok = confirm("Cancel this booking?");
-    if (!ok) return;
+  function openCancelModal(publicId: string) {
+    // Try to find title for nicer modal preview
+    const all = [...pending, ...upcoming, ...history];
+    const found = all.find((x) => x.public_id === publicId);
+    setConfirmCancelId(publicId);
+    setConfirmCancelTitle(found?.service_title ?? null);
+  }
+
+  function closeCancelModal() {
+    // Prevent closing while the cancel API is running for that id
+    if (confirmCancelId && cancellingId === confirmCancelId) return;
+    setConfirmCancelId(null);
+    setConfirmCancelTitle(null);
+  }
+
+  async function confirmCancelBooking() {
+    if (!confirmCancelId) return;
 
     try {
-      setCancellingId(publicId);
+      setCancellingId(confirmCancelId);
       setErr(null);
 
-      await cancelBooking(publicId);
+      await cancelBooking(confirmCancelId);
       await refresh();
+
+      // close modal after successful cancel
+      setConfirmCancelId(null);
+      setConfirmCancelTitle(null);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to cancel booking";
       setErr(msg);
@@ -565,8 +693,20 @@ export default function BookingsPage() {
     };
   }, []);
 
+  const cancelBusy = !!confirmCancelId && cancellingId === confirmCancelId;
+
   return (
     <div className="space-y-5">
+      {/* Lightbox / Modal */}
+      <ConfirmCancelModal
+        open={!!confirmCancelId}
+        bookingId={confirmCancelId}
+        serviceTitle={confirmCancelTitle}
+        busy={cancelBusy}
+        onConfirm={confirmCancelBooking}
+        onClose={closeCancelModal}
+      />
+
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold">Bookings</h2>
@@ -619,7 +759,7 @@ export default function BookingsPage() {
               <BookingCardUI
                 key={b.public_id}
                 b={b}
-                onCancel={onCancelBooking}
+                onCancel={openCancelModal}
                 cancelling={cancellingId === b.public_id}
                 onSaved={refresh}
               />
@@ -636,7 +776,7 @@ export default function BookingsPage() {
               <BookingCardUI
                 key={b.public_id}
                 b={b}
-                onCancel={onCancelBooking}
+                onCancel={openCancelModal}
                 cancelling={cancellingId === b.public_id}
                 onSaved={refresh}
               />
