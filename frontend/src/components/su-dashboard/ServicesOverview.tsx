@@ -5,6 +5,7 @@ import {
   createOwnerService,
   getOwnerServices,
   updateOwnerService,
+  deleteOwnerService,
   type Service,
 } from "../../lib/api/adminServices";
 
@@ -37,6 +38,8 @@ export default function ServicesOverview() {
   const [editTitle, setEditTitle] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [editDuration, setEditDuration] = useState<string>("");
+  // Delete State  
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   async function refresh() {
     setLoading(true);
@@ -104,6 +107,29 @@ export default function ServicesOverview() {
       setSavingId(null);
     }
   }
+
+    async function onConfirmDelete() {
+    if (!editing) return;
+
+    setErr(null);
+    setSavingId(`__delete__:${editing.public_id}`);
+
+    try {
+        await deleteOwnerService(editing.public_id);
+
+        // Remove locally
+        setServices((prev) => prev.filter((s) => s.public_id !== editing.public_id));
+
+        // Close modals
+        setConfirmDeleteOpen(false);
+        setEditId(null);
+    } catch (e: unknown) {
+        setErr(e instanceof Error ? e.message : "Failed to delete service");
+    } finally {
+        setSavingId(null);
+    }
+    }
+
 
   async function onSaveEdit() {
     if (!editing) return;
@@ -404,10 +430,82 @@ export default function ServicesOverview() {
               >
                 {savingId === editing.public_id ? "Saving…" : "Save changes"}
               </button>
+
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteOpen(true)}
+                className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
+                style={{
+                borderColor: "rgb(239 68 68)",
+                background: "rgba(239, 68, 68, 0.12)", // complements both light/dark
+                color: "rgb(239 68 68)",
+                }}
+                disabled={savingId === editing.public_id || savingId === `__delete__:${editing.public_id}`}
+                title="Delete service"
+            >
+                Delete
+              </button>
+              
+
             </div>
           </div>
         </div>
       ) : null}
+
+      {/* Delete modal */}
+      {editing && confirmDeleteOpen ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div
+            className="absolute inset-0"
+            style={{ background: "rgba(0,0,0,0.55)" }}
+            onClick={() => setConfirmDeleteOpen(false)}
+            />
+
+            <div
+            className="relative w-full max-w-md rounded-2xl border p-5"
+            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+            >
+            <div className="text-base font-semibold">Delete service?</div>
+            <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
+                This will remove <span className="font-semibold">{editing.title}</span> from the active services list.
+                You can re-enable it later (since we’re soft-deleting).
+            </div>
+
+            <div
+                className="mt-4 rounded-xl border p-3 text-sm"
+                style={{ borderColor: "rgba(239, 68, 68, 0.45)", background: "rgba(239, 68, 68, 0.08)" }}
+            >
+                This action is intended to be permanent for customers (service becomes inactive).
+            </div>
+
+            <div className="mt-4 flex items-center justify-end gap-2">
+                <button
+                type="button"
+                onClick={() => setConfirmDeleteOpen(false)}
+                className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
+                style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                disabled={savingId === `__delete__:${editing.public_id}`}
+                >
+                Cancel
+                </button>
+
+                <button
+                type="button"
+                onClick={onConfirmDelete}
+                className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
+                style={{
+                    borderColor: "rgb(239 68 68)",
+                    background: "rgb(239 68 68)",
+                    color: "white",
+                }}
+                disabled={savingId === `__delete__:${editing.public_id}`}
+                >
+                {savingId === `__delete__:${editing.public_id}` ? "Deleting…" : "Yes, delete"}
+                </button>
+            </div>
+            </div>
+        </div>
+        ) : null}
     </section>
   );
 }

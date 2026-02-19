@@ -124,4 +124,27 @@ router.patch("/:publicId", requireAuth, requireRole("superuser"), async (req, re
   }
 });
 
+router.delete("/:publicId", requireAuth, requireRole("superuser"), async (req, res, next) => {
+  try {
+    const publicId = String(req.params.publicId || "").trim();
+    if (!publicId) return res.status(400).json({ ok: false, message: "Missing publicId" });
+
+    const r = await pool.query(
+      `UPDATE services
+       SET is_active = false
+       WHERE public_id = $1
+       RETURNING public_id`,
+      [publicId]
+    );
+
+    if (r.rowCount === 0) {
+      return res.status(404).json({ ok: false, message: "Service not found" });
+    }
+
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
 module.exports = router;

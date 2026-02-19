@@ -10,7 +10,11 @@ export type ServicesResponse = { ok: boolean; services: Service[] };
 
 export type AdminServiceResponse = { ok: boolean; service: Service };
 
+export type OkResponse = { ok: boolean };
+
 const API_BASE = process.env.NEXT_PUBLIC_AUTH_API_BASE;
+
+
 
 function resolveUrl(path: string) {
   if (!API_BASE && !path.startsWith("http")) {
@@ -65,5 +69,13 @@ export function updateOwnerService(
   return jsonFetch<AdminServiceResponse>(`/admin/services/${encodeURIComponent(publicId)}`, {
     method: "PATCH",
     body: JSON.stringify(patch),
+  });
+}
+
+
+
+export function deleteOwnerService(publicId: string) {
+  return jsonFetch<OkResponse>(`/admin/services/${encodeURIComponent(publicId)}`, {
+    method: "DELETE",
   });
 }
