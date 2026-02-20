@@ -19,6 +19,29 @@ function dollarsFromCents(cents?: number | null) {
   return (cents / 100).toFixed(2);
 }
 
+function addDays(date: Date, days: number) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function formatSelectedHeader(dateYmd: string, startHour: number | null, blocks: number) {
+  const [y, m, d] = dateYmd.split("-").map(Number);
+  const base = new Date(y, m - 1, d, 0, 0, 0, 0);
+
+  const dayLabel = base.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+
+  if (startHour === null) return dayLabel;
+
+  const start = new Date(y, m - 1, d, startHour, 0, 0, 0);
+  const end = new Date(start.getTime() + blocks * 60 * 60_000);
+
+  const startLabel = start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  const endLabel = end.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+
+  return `${dayLabel} • ${startLabel} – ${endLabel}`;
+}
+
 // Treats input as local time and returns ISO string
 function localDateTimeToIsoFromParts(dateYmd: string, timeHHmm: string) {
   // dateYmd: "YYYY-MM-DD", timeHHmm: "HH:MM"
@@ -97,6 +120,7 @@ export default function BookPage() {
   const [loadingServices, setLoadingServices] = useState(true);
   const [loadingMe, setLoadingMe] = useState(true);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
+  const maxBookDateYmd = useMemo(() => ymdLocal(addDays(new Date(), 60)), []);
 
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -116,6 +140,9 @@ export default function BookPage() {
   // availability (booked intervals for selected date)
   const [availLoading, setAvailLoading] = useState(false);
   const [booked, setBooked] = useState<AvailabilityBooking[]>([]);
+
+  // Calendly-style mini-step: click → pending, then confirm
+  const [pendingStartHour, setPendingStartHour] = useState<number | null>(null);
 
   // address UX
   const [useDifferentAddress, setUseDifferentAddress] = useState(false);
@@ -270,6 +297,7 @@ export default function BookPage() {
   useEffect(() => {
     // just clear selection; user will click a new valid slot
     setSelectedStartHour(null);
+    setPendingStartHour(null);
   }, [servicePublicId, neededBlocks]);
 
   async function openSurveyIfNeeded() {
@@ -639,7 +667,7 @@ export default function BookPage() {
 
                   <div className="mt-2 grid grid-cols-7 gap-2">
                     {calendarCells.map((c) => {
-                      const disabled = isPastDate(c.ymd);
+                      const disabled = isPastDate(c.ymd) || c.ymd > maxBookDateYmd;
                       const active = isSameYmd(c.ymd, selectedDateYmd);
                       const isToday = isSameYmd(c.ymd, todayYmd);
 
@@ -651,6 +679,7 @@ export default function BookPage() {
                             if (disabled) return;
                             setSelectedDateYmd(c.ymd);
                             setSelectedStartHour(null);
+                            setPendingStartHour(null);
                           }}
                           disabled={disabled}
                           className={cn(
@@ -662,7 +691,13 @@ export default function BookPage() {
                             borderColor: "rgb(var(--border))",
                             background: active ? "rgba(var(--bg), 0.45)" : "rgba(var(--bg), 0.25)",
                           }}
-                          title={disabled ? "Past dates are not available" : c.ymd}
+                          title={
+                            isPastDate(c.ymd)
+                              ? "Past dates are not available"
+                              : c.ymd > maxBookDateYmd
+                              ? "Bookings are available up to 60 days out"
+                              : c.ymd
+                          }
                         >
                           <div className={cn("flex items-center justify-center gap-2")}>
                             <span className={cn(!c.inMonth && "opacity-60")}>{c.date.getDate()}</span>
@@ -691,8 +726,11 @@ export default function BookPage() {
                   style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.15)" }}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <div>
+                    <div className="space-y-1">
                       <div className="text-sm font-semibold">Available Times</div>
+                      <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                        {formatSelectedHeader(selectedDateYmd, selectedStartHour, neededBlocks)}
+                      </div>
                       <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
                         1-hour blocks • Selects {neededBlocks} consecutive block(s)
                       </div>
@@ -703,22 +741,27 @@ export default function BookPage() {
                     {hours.map((h) => {
                       const blocked = slotIsBlocked(selectedDateYmd, h);
                       const active = selectedStartHour === h;
+                      const pending = pendingStartHour === h;
 
                       return (
                         <button
                           key={h}
                           type="button"
                           disabled={blocked}
-                          onClick={() => setSelectedStartHour(h)}
+                          onClick={() => setPendingStartHour(h)}
                           className={cn(
-                            "w-full rounded-xl border px-3 py-2 text-sm font-semibold text-left transition",
-                            active && "ring-2",
-                            blocked && "opacity-50 cursor-not-allowed"
-                          )}
-                          style={{
-                            borderColor: "rgb(var(--border))",
-                            background: active ? "rgba(var(--bg), 0.45)" : "rgba(var(--bg), 0.25)",
-                          }}
+                              "w-full rounded-xl border px-3 py-2 text-sm font-semibold text-left transition",
+                              (active || pending) && "ring-2",
+                              blocked && "opacity-50 cursor-not-allowed"
+                            )}
+                            style={{
+                              borderColor: "rgb(var(--border))",
+                              background: active
+                                ? "rgba(var(--bg), 0.55)"
+                                : pending
+                                ? "rgba(var(--bg), 0.40)"
+                                : "rgba(var(--bg), 0.25)",
+                            }}
                           title={blocked ? "Unavailable" : "Select"}
                         >
                           {formatTimeLabel(h)}
@@ -731,7 +774,50 @@ export default function BookPage() {
                       );
                     })}
                   </div>
+                      {pendingStartHour !== null ? (
+  <div className="mt-3 rounded-xl border p-3"
+       style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}>
+    <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+      Selected time
+    </div>
+    <div className="mt-1 text-sm font-semibold">
+      {formatSelectedHeader(selectedDateYmd, pendingStartHour, neededBlocks)}
+    </div>
 
+    <div className="mt-3 flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => {
+          // If it became blocked since click, prevent confirm
+          if (slotIsBlocked(selectedDateYmd, pendingStartHour)) return;
+          setSelectedStartHour(pendingStartHour);
+          setPendingStartHour(null);
+        }}
+        className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+        style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+        disabled={slotIsBlocked(selectedDateYmd, pendingStartHour)}
+        title={slotIsBlocked(selectedDateYmd, pendingStartHour) ? "Unavailable" : "Confirm this time"}
+      >
+        Confirm time
+      </button>
+
+      <button
+        type="button"
+        onClick={() => setPendingStartHour(null)}
+        className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
+        style={{ borderColor: "rgb(var(--border))", background: "transparent" }}
+      >
+        Cancel
+      </button>
+    </div>
+
+    {slotIsBlocked(selectedDateYmd, pendingStartHour) ? (
+      <div className="mt-2 text-xs" style={{ color: "rgb(239 68 68)" }}>
+        That slot just became unavailable. Please select a different time.
+      </div>
+    ) : null}
+  </div>
+) : null}
                   <div className="mt-3 text-xs" style={{ color: "rgb(var(--muted))" }}>
                     Reserved slots are automatically disabled.
                   </div>
