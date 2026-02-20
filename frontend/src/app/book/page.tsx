@@ -9,19 +9,23 @@ import { me, type MeResponse } from "../../lib/api/auth";
 
 import BookingSurveyModal from "../../components/BookingSurveyModal";
 import { surveyNeeded, submitSurvey, type SurveyCode } from "../../lib/api/survey";
+import { getBookingAvailability, type AvailabilityBooking } from "../../lib/api/bookings";
 
 /**
- * Convert a datetime-local string (e.g. "2026-02-08T14:30") to ISO string.
- * Treats input as local time.
+ * Helpers
  */
 function dollarsFromCents(cents?: number | null) {
   if (typeof cents !== "number") return null;
   return (cents / 100).toFixed(2);
 }
 
-function localDateTimeToIso(value: string) {
-  const d = new Date(value);
-  return d.toISOString();
+// Treats input as local time and returns ISO string
+function localDateTimeToIsoFromParts(dateYmd: string, timeHHmm: string) {
+  // dateYmd: "YYYY-MM-DD", timeHHmm: "HH:MM"
+  const [y, m, d] = dateYmd.split("-").map((x) => Number(x));
+  const [hh, mm] = timeHHmm.split(":").map((x) => Number(x));
+  const dt = new Date(y, m - 1, d, hh, mm, 0, 0); // local
+  return dt.toISOString();
 }
 
 function addMinutesIso(iso: string, minutes: number) {
@@ -33,6 +37,58 @@ function addMinutesIso(iso: string, minutes: number) {
 function cn(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
 }
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function ymdLocal(d: Date) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function isSameYmd(a: string, b: string) {
+  return a === b;
+}
+
+function startOfMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function endOfMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+}
+
+function addMonths(date: Date, delta: number) {
+  return new Date(date.getFullYear(), date.getMonth() + delta, 1);
+}
+
+function weekdaySun0(d: Date) {
+  return d.getDay(); // 0=Sun
+}
+
+function formatMonthYear(d: Date) {
+  return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+
+function formatTimeLabel(hour24: number) {
+  const h = hour24 % 12 || 12;
+  const ampm = hour24 < 12 ? "AM" : "PM";
+  return `${h}:00 ${ampm}`;
+}
+
+function overlaps(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date) {
+  return aStart < bEnd && aEnd > bStart;
+}
+
+function blocksNeeded(durationMinutes: number) {
+  // 1-hour blocks
+  return Math.max(1, Math.ceil(durationMinutes / 60));
+}
+
+/**
+ * Recurrence UI types (frontend-only for now)
+ */
+type RecurrenceFreq = "" | "biweekly" | "monthly" | "quarterly";
 
 export default function BookPage() {
   const router = useRouter();
@@ -50,7 +106,16 @@ export default function BookPage() {
 
   // form state
   const [servicePublicId, setServicePublicId] = useState("");
-  const [startsAtLocal, setStartsAtLocal] = useState(""); // datetime-local input value
+
+  // NEW: calendar & time selection state
+  const todayYmd = useMemo(() => ymdLocal(new Date()), []);
+  const [monthCursor, setMonthCursor] = useState(() => startOfMonth(new Date()));
+  const [selectedDateYmd, setSelectedDateYmd] = useState<string>(() => todayYmd);
+  const [selectedStartHour, setSelectedStartHour] = useState<number | null>(null);
+
+  // availability (booked intervals for selected date)
+  const [availLoading, setAvailLoading] = useState(false);
+  const [booked, setBooked] = useState<AvailabilityBooking[]>([]);
 
   // address UX
   const [useDifferentAddress, setUseDifferentAddress] = useState(false);
@@ -67,24 +132,47 @@ export default function BookPage() {
   const [surveyReferrerName, setSurveyReferrerName] = useState("");
   const [surveyOtherText, setSurveyOtherText] = useState("");
 
+  // NEW: recurrence UI state
+  const [recurringEnabled, setRecurringEnabled] = useState(false);
+  const [recurringFreq, setRecurringFreq] = useState<RecurrenceFreq>("");
+  const [recurringCount, setRecurringCount] = useState<number>(1); // how many times after first
+  const [recurringSameTime, setRecurringSameTime] = useState(true);
+
   const selectedService = useMemo(
     () => services.find((s) => s.public_id === servicePublicId) || null,
     [services, servicePublicId]
   );
 
   const durationMinutes = selectedService?.duration_minutes ?? 60;
+  const neededBlocks = useMemo(() => blocksNeeded(durationMinutes), [durationMinutes]);
 
-  const computedEndsAtIso = useMemo(() => {
-    if (!startsAtLocal) return null;
-    const startsIso = localDateTimeToIso(startsAtLocal);
-    return addMinutesIso(startsIso, durationMinutes);
-  }, [startsAtLocal, durationMinutes]);
+  // BUSINESS HOURS (adjust here)
+  const HOURS_START = 8;  // 8AM
+  const HOURS_END = 17;   // last start time is 5PM if 1 block, earlier if multi-block
+  const hours = useMemo(() => {
+    const xs: number[] = [];
+    for (let h = HOURS_START; h <= HOURS_END; h++) xs.push(h);
+    return xs;
+  }, []);
 
   const defaultAddress = (user?.address || "").trim();
 
   const finalAddress = useMemo(() => {
     return useDifferentAddress ? serviceAddress.trim() : defaultAddress;
   }, [useDifferentAddress, serviceAddress, defaultAddress]);
+
+  // computed ISO times based on date + selectedStartHour
+  const startsAtIso = useMemo(() => {
+    if (!selectedDateYmd) return null;
+    if (selectedStartHour === null) return null;
+    const hhmm = `${pad2(selectedStartHour)}:00`;
+    return localDateTimeToIsoFromParts(selectedDateYmd, hhmm);
+  }, [selectedDateYmd, selectedStartHour]);
+
+  const computedEndsAtIso = useMemo(() => {
+    if (!startsAtIso) return null;
+    return addMinutesIso(startsAtIso, durationMinutes);
+  }, [startsAtIso, durationMinutes]);
 
   // Load services
   useEffect(() => {
@@ -153,6 +241,37 @@ export default function BookPage() {
     };
   }, [router]);
 
+  // Availability fetch when date changes
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      try {
+        setAvailLoading(true);
+        const tzOffsetMinutes = new Date().getTimezoneOffset();
+        const res = await getBookingAvailability({ date: selectedDateYmd, tzOffsetMinutes });
+        if (!alive) return;
+        setBooked(res.bookings || []);
+      } catch (e: unknown) {
+        if (!alive) return;
+        // don’t hard-fail the whole page for availability issues; just show an error
+        setBooked([]);
+      } finally {
+        if (alive) setAvailLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [selectedDateYmd]);
+
+  // Reset selected time if service duration changes such that selection becomes invalid
+  useEffect(() => {
+    // just clear selection; user will click a new valid slot
+    setSelectedStartHour(null);
+  }, [servicePublicId, neededBlocks]);
+
   async function openSurveyIfNeeded() {
     try {
       const r = await surveyNeeded();
@@ -200,14 +319,122 @@ export default function BookPage() {
     }
   }
 
+  const pageLoading = loadingServices || loadingMe;
+
+  // Calendar grid for monthCursor
+  const calendarCells = useMemo(() => {
+    const start = startOfMonth(monthCursor);
+    const end = endOfMonth(monthCursor);
+
+    const startDow = weekdaySun0(start);
+    const daysInMonth = end.getDate();
+
+    // build 6 weeks x 7 days
+    const cells: Array<{ ymd: string; inMonth: boolean; date: Date }> = [];
+
+    // previous month spill
+    const prevMonthEnd = new Date(start.getFullYear(), start.getMonth(), 0);
+    const prevDays = prevMonthEnd.getDate();
+    for (let i = 0; i < startDow; i++) {
+      const day = prevDays - (startDow - 1 - i);
+      const d = new Date(start.getFullYear(), start.getMonth() - 1, day);
+      cells.push({ ymd: ymdLocal(d), inMonth: false, date: d });
+    }
+
+    // current month
+    for (let day = 1; day <= daysInMonth; day++) {
+      const d = new Date(start.getFullYear(), start.getMonth(), day);
+      cells.push({ ymd: ymdLocal(d), inMonth: true, date: d });
+    }
+
+    // next month spill to fill 42 cells
+    while (cells.length < 42) {
+      const last = cells[cells.length - 1].date;
+      const d = new Date(last.getFullYear(), last.getMonth(), last.getDate() + 1);
+      cells.push({ ymd: ymdLocal(d), inMonth: false, date: d });
+    }
+
+    return cells;
+  }, [monthCursor]);
+
+  // Build disabled logic for time slots based on booked intervals + neededBlocks
+  const bookedIntervals = useMemo(() => {
+    return booked.map((b) => ({
+      start: new Date(b.starts_at),
+      end: new Date(b.ends_at),
+      status: b.status,
+    }));
+  }, [booked]);
+
+  function isPastDate(ymd: string) {
+    // compare by local midnight
+    const [y, m, d] = ymd.split("-").map((x) => Number(x));
+    const date = new Date(y, m - 1, d, 0, 0, 0, 0);
+    const now = new Date();
+    const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    return date < today0;
+  }
+
+  function slotIsBlocked(dateYmd: string, startHour: number) {
+    // need N consecutive 1-hour blocks
+    const [y, m, d] = dateYmd.split("-").map((x) => Number(x));
+    const start = new Date(y, m - 1, d, startHour, 0, 0, 0);
+    const end = new Date(start.getTime() + neededBlocks * 60 * 60_000);
+
+    // Must be within business hours
+    const lastAllowedStart = HOURS_END - (neededBlocks - 1);
+    if (startHour > lastAllowedStart) return true;
+
+    // overlap with any booking interval
+    for (const it of bookedIntervals) {
+      if (overlaps(start, end, it.start, it.end)) return true;
+    }
+
+    // If selecting today, prevent picking time in the past (simple rule)
+    const today = ymdLocal(new Date());
+    if (isSameYmd(dateYmd, today)) {
+      const now = new Date();
+      if (start <= now) return true;
+    }
+
+    return false;
+  }
+
+  function selectedRangeLabel() {
+    if (!selectedDateYmd || selectedStartHour === null) return "—";
+    const [y, m, d] = selectedDateYmd.split("-").map((x) => Number(x));
+    const start = new Date(y, m - 1, d, selectedStartHour, 0, 0, 0);
+    const end = new Date(start.getTime() + neededBlocks * 60 * 60_000);
+    return `${start.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} • ${
+      start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+    } – ${end.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
+  }
+
+  function buildRecurringNote() {
+    if (!recurringEnabled) return "";
+    const freqLabel =
+      recurringFreq === "biweekly"
+        ? "Every 2 weeks"
+        : recurringFreq === "monthly"
+        ? "Monthly"
+        : recurringFreq === "quarterly"
+        ? "Every 3 months"
+        : "Recurring";
+
+    const countLabel = recurringCount > 0 ? `${recurringCount} time(s)` : "unspecified times";
+    const sameLabel = recurringSameTime ? "same day/time" : "time may vary";
+
+    return `\n\n[Recurring Request]\n- Frequency: ${freqLabel}\n- Repeat: ${countLabel}\n- Preference: ${sameLabel}\n`;
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSuccessMsg(null);
     setError(null);
 
     if (!servicePublicId) return setError("Please select a service.");
-    if (!startsAtLocal) return setError("Please select a date and time.");
-    if (!computedEndsAtIso) return setError("Could not compute end time.");
+    if (!selectedDateYmd || selectedStartHour === null) return setError("Please select a date and time.");
+    if (!startsAtIso || !computedEndsAtIso) return setError("Could not compute schedule.");
 
     // Address rules:
     if (!useDifferentAddress) {
@@ -220,7 +447,14 @@ export default function BookPage() {
       }
     }
 
-    const startsAtIso = localDateTimeToIso(startsAtLocal);
+    // client-side double booking protection
+    if (slotIsBlocked(selectedDateYmd, selectedStartHour)) {
+      return setError("That time is no longer available. Please select another slot.");
+    }
+
+    // Recurrence: frontend-only for now; encode into notes so it’s not lost.
+    const finalNotes =
+      (notes.trim() ? notes.trim() : "") + (recurringEnabled ? buildRecurringNote() : "");
 
     try {
       setLoadingSubmit(true);
@@ -230,16 +464,14 @@ export default function BookPage() {
         startsAt: startsAtIso,
         endsAt: computedEndsAtIso,
         address: finalAddress,
-        notes: notes.trim() ? notes.trim() : undefined,
+        notes: finalNotes.trim() ? finalNotes.trim() : undefined,
       });
 
-      // ✅ store booking pid (optional, but best)
       const bookingPid = created?.booking?.public_id ?? null;
       setCreatedBookingPublicId(bookingPid);
 
       setSuccessMsg("Booking created!");
 
-      // ✅ open survey if needed
       await openSurveyIfNeeded();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to create booking";
@@ -249,17 +481,15 @@ export default function BookPage() {
     }
   }
 
-  const pageLoading = loadingServices || loadingMe;
-
   return (
     <main className="h-screen overflow-y-auto scroll-smooth">
       <Navbar />
 
-      <section className="mx-auto max-w-3xl px-4 py-10 space-y-6">
+      <section className="mx-auto max-w-5xl px-4 py-10 space-y-6">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold">Book a Service</h1>
           <p className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-            Pick a service, choose a time, and confirm your booking.
+            Pick a service, choose a date/time, and confirm your booking.
           </p>
         </div>
 
@@ -292,6 +522,7 @@ export default function BookPage() {
                   {selectedService ? (
                     <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
                       Selected: <span className="font-semibold">{selectedService.title}</span>
+                      <span className="ml-2">• {neededBlocks} hour(s)</span>
                     </div>
                   ) : null}
                 </div>
@@ -318,6 +549,7 @@ export default function BookPage() {
                     const active = s.public_id === servicePublicId;
                     const price = dollarsFromCents(s.base_price_cents);
                     const duration = s.duration_minutes ?? 60;
+                    const hrs = Math.max(1, Math.ceil(duration / 60));
 
                     return (
                       <button
@@ -350,7 +582,7 @@ export default function BookPage() {
 
                         <div className="mt-3 flex items-center gap-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
                           <span className="rounded-full border px-2 py-1" style={{ borderColor: "rgb(var(--border))" }}>
-                            {duration} min
+                            {hrs} hour(s)
                           </span>
                           {price ? (
                             <span className="rounded-full border px-2 py-1" style={{ borderColor: "rgb(var(--border))" }}>
@@ -364,27 +596,241 @@ export default function BookPage() {
                 </div>
               </div>
 
-              {/* TIME */}
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold">Start date & time</label>
-                  <input
-                    type="datetime-local"
-                    className="w-full rounded-xl border px-3 py-2 text-sm"
-                    style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.35)" }}
-                    value={startsAtLocal}
-                    onChange={(e) => setStartsAtLocal(e.target.value)}
-                  />
+              {/* CALENDAR + TIMES (Calendly-style) */}
+              <div className="grid gap-4 lg:grid-cols-3">
+                {/* Calendar */}
+                <div
+                  className="rounded-2xl border p-4 lg:col-span-2"
+                  style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.15)" }}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-semibold">Select a Date</div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
+                        style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                        onClick={() => setMonthCursor((d) => addMonths(d, -1))}
+                      >
+                        ‹
+                      </button>
+
+                      <div className="text-sm font-semibold">{formatMonthYear(monthCursor)}</div>
+
+                      <button
+                        type="button"
+                        className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
+                        style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                        onClick={() => setMonthCursor((d) => addMonths(d, 1))}
+                      >
+                        ›
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-7 gap-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((w) => (
+                      <div key={w} className="text-center font-semibold">
+                        {w}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-2 grid grid-cols-7 gap-2">
+                    {calendarCells.map((c) => {
+                      const disabled = isPastDate(c.ymd);
+                      const active = isSameYmd(c.ymd, selectedDateYmd);
+                      const isToday = isSameYmd(c.ymd, todayYmd);
+
+                      return (
+                        <button
+                          key={c.ymd}
+                          type="button"
+                          onClick={() => {
+                            if (disabled) return;
+                            setSelectedDateYmd(c.ymd);
+                            setSelectedStartHour(null);
+                          }}
+                          disabled={disabled}
+                          className={cn(
+                            "rounded-xl border py-2 text-sm transition",
+                            active && "ring-2",
+                            disabled && "opacity-50 cursor-not-allowed"
+                          )}
+                          style={{
+                            borderColor: "rgb(var(--border))",
+                            background: active ? "rgba(var(--bg), 0.45)" : "rgba(var(--bg), 0.25)",
+                          }}
+                          title={disabled ? "Past dates are not available" : c.ymd}
+                        >
+                          <div className={cn("flex items-center justify-center gap-2")}>
+                            <span className={cn(!c.inMonth && "opacity-60")}>{c.date.getDate()}</span>
+                            {isToday ? (
+                              <span
+                                className="inline-block h-2 w-2 rounded-full"
+                                style={{ background: "rgb(59 130 246)" }}
+                                aria-hidden="true"
+                              />
+                            ) : null}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-4 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                    Selected: <span className="font-semibold">{selectedRangeLabel()}</span>
+                    {availLoading ? <span className="ml-2">• Checking availability…</span> : null}
+                  </div>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold">End time (auto)</label>
-                  <div
-                    className="w-full rounded-xl border px-3 py-2 text-sm"
-                    style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.20)" }}
-                  >
-                    {computedEndsAtIso ? new Date(computedEndsAtIso).toLocaleString() : "—"}
+                {/* Times */}
+                <div
+                  className="rounded-2xl border p-4"
+                  style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.15)" }}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-semibold">Available Times</div>
+                      <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                        1-hour blocks • Selects {neededBlocks} consecutive block(s)
+                      </div>
+                    </div>
                   </div>
+
+                  <div className="mt-3 grid gap-2">
+                    {hours.map((h) => {
+                      const blocked = slotIsBlocked(selectedDateYmd, h);
+                      const active = selectedStartHour === h;
+
+                      return (
+                        <button
+                          key={h}
+                          type="button"
+                          disabled={blocked}
+                          onClick={() => setSelectedStartHour(h)}
+                          className={cn(
+                            "w-full rounded-xl border px-3 py-2 text-sm font-semibold text-left transition",
+                            active && "ring-2",
+                            blocked && "opacity-50 cursor-not-allowed"
+                          )}
+                          style={{
+                            borderColor: "rgb(var(--border))",
+                            background: active ? "rgba(var(--bg), 0.45)" : "rgba(var(--bg), 0.25)",
+                          }}
+                          title={blocked ? "Unavailable" : "Select"}
+                        >
+                          {formatTimeLabel(h)}
+                          {neededBlocks > 1 ? (
+                            <span className="ml-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                              → {formatTimeLabel(h + neededBlocks)}
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-3 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                    Reserved slots are automatically disabled.
+                  </div>
+                </div>
+              </div>
+
+              {/* RECURRING (UI-only for now; encoded into notes) */}
+              <div className="space-y-2">
+                <label className="text-sm font-semibold">Recurring service</label>
+
+                <div
+                  className="rounded-xl border p-3 text-sm"
+                  style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                >
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={recurringEnabled}
+                      onChange={(e) => {
+                        const on = e.target.checked;
+                        setRecurringEnabled(on);
+                        if (!on) {
+                          setRecurringFreq("");
+                          setRecurringCount(1);
+                          setRecurringSameTime(true);
+                        }
+                      }}
+                    />
+                    I want this service to repeat
+                  </label>
+
+                  {recurringEnabled ? (
+                    <div className="mt-3 grid gap-3">
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <div className="space-y-1">
+                          <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+                            Frequency
+                          </div>
+                          <select
+                            value={recurringFreq}
+                            onChange={(e) => setRecurringFreq(e.target.value as RecurrenceFreq)}
+                            className="w-full rounded-lg border px-3 py-2 text-sm"
+                            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.35)" }}
+                          >
+                            <option value="">Select…</option>
+                            <option value="biweekly">Every 2 weeks</option>
+                            <option value="monthly">Monthly</option>
+                            <option value="quarterly">Every 3 months</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+                            Repeat how many more times?
+                          </div>
+                          <input
+                            type="number"
+                            min={1}
+                            max={24}
+                            value={recurringCount}
+                            onChange={(e) => setRecurringCount(Math.max(1, Math.min(24, Number(e.target.value || 1))))}
+                            className="w-full rounded-lg border px-3 py-2 text-sm"
+                            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.35)" }}
+                          />
+                          <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                            (Example: 3 means total of 4 visits including this one)
+                          </div>
+                        </div>
+                      </div>
+
+                      <div
+                        className="rounded-xl border p-3 text-sm"
+                        style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
+                      >
+                        <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+                          Same day & time?
+                        </div>
+
+                        <label className="mt-2 flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={recurringSameTime}
+                            onChange={(e) => setRecurringSameTime(e.target.checked)}
+                          />
+                          Prefer the same day and time each visit
+                        </label>
+
+                        {!recurringSameTime ? (
+                          <div className="mt-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                            For now, we’ll record your preference and coordinate alternative times after the first booking.
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                        Note: recurrence will be saved as a request for now (no auto-generated bookings yet).
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
@@ -460,7 +906,8 @@ export default function BookPage() {
                   type="submit"
                   className="rounded-xl border px-4 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
                   style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                  disabled={loadingSubmit}
+                  disabled={loadingSubmit || selectedStartHour === null}
+                  title={selectedStartHour === null ? "Select a time first" : "Confirm booking"}
                 >
                   {loadingSubmit ? "Booking…" : "Confirm Booking"}
                 </button>
