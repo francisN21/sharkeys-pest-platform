@@ -46,7 +46,7 @@ export type TechBookingRow = {
 };
 
 export type TechRow = {
-  user_id: number;                // ✅ make it a number
+  user_id: number;
   public_id: string | null;
   email: string | null;
   first_name: string | null;
@@ -68,6 +68,6 @@ export function getAdminTechBookings() {
 export function reassignBooking(publicId: string, workerUserId: number) {
   return jsonFetch<{ ok: boolean }>(`/admin/tech-bookings/${encodeURIComponent(publicId)}/reassign`, {
     method: "POST",
-    body: JSON.stringify({ worker_user_id: workerUserId }), // ✅ matches backend zod schema
+    body: JSON.stringify({ worker_user_id: workerUserId }),
   });
 }
