@@ -132,3 +132,25 @@ export function cancelBooking(publicId: string) {
   });
 }
 
+export type AvailabilityBooking = {
+  public_id: string;
+  starts_at: string; // ISO
+  ends_at: string;   // ISO
+  status: string;
+};
+
+export type BookingAvailabilityResponse = {
+  ok: boolean;
+  date: string; // YYYY-MM-DD
+  startUtc: string;
+  endUtc: string;
+  bookings: AvailabilityBooking[];
+};
+
+export function getBookingAvailability(params: { date: string; tzOffsetMinutes: number }) {
+  const qs = new URLSearchParams({
+    date: params.date,
+    tzOffsetMinutes: String(params.tzOffsetMinutes),
+  });
+  return jsonFetch<BookingAvailabilityResponse>(`/bookings/availability?${qs.toString()}`, { method: "GET" });
+}
