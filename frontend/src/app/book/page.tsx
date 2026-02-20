@@ -19,29 +19,6 @@ function dollarsFromCents(cents?: number | null) {
   return (cents / 100).toFixed(2);
 }
 
-function addDays(date: Date, days: number) {
-  const d = new Date(date);
-  d.setDate(d.getDate() + days);
-  return d;
-}
-
-function formatSelectedHeader(dateYmd: string, startHour: number | null, blocks: number) {
-  const [y, m, d] = dateYmd.split("-").map(Number);
-  const base = new Date(y, m - 1, d, 0, 0, 0, 0);
-
-  const dayLabel = base.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
-
-  if (startHour === null) return dayLabel;
-
-  const start = new Date(y, m - 1, d, startHour, 0, 0, 0);
-  const end = new Date(start.getTime() + blocks * 60 * 60_000);
-
-  const startLabel = start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  const endLabel = end.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-
-  return `${dayLabel} • ${startLabel} – ${endLabel}`;
-}
-
 // Treats input as local time and returns ISO string
 function localDateTimeToIsoFromParts(dateYmd: string, timeHHmm: string) {
   // dateYmd: "YYYY-MM-DD", timeHHmm: "HH:MM"
@@ -85,6 +62,12 @@ function addMonths(date: Date, delta: number) {
   return new Date(date.getFullYear(), date.getMonth() + delta, 1);
 }
 
+function addDays(date: Date, days: number) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
 function weekdaySun0(d: Date) {
   return d.getDay(); // 0=Sun
 }
@@ -108,6 +91,23 @@ function blocksNeeded(durationMinutes: number) {
   return Math.max(1, Math.ceil(durationMinutes / 60));
 }
 
+function formatSelectedHeader(dateYmd: string, startHour: number | null, blocks: number) {
+  const [y, m, d] = dateYmd.split("-").map(Number);
+  const base = new Date(y, m - 1, d, 0, 0, 0, 0);
+
+  const dayLabel = base.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+
+  if (startHour === null) return dayLabel;
+
+  const start = new Date(y, m - 1, d, startHour, 0, 0, 0);
+  const end = new Date(start.getTime() + blocks * 60 * 60_000);
+
+  const startLabel = start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  const endLabel = end.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+
+  return `${dayLabel} • ${startLabel} – ${endLabel}`;
+}
+
 /**
  * Recurrence UI types (frontend-only for now)
  */
@@ -120,7 +120,6 @@ export default function BookPage() {
   const [loadingServices, setLoadingServices] = useState(true);
   const [loadingMe, setLoadingMe] = useState(true);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
-  const maxBookDateYmd = useMemo(() => ymdLocal(addDays(new Date(), 60)), []);
 
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -135,14 +134,14 @@ export default function BookPage() {
   const todayYmd = useMemo(() => ymdLocal(new Date()), []);
   const [monthCursor, setMonthCursor] = useState(() => startOfMonth(new Date()));
   const [selectedDateYmd, setSelectedDateYmd] = useState<string>(() => todayYmd);
+
+  // Calendly-style mini-step: click → pending, then confirm
   const [selectedStartHour, setSelectedStartHour] = useState<number | null>(null);
+  const [pendingStartHour, setPendingStartHour] = useState<number | null>(null);
 
   // availability (booked intervals for selected date)
   const [availLoading, setAvailLoading] = useState(false);
   const [booked, setBooked] = useState<AvailabilityBooking[]>([]);
-
-  // Calendly-style mini-step: click → pending, then confirm
-  const [pendingStartHour, setPendingStartHour] = useState<number | null>(null);
 
   // address UX
   const [useDifferentAddress, setUseDifferentAddress] = useState(false);
@@ -173,14 +172,11 @@ export default function BookPage() {
   const durationMinutes = selectedService?.duration_minutes ?? 60;
   const neededBlocks = useMemo(() => blocksNeeded(durationMinutes), [durationMinutes]);
 
-  // BUSINESS HOURS (adjust here)
-  const HOURS_START = 8;  // 8AM
-  const HOURS_END = 17;   // last start time is 5PM if 1 block, earlier if multi-block
-  const hours = useMemo(() => {
-    const xs: number[] = [];
-    for (let h = HOURS_START; h <= HOURS_END; h++) xs.push(h);
-    return xs;
-  }, []);
+  // Allow bookings up to 60 days out
+  const maxBookDateYmd = useMemo(() => ymdLocal(addDays(new Date(), 60)), []);
+
+  // 24-hour time slots (0..23)
+  const hours = useMemo(() => Array.from({ length: 24 }, (_, i) => i), []);
 
   const defaultAddress = (user?.address || "").trim();
 
@@ -279,9 +275,8 @@ export default function BookPage() {
         const res = await getBookingAvailability({ date: selectedDateYmd, tzOffsetMinutes });
         if (!alive) return;
         setBooked(res.bookings || []);
-      } catch (e: unknown) {
+      } catch {
         if (!alive) return;
-        // don’t hard-fail the whole page for availability issues; just show an error
         setBooked([]);
       } finally {
         if (alive) setAvailLoading(false);
@@ -293,9 +288,8 @@ export default function BookPage() {
     };
   }, [selectedDateYmd]);
 
-  // Reset selected time if service duration changes such that selection becomes invalid
+  // Clear selection if service duration changes
   useEffect(() => {
-    // just clear selection; user will click a new valid slot
     setSelectedStartHour(null);
     setPendingStartHour(null);
   }, [servicePublicId, neededBlocks]);
@@ -309,7 +303,6 @@ export default function BookPage() {
         router.push("/account");
       }
     } catch {
-      // If survey check fails, don't block the user
       router.push("/account");
     }
   }
@@ -317,7 +310,6 @@ export default function BookPage() {
   async function onSubmitSurvey() {
     if (!surveyHeardFrom) return;
 
-    // Simple validation for conditional fields
     if (surveyHeardFrom === "other" && surveyOtherText.trim().length < 2) {
       setError("Please specify 'Other' (at least 2 characters).");
       return;
@@ -395,7 +387,6 @@ export default function BookPage() {
   }, [booked]);
 
   function isPastDate(ymd: string) {
-    // compare by local midnight
     const [y, m, d] = ymd.split("-").map((x) => Number(x));
     const date = new Date(y, m - 1, d, 0, 0, 0, 0);
     const now = new Date();
@@ -409,9 +400,8 @@ export default function BookPage() {
     const start = new Date(y, m - 1, d, startHour, 0, 0, 0);
     const end = new Date(start.getTime() + neededBlocks * 60 * 60_000);
 
-    // Must be within business hours
-    const lastAllowedStart = HOURS_END - (neededBlocks - 1);
-    if (startHour > lastAllowedStart) return true;
+    // must stay within same day (no crossing to next date)
+    if (startHour + neededBlocks > 24) return true;
 
     // overlap with any booking interval
     for (const it of bookedIntervals) {
@@ -426,16 +416,6 @@ export default function BookPage() {
     }
 
     return false;
-  }
-
-  function selectedRangeLabel() {
-    if (!selectedDateYmd || selectedStartHour === null) return "—";
-    const [y, m, d] = selectedDateYmd.split("-").map((x) => Number(x));
-    const start = new Date(y, m - 1, d, selectedStartHour, 0, 0, 0);
-    const end = new Date(start.getTime() + neededBlocks * 60 * 60_000);
-    return `${start.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} • ${
-      start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
-    } – ${end.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
   }
 
   function buildRecurringNote() {
@@ -480,9 +460,7 @@ export default function BookPage() {
       return setError("That time is no longer available. Please select another slot.");
     }
 
-    // Recurrence: frontend-only for now; encode into notes so it’s not lost.
-    const finalNotes =
-      (notes.trim() ? notes.trim() : "") + (recurringEnabled ? buildRecurringNote() : "");
+    const finalNotes = (notes.trim() ? notes.trim() : "") + (recurringEnabled ? buildRecurringNote() : "");
 
     try {
       setLoadingSubmit(true);
@@ -699,7 +677,7 @@ export default function BookPage() {
                               : c.ymd
                           }
                         >
-                          <div className={cn("flex items-center justify-center gap-2")}>
+                          <div className="flex items-center justify-center gap-2">
                             <span className={cn(!c.inMonth && "opacity-60")}>{c.date.getDate()}</span>
                             {isToday ? (
                               <span
@@ -715,7 +693,10 @@ export default function BookPage() {
                   </div>
 
                   <div className="mt-4 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                    Selected: <span className="font-semibold">{selectedRangeLabel()}</span>
+                    Selected:{" "}
+                    <span className="font-semibold">
+                      {formatSelectedHeader(selectedDateYmd, selectedStartHour, neededBlocks)}
+                    </span>
                     {availLoading ? <span className="ml-2">• Checking availability…</span> : null}
                   </div>
                 </div>
@@ -737,7 +718,12 @@ export default function BookPage() {
                     </div>
                   </div>
 
-                  <div className="mt-3 grid gap-2">
+                  {/* Wheel/scroll list */}
+                  <div
+                    className="mt-3 grid gap-2 overflow-y-auto pr-1"
+                    style={{ maxHeight: "360px" }}
+                    aria-label="Available time slots"
+                  >
                     {hours.map((h) => {
                       const blocked = slotIsBlocked(selectedDateYmd, h);
                       const active = selectedStartHour === h;
@@ -750,74 +736,77 @@ export default function BookPage() {
                           disabled={blocked}
                           onClick={() => setPendingStartHour(h)}
                           className={cn(
-                              "w-full rounded-xl border px-3 py-2 text-sm font-semibold text-left transition",
-                              (active || pending) && "ring-2",
-                              blocked && "opacity-50 cursor-not-allowed"
-                            )}
-                            style={{
-                              borderColor: "rgb(var(--border))",
-                              background: active
-                                ? "rgba(var(--bg), 0.55)"
-                                : pending
-                                ? "rgba(var(--bg), 0.40)"
-                                : "rgba(var(--bg), 0.25)",
-                            }}
+                            "w-full rounded-xl border px-3 py-2 text-sm font-semibold text-left transition",
+                            (active || pending) && "ring-2",
+                            blocked && "opacity-50 cursor-not-allowed"
+                          )}
+                          style={{
+                            borderColor: "rgb(var(--border))",
+                            background: active
+                              ? "rgba(var(--bg), 0.55)"
+                              : pending
+                              ? "rgba(var(--bg), 0.40)"
+                              : "rgba(var(--bg), 0.25)",
+                          }}
                           title={blocked ? "Unavailable" : "Select"}
                         >
                           {formatTimeLabel(h)}
                           {neededBlocks > 1 ? (
                             <span className="ml-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                              → {formatTimeLabel(h + neededBlocks)}
+                              → {formatTimeLabel((h + neededBlocks) % 24)}
                             </span>
                           ) : null}
                         </button>
                       );
                     })}
                   </div>
-                      {pendingStartHour !== null ? (
-  <div className="mt-3 rounded-xl border p-3"
-       style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}>
-    <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-      Selected time
-    </div>
-    <div className="mt-1 text-sm font-semibold">
-      {formatSelectedHeader(selectedDateYmd, pendingStartHour, neededBlocks)}
-    </div>
 
-    <div className="mt-3 flex items-center gap-2">
-      <button
-        type="button"
-        onClick={() => {
-          // If it became blocked since click, prevent confirm
-          if (slotIsBlocked(selectedDateYmd, pendingStartHour)) return;
-          setSelectedStartHour(pendingStartHour);
-          setPendingStartHour(null);
-        }}
-        className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-        style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-        disabled={slotIsBlocked(selectedDateYmd, pendingStartHour)}
-        title={slotIsBlocked(selectedDateYmd, pendingStartHour) ? "Unavailable" : "Confirm this time"}
-      >
-        Confirm time
-      </button>
+                  {pendingStartHour !== null ? (
+                    <div
+                      className="mt-3 rounded-xl border p-3"
+                      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                    >
+                      <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+                        Selected time
+                      </div>
+                      <div className="mt-1 text-sm font-semibold">
+                        {formatSelectedHeader(selectedDateYmd, pendingStartHour, neededBlocks)}
+                      </div>
 
-      <button
-        type="button"
-        onClick={() => setPendingStartHour(null)}
-        className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
-        style={{ borderColor: "rgb(var(--border))", background: "transparent" }}
-      >
-        Cancel
-      </button>
-    </div>
+                      <div className="mt-3 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (slotIsBlocked(selectedDateYmd, pendingStartHour)) return;
+                            setSelectedStartHour(pendingStartHour);
+                            setPendingStartHour(null);
+                          }}
+                          className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+                          style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                          disabled={slotIsBlocked(selectedDateYmd, pendingStartHour)}
+                          title={slotIsBlocked(selectedDateYmd, pendingStartHour) ? "Unavailable" : "Confirm this time"}
+                        >
+                          Confirm time
+                        </button>
 
-    {slotIsBlocked(selectedDateYmd, pendingStartHour) ? (
-      <div className="mt-2 text-xs" style={{ color: "rgb(239 68 68)" }}>
-        That slot just became unavailable. Please select a different time.
-      </div>
-    ) : null}
-  </div>
-) : null}
+                        <button
+                          type="button"
+                          onClick={() => setPendingStartHour(null)}
+                          className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
+                          style={{ borderColor: "rgb(var(--border))", background: "transparent" }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+
+                      {slotIsBlocked(selectedDateYmd, pendingStartHour) ? (
+                        <div className="mt-2 text-xs" style={{ color: "rgb(239 68 68)" }}>
+                          That slot just became unavailable. Please select a different time.
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   <div className="mt-3 text-xs" style={{ color: "rgb(var(--muted))" }}>
                     Reserved slots are automatically disabled.
                   </div>
@@ -993,7 +982,7 @@ export default function BookPage() {
                   className="rounded-xl border px-4 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
                   style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
                   disabled={loadingSubmit || selectedStartHour === null}
-                  title={selectedStartHour === null ? "Select a time first" : "Confirm booking"}
+                  title={selectedStartHour === null ? "Select and confirm a time first" : "Confirm booking"}
                 >
                   {loadingSubmit ? "Booking…" : "Confirm Booking"}
                 </button>
