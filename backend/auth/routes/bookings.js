@@ -271,4 +271,57 @@ router.patch("/:publicId/cancel", requireAuth, async (req, res, next) => {
   }
 });
 
+// GET /bookings/availability?date=YYYY-MM-DD&tzOffsetMinutes=480
+// Returns bookings that overlap the local-date window (based on client tz offset).
+router.get("/availability", requireAuth, async (req, res, next) => {
+  try {
+    const date = String(req.query.date || "").trim(); // YYYY-MM-DD
+    const tzOffsetMinutes = Number(req.query.tzOffsetMinutes ?? NaN); // from new Date().getTimezoneOffset()
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ ok: false, message: "Invalid date (expected YYYY-MM-DD)" });
+    }
+    if (!Number.isFinite(tzOffsetMinutes)) {
+      return res.status(400).json({ ok: false, message: "Invalid tzOffsetMinutes" });
+    }
+
+    const [yStr, mStr, dStr] = date.split("-");
+    const y = Number(yStr);
+    const m = Number(mStr);
+    const d = Number(dStr);
+
+    // local midnight → UTC = Date.UTC(...) + offsetMinutes
+    // getTimezoneOffset() is "minutes to add to local to get UTC"
+    const startUtcMs = Date.UTC(y, m - 1, d, 0, 0, 0, 0) + tzOffsetMinutes * 60_000;
+    const endUtcMs = startUtcMs + 24 * 60 * 60_000;
+
+    const startUtcIso = new Date(startUtcMs).toISOString();
+    const endUtcIso = new Date(endUtcMs).toISOString();
+
+    // Overlap test: starts_at < end AND ends_at > start
+    // Exclude cancelled (you can include completed, since it's still a reserved block)
+    const r = await pool.query(
+      `
+      SELECT public_id, starts_at, ends_at, status
+      FROM bookings
+      WHERE status != 'cancelled'
+        AND starts_at < $1::timestamptz
+        AND ends_at > $2::timestamptz
+      ORDER BY starts_at ASC
+      `,
+      [endUtcIso, startUtcIso]
+    );
+
+    return res.json({
+      ok: true,
+      date,
+      startUtc: startUtcIso,
+      endUtc: endUtcIso,
+      bookings: r.rows,
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
 module.exports = router;

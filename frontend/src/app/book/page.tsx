@@ -273,6 +273,7 @@ export default function BookPage() {
         setAvailLoading(true);
         const tzOffsetMinutes = new Date().getTimezoneOffset();
         const res = await getBookingAvailability({ date: selectedDateYmd, tzOffsetMinutes });
+        
         if (!alive) return;
         setBooked(res.bookings || []);
       } catch {
