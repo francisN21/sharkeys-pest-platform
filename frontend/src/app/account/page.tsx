@@ -9,6 +9,7 @@ import TechnicianPage from "../account/technician/page";
 import AdminJobsPage from "../account/admin/jobs/page";
 import AdminJobHistoryPage from "./admin/jobhistory/page";
 import AdminCustomersPage from "../account/admin/customers/page";
+import AdminLeadsPage from "../account/admin/leads/page";
 import { me, type MeResponse } from "../../lib/api/auth";
 import TechBookingsPage from "./techbookings/page";
 
@@ -25,6 +26,7 @@ type TabKey =
   | "bookings"
   | "tech"
   | "admin_customers"
+  | "admin_leads"
   | "admin_jobs"
   | "admin_jobhistory"
   | "admin_tech_bookings";
@@ -68,6 +70,7 @@ export default function AccountShellPage() {
     // Admin (includes superuser)
     base.push(
       { key: "admin_customers", label: "Customers" },
+      { key: "admin_leads", label: "Leads" },
       { key: "admin_jobs", label: "Jobs" },
       { key: "admin_jobhistory", label: "Completed" },
       { key: "admin_tech_bookings", label: "Tech Bookings" }
@@ -154,6 +157,7 @@ export default function AccountShellPage() {
               {role === "technician" && activeTab === "tech" && <TechnicianPage />}
 
               {role === "admin" && activeTab === "admin_customers" && <AdminCustomersPage />}
+              {role === "admin" && activeTab === "admin_customers" && <AdminLeadsPage />}
               {role === "admin" && activeTab === "admin_jobs" && <AdminJobsPage />}
               {role === "admin" && activeTab === "admin_jobhistory" && <AdminJobHistoryPage />}
               {role === "admin" && activeTab === "admin_tech_bookings" && <TechBookingsPage />}
