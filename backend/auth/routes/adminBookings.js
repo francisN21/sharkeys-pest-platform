@@ -2,9 +2,30 @@ const express = require("express");
 const { z } = require("zod");
 const { pool } = require("../src/db");
 const { requireAuth } = require("../middleware/requireAuth");
-const { requireRole } = require("../middleware/requireRole");
 
 const router = express.Router();
+
+/**
+ * Helper: accept BOTH admin + superuser for this router.
+ * (We do this without depending on requireRole implementation.)
+ */
+function requireAnyRole(roles) {
+  return async (req, res, next) => {
+    try {
+      if (!req.user?.id) return res.status(401).json({ ok: false, message: "Not authenticated" });
+
+      const r = await pool.query(`SELECT role FROM user_roles WHERE user_id = $1`, [req.user.id]);
+      const userRoles = r.rows.map((x) => String(x.role).trim().toLowerCase());
+
+      const ok = roles.some((role) => userRoles.includes(String(role).trim().toLowerCase()));
+      if (!ok) return res.status(403).json({ ok: false, message: "Forbidden" });
+
+      next();
+    } catch (e) {
+      next(e);
+    }
+  };
+}
 
 async function addEvent(client, bookingId, actorUserId, eventType, metadata = {}) {
   await client.query(
@@ -14,7 +35,178 @@ async function addEvent(client, bookingId, actorUserId, eventType, metadata = {}
   );
 }
 
-router.get("/", requireAuth, requireRole("admin"), async (req, res, next) => {
+/**
+ * ---------------------------------------------------------------------------
+ * NEW: POST /admin/bookings
+ * Creates a booking on behalf of:
+ *  - existing registered customer (customerPublicId)
+ *  - OR unregistered lead (lead object)
+ * ---------------------------------------------------------------------------
+ */
+const adminCreateBookingSchema = z
+  .object({
+    servicePublicId: z.string().uuid(),
+    startsAt: z.string().datetime(),
+    endsAt: z.string().datetime(),
+    notes: z.string().max(2000).optional(),
+
+    // existing customer path
+    customerPublicId: z.string().uuid().optional(),
+
+    // new lead path
+    lead: z
+      .object({
+        email: z.string().email(),
+        first_name: z.string().trim().min(1).optional(),
+        last_name: z.string().trim().min(1).optional(),
+        phone: z.string().trim().min(5).optional(),
+        account_type: z.enum(["residential", "business"]).optional(),
+        address: z.string().min(5),
+      })
+      .optional(),
+
+    // optional address override (mostly useful for existing customer)
+    address: z.string().min(5).optional(),
+  })
+  .refine((x) => (x.customerPublicId ? !x.lead : !!x.lead), {
+    message: "Provide either customerPublicId OR lead",
+  });
+
+router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const actorUserId = req.user.id;
+    const payload = adminCreateBookingSchema.parse(req.body);
+
+    await client.query("BEGIN");
+
+    // Validate service
+    const s = await client.query(
+      `SELECT id FROM services WHERE public_id = $1 AND is_active = true`,
+      [payload.servicePublicId]
+    );
+    if (s.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ ok: false, message: "Invalid service" });
+    }
+    const serviceId = s.rows[0].id;
+
+    let customerUserId = null;
+    let leadId = null;
+    let finalAddress = null;
+
+    if (payload.customerPublicId) {
+      // Existing registered customer
+      const u = await client.query(
+        `SELECT id, address FROM users WHERE public_id = $1`,
+        [payload.customerPublicId]
+      );
+      if (u.rowCount === 0) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ ok: false, message: "Customer not found" });
+      }
+
+      customerUserId = u.rows[0].id;
+      const customerAddress = (u.rows[0].address || "").trim();
+      finalAddress = (payload.address || "").trim() || customerAddress;
+
+      if (!finalAddress || finalAddress.length < 5) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ ok: false, message: "Address is required (customer has none saved)" });
+      }
+    } else {
+      // Lead (unregistered)
+      const lead = payload.lead;
+
+      const up = await client.query(
+        `
+        INSERT INTO leads (email, first_name, last_name, phone, account_type, address)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (email) DO UPDATE SET
+          first_name = COALESCE(EXCLUDED.first_name, leads.first_name),
+          last_name  = COALESCE(EXCLUDED.last_name, leads.last_name),
+          phone      = COALESCE(EXCLUDED.phone, leads.phone),
+          account_type = COALESCE(EXCLUDED.account_type, leads.account_type),
+          address    = COALESCE(EXCLUDED.address, leads.address),
+          updated_at = now()
+        RETURNING id, address
+        `,
+        [
+          lead.email,
+          lead.first_name || null,
+          lead.last_name || null,
+          lead.phone || null,
+          lead.account_type || null,
+          lead.address,
+        ]
+      );
+
+      leadId = up.rows[0].id;
+      finalAddress = (payload.address || "").trim() || (up.rows[0].address || "").trim();
+
+      if (!finalAddress || finalAddress.length < 5) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ ok: false, message: "Address is required for new customers" });
+      }
+    }
+
+    const created = await client.query(
+      `
+      INSERT INTO bookings (customer_user_id, lead_id, service_id, starts_at, ends_at, address, notes)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, public_id, status, starts_at, ends_at, address, notes, created_at
+      `,
+      [customerUserId, leadId, serviceId, payload.startsAt, payload.endsAt, finalAddress, payload.notes || null]
+    );
+
+    const booking = created.rows[0];
+
+    await addEvent(client, booking.id, actorUserId, "created_by_admin", {
+      customerPublicId: payload.customerPublicId || null,
+      leadEmail: payload.lead?.email || null,
+    });
+
+    await client.query("COMMIT");
+
+    return res.status(201).json({
+      ok: true,
+      booking: {
+        public_id: booking.public_id,
+        status: booking.status,
+        starts_at: booking.starts_at,
+        ends_at: booking.ends_at,
+        address: booking.address,
+        notes: booking.notes ?? null,
+        created_at: booking.created_at,
+      },
+    });
+  } catch (e) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
+
+    // DB-level double-booking protection
+    if (e && e.code === "23P01") {
+      return res.status(409).json({ ok: false, message: "Time slot unavailable" });
+    }
+
+    next(e);
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * ---------------------------------------------------------------------------
+ * Existing routes (updated auth + updated joins to support lead-backed bookings)
+ * ---------------------------------------------------------------------------
+ */
+
+/**
+ * GET /admin/bookings?status=pending
+ * NOTE: now supports lead bookings by LEFT JOIN users/leads and COALESCE fields.
+ */
+router.get("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req, res, next) => {
   const status = String(req.query.status || "pending");
 
   try {
@@ -34,16 +226,35 @@ router.get("/", requireAuth, requireRole("admin"), async (req, res, next) => {
         s.title AS service_title,
         b.assigned_worker_user_id,
 
+        -- If booking is for a registered customer, cu.* will exist
         cu.public_id AS customer_public_id,
         cu.first_name AS customer_first_name,
         cu.last_name AS customer_last_name,
         cu.phone AS customer_phone,
         cu.email AS customer_email,
         cu.address AS customer_address,
-        cu.account_type AS customer_account_type
+        cu.account_type AS customer_account_type,
+
+        -- If booking is for a lead, l.* will exist
+        l.public_id AS lead_public_id,
+        l.first_name AS lead_first_name,
+        l.last_name AS lead_last_name,
+        l.phone AS lead_phone,
+        l.email AS lead_email,
+        l.address AS lead_address,
+        l.account_type AS lead_account_type,
+
+        -- Unified fields for UI convenience
+        COALESCE(cu.first_name, l.first_name) AS bookee_first_name,
+        COALESCE(cu.last_name,  l.last_name)  AS bookee_last_name,
+        COALESCE(cu.email,      l.email)      AS bookee_email,
+        COALESCE(cu.phone,      l.phone)      AS bookee_phone,
+        COALESCE(cu.account_type, l.account_type) AS bookee_account_type
+
       FROM bookings b
       JOIN services s ON s.id = b.service_id
-      JOIN users cu ON cu.id = b.customer_user_id
+      LEFT JOIN users cu ON cu.id = b.customer_user_id
+      LEFT JOIN leads l ON l.id = b.lead_id
       WHERE b.status = $1
       ORDER BY b.created_at DESC
       LIMIT 200
@@ -57,7 +268,7 @@ router.get("/", requireAuth, requireRole("admin"), async (req, res, next) => {
   }
 });
 
-router.patch("/:publicId/cancel", requireAuth, requireRole("admin"), async (req, res, next) => {
+router.patch("/:publicId/cancel", requireAuth, requireAnyRole(["admin", "superuser"]), async (req, res, next) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -74,7 +285,6 @@ router.patch("/:publicId/cancel", requireAuth, requireRole("admin"), async (req,
 
     const b = lock.rows[0];
 
-    // already done?
     if (b.status === "completed") {
       await client.query("ROLLBACK");
       return res.status(409).json({ ok: false, message: "Completed bookings cannot be cancelled" });
@@ -101,14 +311,16 @@ router.patch("/:publicId/cancel", requireAuth, requireRole("admin"), async (req,
 
     return res.json({ ok: true, booking: updated.rows[0] });
   } catch (e) {
-    try { await client.query("ROLLBACK"); } catch {}
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
     next(e);
   } finally {
     client.release();
   }
 });
 
-router.patch("/:publicId/accept", requireAuth, requireRole("admin"), async (req, res, next) => {
+router.patch("/:publicId/accept", requireAuth, requireAnyRole(["admin", "superuser"]), async (req, res, next) => {
   const client = await pool.connect();
   try {
     const bookingPublicId = req.params.publicId;
@@ -149,7 +361,9 @@ router.patch("/:publicId/accept", requireAuth, requireRole("admin"), async (req,
 
     res.json({ ok: true, booking: updated.rows[0] });
   } catch (e) {
-    try { await client.query("ROLLBACK"); } catch {}
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
     next(e);
   } finally {
     client.release();
@@ -160,7 +374,7 @@ const assignSchema = z.object({
   workerUserId: z.number().int().positive(),
 });
 
-router.patch("/:publicId/assign", requireAuth, requireRole("admin"), async (req, res, next) => {
+router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superuser"]), async (req, res, next) => {
   const client = await pool.connect();
   try {
     const bookingPublicId = req.params.publicId;
@@ -186,7 +400,7 @@ router.patch("/:publicId/assign", requireAuth, requireRole("admin"), async (req,
       return res.status(409).json({ ok: false, message: "Booking must be accepted first" });
     }
 
-    // Confirm worker has worker role (DB role value is 'worker', not 'technician')
+    // Confirm worker has worker role
     const w = await client.query(
       `SELECT 1 FROM user_roles WHERE role = 'worker' AND user_id = $1`,
       [workerUserId]
@@ -196,7 +410,6 @@ router.patch("/:publicId/assign", requireAuth, requireRole("admin"), async (req,
       return res.status(400).json({ ok: false, message: "Invalid technician (workerUserId)" });
     }
 
-    // If you're using booking_assignments (recommended), store assignment there
     await client.query(
       `
       INSERT INTO booking_assignments (booking_id, worker_user_id, assigned_by_user_id, assigned_at)
@@ -226,14 +439,16 @@ router.patch("/:publicId/assign", requireAuth, requireRole("admin"), async (req,
     await client.query("COMMIT");
     res.json({ ok: true, booking: updated.rows[0] });
   } catch (e) {
-    try { await client.query("ROLLBACK"); } catch {}
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
     next(e);
   } finally {
     client.release();
   }
 });
 
-router.get("/technicians", requireAuth, requireRole("admin"), async (req, res, next) => {
+router.get("/technicians", requireAuth, requireAnyRole(["admin", "superuser"]), async (req, res, next) => {
   try {
     const r = await pool.query(
       `
@@ -268,15 +483,10 @@ const completedQuerySchema = z.object({
 });
 
 function buildCompletedRange({ year, month, day }) {
-  // returns { start, end } strings (YYYY-MM-DD) or nulls
   if (!year) return { start: null, end: null };
 
-  // year only
-  if (!month) {
-    return { start: `${year}-01-01`, end: `${year + 1}-01-01` };
-    }
+  if (!month) return { start: `${year}-01-01`, end: `${year + 1}-01-01` };
 
-  // year + month
   if (!day) {
     const nextMonth = month === 12 ? 1 : month + 1;
     const nextYear = month === 12 ? year + 1 : year;
@@ -285,28 +495,20 @@ function buildCompletedRange({ year, month, day }) {
     return { start, end };
   }
 
-  // year + month + day
   const start = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  // end = next day
   const d = new Date(`${start}T00:00:00.000Z`);
   const next = new Date(d.getTime() + 24 * 60 * 60 * 1000);
-  const end = `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-${String(next.getUTCDate()).padStart(2, "0")}`;
+  const end = `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-${String(
+    next.getUTCDate()
+  ).padStart(2, "0")}`;
   return { start, end };
 }
 
 /**
  * GET /admin/bookings/completed
- * Query params:
- *  - page (default 1)
- *  - pageSize (default 30, max 100)
- *  - year, month, day (optional)
- *  - q (search string optional)
- *
- * Adds:
- *  - completed_event_at (from booking_events)
- *  - completed_by_* (technician who marked it complete)
+ * Updated joins to support lead bookings + unified fields.
  */
-router.get("/completed", requireAuth, requireRole("admin"), async (req, res, next) => {
+router.get("/completed", requireAuth, requireAnyRole(["admin", "superuser"]), async (req, res, next) => {
   try {
     const { page, pageSize, year, month, day, q } = completedQuerySchema.parse(req.query);
     const offset = (page - 1) * pageSize;
@@ -325,19 +527,19 @@ router.get("/completed", requireAuth, requireRole("admin"), async (req, res, nex
     }
 
     if (q && q.length > 0) {
-      // search across common fields (+ technician who completed it)
       where.push(`
         (
           b.public_id::text ILIKE $${p}
           OR b.address ILIKE $${p}
           OR COALESCE(b.notes,'') ILIKE $${p}
           OR s.title ILIKE $${p}
-          OR cu.first_name ILIKE $${p}
-          OR cu.last_name ILIKE $${p}
-          OR (cu.first_name || ' ' || cu.last_name) ILIKE $${p}
-          OR cu.email ILIKE $${p}
-          OR COALESCE(cu.phone,'') ILIKE $${p}
-          OR COALESCE(cu.address,'') ILIKE $${p}
+
+          OR COALESCE(cu.first_name, l.first_name, '') ILIKE $${p}
+          OR COALESCE(cu.last_name,  l.last_name,  '') ILIKE $${p}
+          OR (COALESCE(cu.first_name, l.first_name, '') || ' ' || COALESCE(cu.last_name, l.last_name, '')) ILIKE $${p}
+          OR COALESCE(cu.email, l.email, '') ILIKE $${p}
+          OR COALESCE(cu.phone, l.phone, '') ILIKE $${p}
+          OR COALESCE(cu.address, l.address, '') ILIKE $${p}
 
           OR COALESCE(wu.first_name,'') ILIKE $${p}
           OR COALESCE(wu.last_name,'') ILIKE $${p}
@@ -352,13 +554,13 @@ router.get("/completed", requireAuth, requireRole("admin"), async (req, res, nex
 
     const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
-    // total count (include same joins because WHERE might reference wu.*)
     const countRes = await pool.query(
       `
       SELECT COUNT(*)::int AS total
       FROM bookings b
       JOIN services s ON s.id = b.service_id
-      JOIN users cu ON cu.id = b.customer_user_id
+      LEFT JOIN users cu ON cu.id = b.customer_user_id
+      LEFT JOIN leads l ON l.id = b.lead_id
 
       LEFT JOIN LATERAL (
         SELECT be.actor_user_id, be.created_at AS completed_event_at
@@ -379,7 +581,6 @@ router.get("/completed", requireAuth, requireRole("admin"), async (req, res, nex
     const total = countRes.rows[0]?.total ?? 0;
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-    // page rows
     const dataParams = [...params, pageSize, offset];
 
     const dataRes = await pool.query(
@@ -406,6 +607,20 @@ router.get("/completed", requireAuth, requireRole("admin"), async (req, res, nex
         cu.address AS customer_address,
         cu.account_type AS customer_account_type,
 
+        l.public_id AS lead_public_id,
+        l.first_name AS lead_first_name,
+        l.last_name AS lead_last_name,
+        l.phone AS lead_phone,
+        l.email AS lead_email,
+        l.address AS lead_address,
+        l.account_type AS lead_account_type,
+
+        COALESCE(cu.first_name, l.first_name) AS bookee_first_name,
+        COALESCE(cu.last_name,  l.last_name)  AS bookee_last_name,
+        COALESCE(cu.email,      l.email)      AS bookee_email,
+        COALESCE(cu.phone,      l.phone)      AS bookee_phone,
+        COALESCE(cu.account_type, l.account_type) AS bookee_account_type,
+
         ce.completed_event_at,
         wu.id AS completed_by_user_id,
         wu.public_id AS completed_by_public_id,
@@ -416,7 +631,8 @@ router.get("/completed", requireAuth, requireRole("admin"), async (req, res, nex
 
       FROM bookings b
       JOIN services s ON s.id = b.service_id
-      JOIN users cu ON cu.id = b.customer_user_id
+      LEFT JOIN users cu ON cu.id = b.customer_user_id
+      LEFT JOIN leads l ON l.id = b.lead_id
 
       LEFT JOIN LATERAL (
         SELECT be.actor_user_id, be.created_at AS completed_event_at
@@ -454,18 +670,13 @@ router.get("/completed", requireAuth, requireRole("admin"), async (req, res, nex
 
 /**
  * GET /admin/bookings/completed/filters
- * Returns only values that exist in DB.
- * Query params: year?, month?
- * - if no year: returns available years
- * - if year only: returns available months in that year
- * - if year+month: returns available days in that month
+ * Works as-is (completed_at exists regardless of lead/user).
  */
-router.get("/completed/filters", requireAuth, requireRole("admin"), async (req, res, next) => {
+router.get("/completed/filters", requireAuth, requireAnyRole(["admin", "superuser"]), async (req, res, next) => {
   try {
     const year = req.query.year ? Number(req.query.year) : null;
     const month = req.query.month ? Number(req.query.month) : null;
 
-    // years
     if (!year) {
       const r = await pool.query(
         `
@@ -478,7 +689,6 @@ router.get("/completed/filters", requireAuth, requireRole("admin"), async (req, 
       return res.json({ ok: true, years: r.rows.map((x) => x.year) });
     }
 
-    // months in year
     if (year && !month) {
       const r = await pool.query(
         `
@@ -494,7 +704,6 @@ router.get("/completed/filters", requireAuth, requireRole("admin"), async (req, 
       return res.json({ ok: true, months: r.rows.map((x) => x.month) });
     }
 
-    // days in month
     if (year && month) {
       const start = `${year}-${String(month).padStart(2, "0")}-01`;
       const nextMonth = month === 12 ? 1 : month + 1;
