@@ -31,7 +31,7 @@ type TabKey =
   | "admin_jobhistory"
   | "admin_tech_bookings";
 
-type Tab = { key: TabKey; label: string };
+type Tab = { key: TabKey; label: string; icon: string };
 
 function normalizeRole(user: AuthedUser | null): AppRole {
   const primary = user?.user_role;
@@ -46,6 +46,10 @@ function normalizeRole(user: AuthedUser | null): AppRole {
   return "customer";
 }
 
+function cn(...xs: Array<string | false | null | undefined>) {
+  return xs.filter(Boolean).join(" ");
+}
+
 export default function AccountShellPage() {
   const router = useRouter();
 
@@ -55,25 +59,24 @@ export default function AccountShellPage() {
   const [loading, setLoading] = useState(true);
 
   const tabs: Tab[] = useMemo(() => {
-    const base: Tab[] = [{ key: "account", label: "Account" }];
+    const base: Tab[] = [{ key: "account", label: "Account", icon: "fa-regular fa-id-badge" }];
 
     if (role === "customer") {
-      base.push({ key: "bookings", label: "Bookings" });
+      base.push({ key: "bookings", label: "Bookings", icon: "fa-regular fa-calendar-check" });
       return base;
     }
 
     if (role === "technician") {
-      base.push({ key: "tech", label: "Technician" });
+      base.push({ key: "tech", label: "Technician", icon: "fa-solid fa-screwdriver-wrench" });
       return base;
     }
 
-    // Admin (includes superuser)
     base.push(
-      { key: "admin_customers", label: "Customers" },
-      { key: "admin_leads", label: "Leads" },
-      { key: "admin_jobs", label: "Jobs" },
-      { key: "admin_jobhistory", label: "Completed" },
-      { key: "admin_tech_bookings", label: "Tech Bookings" }
+      { key: "admin_customers", label: "Customers", icon: "fa-regular fa-user" },
+      { key: "admin_leads", label: "Leads", icon: "fa-solid fa-user-plus" },
+      { key: "admin_jobs", label: "Jobs", icon: "fa-solid fa-briefcase" },
+      { key: "admin_jobhistory", label: "Completed", icon: "fa-regular fa-circle-check" },
+      { key: "admin_tech_bookings", label: "Tech Bookings", icon: "fa-solid fa-clipboard-list" }
     );
 
     return base;
@@ -115,35 +118,38 @@ export default function AccountShellPage() {
   }, [router]);
 
   useEffect(() => {
-    if (!tabs.find((t) => t.key === activeTab)) {
-      setActiveTab("account");
-    }
+    if (!tabs.find((t) => t.key === activeTab)) setActiveTab("account");
   }, [tabs, activeTab]);
 
   return (
     <main className="h-screen overflow-y-auto scroll-smooth md:snap-y md:snap-mandatory">
       <Navbar />
-
-      <section className="mx-auto max-w-3xl px-4 py-10 space-y-6">
+      <div className="mx-auto max-w-6xl px-4 py-10 space-y-6">
         {err ? (
-          <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(239 68 68)" }}>
+          <div className="rounded-2xl border p-4 text-sm" style={{ borderColor: "rgb(239 68 68)" }}>
             {err}
           </div>
         ) : null}
-
-        <div className="inline-flex rounded-lg shadow-sm -space-x-px" role="group">
-          {tabs.map((t, idx) => (
-            <TabButton
-              key={t.key}
-              label={t.label}
-              active={activeTab === t.key}
-              position={idx === 0 ? "first" : idx === tabs.length - 1 ? "last" : "middle"}
-              onClick={() => setActiveTab(t.key)}
-            />
-          ))}
+        {/* tabs bar */}
+        <div className="w-full border-b" style={{ borderColor: "rgb(var(--border))" }}>
+          <nav className="flex flex-wrap items-center gap-2 -mb-px" aria-label="Account navigation">
+            {tabs.map((t) => (
+              <GithubTab
+                key={t.key}
+                label={t.label}
+                icon={t.icon}
+                active={activeTab === t.key}
+                onClick={() => setActiveTab(t.key)}
+              />
+            ))}
+          </nav>
         </div>
 
-        <div className="w-full max-w-3xl rounded-xl shadow p-6" style={{ background: "rgb(var(--card))" }}>
+        {/* Content card */}
+        <div
+          className="rounded-2xl border p-6"
+          style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+        >
           {loading ? (
             <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
               Loading…
@@ -157,42 +163,46 @@ export default function AccountShellPage() {
               {role === "technician" && activeTab === "tech" && <TechnicianPage />}
 
               {role === "admin" && activeTab === "admin_customers" && <AdminCustomersPage />}
-              {role === "admin" && activeTab === "admin_customers" && <AdminLeadsPage />}
+              {role === "admin" && activeTab === "admin_leads" && <AdminLeadsPage />}
               {role === "admin" && activeTab === "admin_jobs" && <AdminJobsPage />}
               {role === "admin" && activeTab === "admin_jobhistory" && <AdminJobHistoryPage />}
               {role === "admin" && activeTab === "admin_tech_bookings" && <TechBookingsPage />}
             </>
           )}
         </div>
-      </section>
+      </div>
     </main>
   );
 }
 
-function TabButton({
+function GithubTab({
   label,
+  icon,
   active,
-  position,
   onClick,
 }: {
   label: string;
+  icon: string;
   active: boolean;
-  position: "first" | "middle" | "last";
   onClick: () => void;
 }) {
-  const rounded = position === "first" ? "rounded-l-lg" : position === "last" ? "rounded-r-lg" : "";
-
   return (
     <button
       type="button"
       onClick={onClick}
-      className={[
-        "px-3 py-2 text-sm font-medium leading-5 border focus:outline-none focus:ring-2 focus:ring-blue-500",
-        rounded,
-        active ? "bg-blue-600 text-white border-blue-600 z-10" : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100",
-      ].join(" ")}
+      className={cn(
+        "group inline-flex items-center gap-2 px-3 py-2 text-sm font-medium border-b-2 transition",
+        "rounded-t-lg",
+        active ? "border-blue-500" : "border-transparent hover:border-[rgb(var(--border))]"
+      )}
+      style={{
+        color: active ? "rgb(var(--fg))" : "rgb(var(--muted))",
+        background: "transparent",
+      }}
+      aria-current={active ? "page" : undefined}
     >
-      {label}
+      <i className={cn(icon, "text-[13px]", active ? "" : "opacity-80")} aria-hidden="true" />
+      <span className={cn(active ? "text-[rgb(var(--fg))]" : "group-hover:text-[rgb(var(--fg))]")}>{label}</span>
     </button>
   );
 }
