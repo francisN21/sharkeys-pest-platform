@@ -12,6 +12,23 @@ const createBookingSchema = z.object({
   endsAt: z.string().datetime(),
   address: z.string().min(5),
   notes: z.string().max(2000).optional(),
+
+    // Payload for the new Leads, 
+    customerPublicId: z.string().uuid().optional(),
+    lead: z
+      .object({
+        email: z.string().email(),
+        first_name: z.string().min(1).optional(),
+        last_name: z.string().min(1).optional(),
+        phone: z.string().min(5).optional(),
+        account_type: z.enum(["residential", "business"]).optional(),
+        address: z.string().min(5),
+      })
+      .optional(),
+
+    address: z.string().min(5).optional(), // optional override when booking for existing
+  }).refine((x) => (x.customerPublicId ? !x.lead : !!x.lead), {
+    message: "Provide either customerPublicId OR lead",
 });
 
 // New Update booking schema
