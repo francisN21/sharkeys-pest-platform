@@ -191,18 +191,32 @@ function GithubTab({
       type="button"
       onClick={onClick}
       className={cn(
-        "group inline-flex items-center gap-2 px-3 py-2 text-sm font-medium border-b-2 transition",
-        "rounded-t-lg",
-        active ? "border-blue-500" : "border-transparent hover:border-[rgb(var(--border))]"
+        "group inline-flex items-center gap-2 px-3 py-2 text-sm font-medium",
+        "rounded-md transition-all duration-150",
+        "border-b-2",
+        active
+          ? "border-blue-500"
+          : "border-transparent hover:border-[rgb(var(--border))]"
       )}
       style={{
         color: active ? "rgb(var(--fg))" : "rgb(var(--muted))",
-        background: "transparent",
+        background: active
+          ? "rgba(var(--bg), 0.35)"
+          : "transparent",
       }}
       aria-current={active ? "page" : undefined}
     >
-      <i className={cn(icon, "text-[13px]", active ? "" : "opacity-80")} aria-hidden="true" />
-      <span className={cn(active ? "text-[rgb(var(--fg))]" : "group-hover:text-[rgb(var(--fg))]")}>{label}</span>
+      <i
+        className={cn(
+          icon,
+          "text-[13px] transition-opacity",
+          active ? "" : "opacity-80 group-hover:opacity-100"
+        )}
+        aria-hidden="true"
+      />
+      <span className="transition-colors duration-150 group-hover:text-[rgb(var(--fg))]">
+        {label}
+      </span>
     </button>
   );
 }
