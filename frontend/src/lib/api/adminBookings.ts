@@ -132,3 +132,48 @@ export function adminGetCompletedFilters(params: { year?: number; month?: number
   if (params.month) qs.set("month", String(params.month));
   return jsonFetch<AdminCompletedFiltersResponse>(`/admin/bookings/completed/filters?${qs.toString()}`);
 }
+
+export type AdminCreateBookingResponse = {
+  ok: boolean;
+  booking?: {
+    public_id: string;
+    status: string;
+    starts_at: string;
+    ends_at: string;
+    address: string;
+    notes: string | null;
+    created_at: string;
+  };
+};
+
+export type AdminCreateBookingInput =
+  | {
+      servicePublicId: string;
+      startsAt: string;
+      endsAt: string;
+      notes?: string;
+      customerPublicId: string;
+      address?: string; // optional override
+    }
+  | {
+      servicePublicId: string;
+      startsAt: string;
+      endsAt: string;
+      notes?: string;
+      lead: {
+        email: string;
+        first_name?: string;
+        last_name?: string;
+        phone?: string;
+        account_type?: "residential" | "business";
+        address: string;
+      };
+      address?: string; // optional override (usually not needed)
+    };
+
+export function adminCreateBooking(payload: AdminCreateBookingInput) {
+  return jsonFetch<AdminCreateBookingResponse>("/admin/bookings", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
