@@ -52,8 +52,6 @@ function cn(...xs: Array<string | false | null | undefined>) {
 
 export default function AccountShellPage() {
   const router = useRouter();
-
-  const [data, setData] = useState<MeResponse | null>(null);
   const [role, setRole] = useState<AppRole>("customer");
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -97,9 +95,6 @@ export default function AccountShellPage() {
           router.replace("/login");
           return;
         }
-
-        setData(res);
-
         const r = normalizeRole(res.user as AuthedUser);
         setRole(r);
       } catch (e: unknown) {
