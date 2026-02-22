@@ -30,6 +30,19 @@ export type AdminBookingRow = {
   completed_by_last_name?: string | null;
   completed_by_phone?: string | null;
   completed_by_email?: string | null;
+  //bookee data
+  bookee_first_name?: string | null;
+  bookee_last_name?: string | null;
+  bookee_email?: string | null;
+  bookee_phone?: string | null;
+  bookee_account_type?: string | null;
+  //leads data
+  lead_first_name?: string | null;
+  lead_last_name?: string | null;
+  lead_email?: string | null;
+  lead_phone?: string | null;
+  lead_account_type?: string | null;
+  lead_public_id?: string | null;
 };
 
 export type AdminListBookingsResponse = {

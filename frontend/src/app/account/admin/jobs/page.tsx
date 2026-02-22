@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   adminAcceptBooking,
   adminCancelBooking,
@@ -50,6 +50,61 @@ function formatElapsedSince(ts: string) {
   return `${mins}m`;
 }
 
+/** ---------- Lead/Registered helpers ---------- */
+
+type PersonKind = "lead" | "registered";
+
+function getKind(b: AdminBookingRow): PersonKind {
+  // Your backend sends lead_public_id when lead-backed
+  return b.lead_public_id ? "lead" : "registered";
+}
+
+function KindPill({ kind }: { kind: PersonKind }) {
+  const isLead = kind === "lead";
+  return (
+    <span
+      className="rounded-full border px-2 py-1 text-xs font-semibold"
+      style={{
+        borderColor: "rgb(var(--border))",
+        background: isLead ? "rgba(245, 158, 11, 0.18)" : "rgba(var(--bg), 0.20)",
+      }}
+      title={isLead ? "Unregistered lead" : "Registered customer"}
+    >
+      {isLead ? "Lead" : "Registered"}
+    </span>
+  );
+}
+
+function getBookee(b: AdminBookingRow) {
+  // Prefer unified fields from backend:
+  const first = b.bookee_first_name ?? b.customer_first_name ?? b.lead_first_name ?? null;
+
+  const last = b.bookee_last_name ?? b.customer_last_name ?? b.lead_last_name ?? null;
+
+  const email = b.bookee_email ?? b.customer_email ?? b.lead_email ?? "";
+
+  const phone = b.bookee_phone ?? b.customer_phone ?? b.lead_phone ?? null;
+
+  const accountType = b.bookee_account_type ?? b.customer_account_type ?? b.lead_account_type ?? null;
+
+  // In your AdminBookingRow, customer_address exists; lead address is not on this type.
+  const customerAddress = b.customer_address ?? null;
+
+  const name = [first, last].filter(Boolean).join(" ").trim();
+
+  return {
+    first,
+    last,
+    email,
+    phone,
+    accountType,
+    customerAddress,
+    displayName: name.length ? name : email || "—",
+  };
+}
+
+/** ---------- Modal ---------- */
+
 function ConfirmAdminActionModal({
   open,
   title,
@@ -64,7 +119,7 @@ function ConfirmAdminActionModal({
   open: boolean;
   title: string;
   message: string;
-  details?: React.ReactNode;
+  details?: ReactNode;
   busy: boolean;
   confirmLabel: string;
   cancelLabel?: string;
@@ -161,6 +216,8 @@ function ConfirmAdminActionModal({
   );
 }
 
+/** ---------- Page ---------- */
+
 export default function AdminJobsPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -178,7 +235,7 @@ export default function AdminJobsPage() {
   const [techs, setTechs] = useState<TechnicianRow[]>([]);
   const [selectedTech, setSelectedTech] = useState<Record<string, number | "">>({});
 
-  // Modal state (replaces confirm())
+  // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [modalKind, setModalKind] = useState<"accept" | "cancel">("accept");
   const [modalBookingId, setModalBookingId] = useState<string | null>(null);
@@ -198,7 +255,6 @@ export default function AdminJobsPage() {
         setLoading(true);
         setErr(null);
 
-        // load tech list + both booking lists
         const [t] = await Promise.all([adminListTechnicians()]);
         if (!alive) return;
 
@@ -224,7 +280,7 @@ export default function AdminJobsPage() {
       const bKey = sortBy === "created" ? b.created_at : b.starts_at;
       const at = new Date(aKey).getTime();
       const bt = new Date(bKey).getTime();
-      return bt - at; // newest first
+      return bt - at;
     });
     return copy;
   }, [pendingRows, sortBy]);
@@ -236,7 +292,7 @@ export default function AdminJobsPage() {
       const bKey = sortBy === "created" ? b.created_at : b.starts_at;
       const at = new Date(aKey).getTime();
       const bt = new Date(bKey).getTime();
-      return bt - at; // newest first
+      return bt - at;
     });
     return copy;
   }, [acceptedRows, sortBy]);
@@ -262,7 +318,6 @@ export default function AdminJobsPage() {
   }
 
   function closeModal() {
-    // prevent closing while executing for that id
     if (modalBookingId && busyId === modalBookingId) return;
     setModalOpen(false);
     setModalBookingId(null);
@@ -289,15 +344,14 @@ export default function AdminJobsPage() {
         e instanceof Error
           ? e.message
           : modalKind === "accept"
-          ? "Failed to accept booking"
-          : "Failed to cancel booking"
+            ? "Failed to accept booking"
+            : "Failed to cancel booking"
       );
     } finally {
       setBusyId(null);
     }
   }
 
-  // ✅ KEEP onAssign (was never a confirm(), so no modal needed)
   async function onAssign(publicId: string) {
     const workerUserIdStr = selectedTech[publicId] ?? "";
     if (!workerUserIdStr) {
@@ -338,7 +392,6 @@ export default function AdminJobsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Modal replaces confirm() dialogs */}
       <ConfirmAdminActionModal
         open={modalOpen}
         title={modalTitle}
@@ -430,6 +483,9 @@ export default function AdminJobsPage() {
               const busy = busyId === b.public_id;
               const notes = formatNotes(b.notes);
 
+              const kind = getKind(b);
+              const bookee = getBookee(b);
+
               return (
                 <div
                   key={b.public_id}
@@ -444,19 +500,19 @@ export default function AdminJobsPage() {
                       </div>
 
                       <div className="mt-2 text-sm">
-                        <div className="font-semibold">
-                          {b.customer_first_name} {b.customer_last_name}
-                          <span className="ml-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                            ({b.customer_account_type || "—"})
+                        <div className="font-semibold flex items-center gap-2">
+                          <span className="truncate">{bookee.displayName}</span>
+                          <span className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                            ({bookee.accountType || "—"})
                           </span>
                         </div>
 
                         <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                          Phone: {b.customer_phone || "—"} • Email: {b.customer_email}
+                          Phone: {bookee.phone || "—"} • Email: {bookee.email || "—"}
                         </div>
 
                         <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                          Location: {b.address || b.customer_address || "—"}
+                          Location: {b.address || bookee.customerAddress || "—"}
                         </div>
                       </div>
 
@@ -481,9 +537,15 @@ export default function AdminJobsPage() {
                       ) : null}
                     </div>
 
-                    <span className="rounded-full border px-2 py-1 text-xs" style={{ borderColor: "rgb(var(--border))" }}>
-                      Pending
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <KindPill kind={kind} />
+                      <span
+                        className="rounded-full border px-2 py-1 text-xs"
+                        style={{ borderColor: "rgb(var(--border))" }}
+                      >
+                        Pending
+                      </span>
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-end gap-2">
@@ -536,6 +598,9 @@ export default function AdminJobsPage() {
                 const busy = busyId === b.public_id;
                 const notes = formatNotes(b.notes);
 
+                const kind = getKind(b);
+                const bookee = getBookee(b);
+
                 return (
                   <div
                     key={b.public_id}
@@ -550,19 +615,19 @@ export default function AdminJobsPage() {
                         </div>
 
                         <div className="mt-2 text-sm">
-                          <div className="font-semibold">
-                            {b.customer_first_name} {b.customer_last_name}
-                            <span className="ml-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                              ({b.customer_account_type || "—"})
+                          <div className="font-semibold flex items-center gap-2">
+                            <span className="truncate">{bookee.displayName}</span>
+                            <span className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                              ({bookee.accountType || "—"})
                             </span>
                           </div>
 
                           <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                            Phone: {b.customer_phone || "—"} • Email: {b.customer_email}
+                            Phone: {bookee.phone || "—"} • Email: {bookee.email || "—"}
                           </div>
 
                           <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                            Location: {b.address || b.customer_address || "—"}
+                            Location: {b.address || bookee.customerAddress || "—"}
                           </div>
                         </div>
 
@@ -587,9 +652,15 @@ export default function AdminJobsPage() {
                         ) : null}
                       </div>
 
-                      <span className="rounded-full border px-2 py-1 text-xs" style={{ borderColor: "rgb(var(--border))" }}>
-                        Accepted
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <KindPill kind={kind} />
+                        <span
+                          className="rounded-full border px-2 py-1 text-xs"
+                          style={{ borderColor: "rgb(var(--border))" }}
+                        >
+                          Accepted
+                        </span>
+                      </div>
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
