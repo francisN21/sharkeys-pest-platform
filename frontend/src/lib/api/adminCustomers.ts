@@ -1,5 +1,4 @@
-import { jsonFetch } from "../api/bookings"; // adjust to your real path
-
+import { jsonFetch } from "../api/bookings";
 export type AdminCustomerRow = {
   id: number;
   public_id: string;
@@ -31,6 +30,38 @@ export type AdminListCustomersResponse = {
 export function adminListCustomers(args?: { page?: number; pageSize?: number; q?: string }) {
   const page = args?.page ?? 1;
   const pageSize = args?.pageSize ?? 30;
-  const q = args?.q ? `&q=${encodeURIComponent(args.q)}` : "";
-  return jsonFetch<AdminListCustomersResponse>(`/admin/customers?page=${page}&pageSize=${pageSize}${q}`);
+
+  const qs = new URLSearchParams();
+  qs.set("page", String(page));
+  qs.set("pageSize", String(pageSize));
+  if (args?.q && args.q.trim()) qs.set("q", args.q.trim());
+
+  return jsonFetch<AdminListCustomersResponse>(`/admin/customers?${qs.toString()}`);
+}
+
+export type SearchPersonKind = "registered" | "lead";
+
+export type AdminSearchRow = {
+  public_id: string; // uuid string (as text)
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  address: string | null;
+  created_at: string; // backend returns created_at for both
+  kind: SearchPersonKind;
+};
+
+export type AdminSearchCustomersAndLeadsResponse = {
+  ok: boolean;
+  results: AdminSearchRow[];
+};
+
+export function adminSearchCustomersAndLeads(args?: { q?: string; limit?: number }) {
+  const qs = new URLSearchParams();
+  if (args?.q && args.q.trim()) qs.set("q", args.q.trim());
+  if (args?.limit) qs.set("limit", String(args.limit));
+
+  // ✅ matches backend route: GET /admin/customers/search
+  return jsonFetch<AdminSearchCustomersAndLeadsResponse>(`/admin/customers/search?${qs.toString()}`);
 }
