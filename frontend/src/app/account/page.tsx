@@ -71,7 +71,7 @@ export default function AccountShellPage() {
 
     base.push(
       { key: "admin_customers", label: "Customers", icon: "fa-regular fa-user" },
-      { key: "admin_leads", label: "Leads", icon: "fa-solid fa-user-plus" },
+      { key: "admin_leads", label: "Admin Booking", icon: "fa-solid fa-user-plus" },
       { key: "admin_jobs", label: "Jobs", icon: "fa-solid fa-briefcase" },
       { key: "admin_jobhistory", label: "Completed", icon: "fa-regular fa-circle-check" },
       { key: "admin_tech_bookings", label: "Tech Bookings", icon: "fa-solid fa-clipboard-list" }

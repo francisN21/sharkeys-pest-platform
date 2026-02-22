@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getServices, type Service } from "../../../../lib/api/services";
 import { adminCreateBooking, getBookingAvailability, type AvailabilityBooking } from "../../../../lib/api/adminBookings";
 import { me, type MeResponse } from "../../../../lib/api/auth";
-import { adminListCustomers, type AdminCustomerRow } from "../../../../lib/api/adminCustomers";
+import {
+  adminSearchCustomersAndLeads,
+  type AdminSearchRow,
+  type SearchPersonKind,
+} from "../../../../lib/api/adminCustomers";
 
 /**
  * Helpers
@@ -109,6 +113,11 @@ function isAdminOrSuperUser(meRes: MeResponse | null) {
 
 type BookingTargetMode = "existing" | "new";
 
+type SelectedPerson =
+  | { kind: "registered"; public_id: string }
+  | { kind: "lead"; public_id: string }
+  | null;
+
 export default function AdminLeadsPage() {
   const router = useRouter();
 
@@ -156,17 +165,18 @@ export default function AdminLeadsPage() {
   // Target selection: existing vs new lead
   const [targetMode, setTargetMode] = useState<BookingTargetMode>("existing");
 
-  // Existing customer selection
+  // Existing customer selection (now includes leads too)
   const [custQ, setCustQ] = useState("");
   const [custLoading, setCustLoading] = useState(false);
-  const [custRows, setCustRows] = useState<AdminCustomerRow[]>([]);
-  const [selectedCustomerPublicId, setSelectedCustomerPublicId] = useState<string>("");
-  const selectedCustomer = useMemo(
-    () => custRows.find((c) => c.public_id === selectedCustomerPublicId) || null,
-    [custRows, selectedCustomerPublicId]
-  );
+  const [custRows, setCustRows] = useState<AdminSearchRow[]>([]);
+  const [selectedPerson, setSelectedPerson] = useState<SelectedPerson>(null);
 
-  const existingCustomerAddress = (selectedCustomer?.address || "").trim();
+  const selectedRow = useMemo(() => {
+    if (!selectedPerson) return null;
+    return custRows.find((r) => r.public_id === selectedPerson.public_id && r.kind === selectedPerson.kind) || null;
+  }, [custRows, selectedPerson]);
+
+  const existingCustomerAddress = (selectedRow?.address || "").trim();
 
   // New customer (lead) form
   const [leadFirst, setLeadFirst] = useState("");
@@ -312,11 +322,11 @@ export default function AdminLeadsPage() {
     if (targetMode === "existing") {
       setUseDifferentAddress(false);
       setServiceAddress("");
-      // keep customer selection
+      // keep selection
     } else {
       setUseDifferentAddress(true);
       setServiceAddress("");
-      setSelectedCustomerPublicId("");
+      setSelectedPerson(null);
       setCustRows([]);
       setCustQ("");
     }
@@ -406,19 +416,44 @@ export default function AdminLeadsPage() {
     return `\n\n[Recurring Request]\n- Frequency: ${freqLabel}\n- Repeat: ${countLabel}\n- Preference: ${sameLabel}\n`;
   }
 
-  async function loadCustomers() {
+  // -------- Customer search (customers + leads) --------
+
+  const lastSearchId = useRef(0);
+  const [custOpen, setCustOpen] = useState(false);
+
+  async function loadCustomers(qOverride?: string) {
+    const q = (qOverride ?? custQ).trim();
+
+    const myId = ++lastSearchId.current;
     try {
       setCustLoading(true);
       setError(null);
-      const res = await adminListCustomers({ page: 1, pageSize: 10, q: custQ.trim() || undefined });
-      setCustRows(res.customers || []);
+
+      const res = await adminSearchCustomersAndLeads({ q, limit: 25 });
+      if (myId !== lastSearchId.current) return;
+
+      setCustRows(res.results || []);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to load customers");
+      if (myId !== lastSearchId.current) return;
+      setError(e instanceof Error ? e.message : "Failed to load customers/leads");
       setCustRows([]);
     } finally {
-      setCustLoading(false);
+      if (myId === lastSearchId.current) setCustLoading(false);
     }
   }
+
+  // Debounce typing
+  useEffect(() => {
+    if (targetMode !== "existing") return;
+    if (!custOpen) return;
+
+    const t = window.setTimeout(() => {
+      loadCustomers();
+    }, 250);
+
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [custQ, custOpen, targetMode]);
 
   function resetForm() {
     setError(null);
@@ -427,7 +462,7 @@ export default function AdminLeadsPage() {
     setTargetMode("existing");
     setCustQ("");
     setCustRows([]);
-    setSelectedCustomerPublicId("");
+    setSelectedPerson(null);
 
     setLeadFirst("");
     setLeadLast("");
@@ -467,12 +502,24 @@ export default function AdminLeadsPage() {
     }
 
     if (targetMode === "existing") {
-      if (!selectedCustomerPublicId) return setError("Please select a customer.");
-      if (!useDifferentAddress && existingCustomerAddress.length < 5) {
-        return setError("This customer has no saved address. Use a different address.");
-      }
-      if (useDifferentAddress && serviceAddress.trim().length < 5) {
-        return setError("Please enter a valid address (at least 5 characters).");
+      if (!selectedPerson) return setError("Please select a customer or lead.");
+
+      if (selectedPerson.kind === "registered") {
+        if (!useDifferentAddress && existingCustomerAddress.length < 5) {
+          return setError("This customer has no saved address. Use a different address.");
+        }
+        if (useDifferentAddress && serviceAddress.trim().length < 5) {
+          return setError("Please enter a valid address (at least 5 characters).");
+        }
+      } else {
+        // lead selected
+        if (!finalAddress || finalAddress.length < 5) {
+          return setError("This lead has no saved address. Use a different address.");
+        }
+        // You can still allow "useDifferentAddress" for leads too (works same)
+        if (useDifferentAddress && serviceAddress.trim().length < 5) {
+          return setError("Please enter a valid address (at least 5 characters).");
+        }
       }
     } else {
       if (leadEmail.trim().length < 5) return setError("Enter a valid email.");
@@ -486,14 +533,39 @@ export default function AdminLeadsPage() {
 
       const created =
         targetMode === "existing"
-          ? await adminCreateBooking({
-              servicePublicId,
-              startsAt: startsAtIso,
-              endsAt: computedEndsAtIso,
-              customerPublicId: selectedCustomerPublicId,
-              address: finalAddress,
-              notes: finalNotes.trim() ? finalNotes.trim() : undefined,
-            })
+          ? selectedPerson?.kind === "registered"
+            ? await adminCreateBooking({
+                servicePublicId,
+                startsAt: startsAtIso,
+                endsAt: computedEndsAtIso,
+                customerPublicId: selectedPerson.public_id,
+                address: finalAddress,
+                notes: finalNotes.trim() ? finalNotes.trim() : undefined,
+              })
+            : await adminCreateBooking({
+                servicePublicId,
+                startsAt: startsAtIso,
+                endsAt: computedEndsAtIso,
+
+                // ✅ backend expects a "lead" object (not leadPublicId)
+                lead: {
+                  email: (selectedRow?.email || "").trim(),
+                  first_name: selectedRow?.first_name?.trim() || undefined,
+                  last_name: selectedRow?.last_name?.trim() || undefined,
+                  phone: selectedRow?.phone?.trim() || undefined,
+                  account_type:
+                    selectedRow?.kind === "lead" && selectedRow?.account_type
+                      ? selectedRow.account_type
+                      : undefined,
+
+                  // ✅ must be min(5); we always force it to finalAddress
+                  address: finalAddress,
+                },
+
+                // optional: keep this so finalAddress wins even if lead row is old
+                address: finalAddress,
+                notes: finalNotes.trim() ? finalNotes.trim() : undefined,
+              })
           : await adminCreateBooking({
               servicePublicId,
               startsAt: startsAtIso,
@@ -548,6 +620,30 @@ export default function AdminLeadsPage() {
   }
 
   const disableTimeSlots = !availabilityOk || availLoading;
+
+  function kindLabel(kind: SearchPersonKind) {
+    return kind === "registered" ? "Registered" : "Lead";
+  }
+
+  function kindPillStyles(kind: SearchPersonKind) {
+    if (kind === "registered") {
+      return {
+        borderColor: "rgba(34, 197, 94, 0.35)",
+        background: "rgba(34, 197, 94, 0.10)",
+        color: "rgb(22 101 52)",
+      };
+    }
+    return {
+      borderColor: "rgba(249, 115, 22, 0.35)",
+      background: "rgba(249, 115, 22, 0.10)",
+      color: "rgb(154 52 18)",
+    };
+  }
+
+  function displayName(r: AdminSearchRow) {
+    const name = [r.first_name, r.last_name].filter(Boolean).join(" ").trim();
+    return name || r.email;
+  }
 
   // ✅ TAB PANEL UI (no Navbar, no outer max-width page wrapper)
   return (
@@ -715,13 +811,21 @@ export default function AdminLeadsPage() {
                       <input
                         value={custQ}
                         onChange={(e) => setCustQ(e.target.value)}
+                        onFocus={() => {
+                          setCustOpen(true);
+                          // show something even if empty, but don’t hammer every focus if already have rows
+                          if (custRows.length === 0) loadCustomers("");
+                        }}
                         placeholder="Search customer name, email, phone…"
                         className="w-full rounded-xl border px-3 py-2 text-sm"
                         style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.35)" }}
                       />
                       <button
                         type="button"
-                        onClick={loadCustomers}
+                        onClick={() => {
+                          setCustOpen(true);
+                          loadCustomers();
+                        }}
                         className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
                         style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
                         disabled={custLoading}
@@ -730,39 +834,59 @@ export default function AdminLeadsPage() {
                       </button>
                     </div>
 
-                    {custRows.length > 0 ? (
-                      <div className="grid gap-2">
-                        {custRows.map((c) => {
-                          const active = c.public_id === selectedCustomerPublicId;
-                          const name = [c.first_name, c.last_name].filter(Boolean).join(" ") || c.email;
+                    {/* Results list: max 4 visible then scroll */}
+                    <div
+                      className="grid gap-2 overflow-y-auto pr-1"
+                      style={{
+                        maxHeight: "calc(4 * 82px + 16px)", // ~4 cards + spacing
+                      }}
+                    >
+                      {custRows.length > 0 ? (
+                        custRows.map((r) => {
+                          const active =
+                            !!selectedPerson &&
+                            selectedPerson.public_id === r.public_id &&
+                            selectedPerson.kind === r.kind;
 
                           return (
                             <button
-                              key={c.public_id}
+                              key={`${r.kind}:${r.public_id}`}
                               type="button"
-                              onClick={() => setSelectedCustomerPublicId(c.public_id)}
+                              onClick={() => setSelectedPerson({ kind: r.kind, public_id: r.public_id })}
                               className={cn("text-left rounded-2xl border p-3 transition", active && "ring-2")}
                               style={{
                                 borderColor: "rgb(var(--border))",
                                 background: active ? "rgba(var(--bg), 0.35)" : "rgba(var(--bg), 0.20)",
                               }}
                             >
-                              <div className="text-sm font-semibold truncate">{name}</div>
-                              <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                                {c.email} • {c.phone || "—"}
-                              </div>
-                              <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                                Address: {c.address || "—"}
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="text-sm font-semibold truncate">{displayName(r)}</div>
+                                  <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                                    {r.email} • {r.phone || "—"}
+                                  </div>
+                                  <div className="text-xs truncate" style={{ color: "rgb(var(--muted))" }}>
+                                    Address: {r.address || "—"}
+                                  </div>
+                                </div>
+
+                                <span
+                                  className="shrink-0 rounded-full border px-2 py-1 text-[11px] font-semibold"
+                                  style={kindPillStyles(r.kind)}
+                                  title={r.kind === "registered" ? "Registered user" : "Unregistered lead"}
+                                >
+                                  {kindLabel(r.kind)}
+                                </span>
                               </div>
                             </button>
                           );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                        Search to select a customer.
-                      </div>
-                    )}
+                        })
+                      ) : (
+                        <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                          {custLoading ? "Searching…" : "Start typing or click Search."}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -1150,7 +1274,7 @@ export default function AdminLeadsPage() {
                   style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
                 >
                   <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-                    Using customer saved address
+                    Using selected saved address
                   </div>
                   <div className="mt-1">
                     {existingCustomerAddress ? (

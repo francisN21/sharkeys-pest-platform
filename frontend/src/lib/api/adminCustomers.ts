@@ -50,6 +50,7 @@ export type AdminSearchRow = {
   address: string | null;
   created_at: string; // backend returns created_at for both
   kind: SearchPersonKind;
+  account_type?: "residential" | "business" | null;
 };
 
 export type AdminSearchCustomersAndLeadsResponse = {
