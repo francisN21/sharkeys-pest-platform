@@ -11,9 +11,6 @@ const QuerySchema = z.object({
   limit: z.coerce.number().min(1).max(50).default(25),
 });
 
-// NOTE: assumes you have a leads table named `leads`
-// with columns: public_id, email, first_name, last_name, phone, address, created_at
-// If your table name/columns differ, tell me and I’ll adapt it.
 router.get("/", requireAuth, requireRole("admin"), async (req, res, next) => {
   try {
     const parsed = QuerySchema.safeParse(req.query);
@@ -21,39 +18,39 @@ router.get("/", requireAuth, requireRole("admin"), async (req, res, next) => {
       return res.status(400).json({ ok: false, error: "invalid_query", details: parsed.error.flatten() });
     }
 
-    const q = (parsed.data.q || "").trim();
+    const q = (parsed.data.q || "").trim().toLowerCase();
     const limit = parsed.data.limit;
 
-    // basic search pattern
-    const like = `%${q.toLowerCase()}%`;
+    const like = `%${q}%`;
 
-    // We do a UNION ALL so we can return both sets in one payload.
-    // You can refine ranking later; for now we order by created_at desc.
-    const params = q ? [like, limit] : [limit];
-
+    // NOTE:
+    // - leads.email is CITEXT so ILIKE works fine.
+    // - We return "public_id" as string for both.
+    // - Adjust "customers" table name below ONLY if yours differs.
+    // - For customers, I'm assuming columns: public_id, email, first_name, last_name, phone, address, created_at
     const sql = q
       ? `
         SELECT * FROM (
           SELECT
-            u.public_id,
-            u.email,
-            u.first_name,
-            u.last_name,
-            u.phone,
-            u.address,
-            u.created_at,
+            c.public_id::text AS public_id,
+            c.email::text AS email,
+            c.first_name,
+            c.last_name,
+            c.phone,
+            c.address,
+            c.created_at,
             'registered'::text AS kind
-          FROM customers u
+          FROM customers c
           WHERE
-            LOWER(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')) LIKE $1
-            OR LOWER(COALESCE(u.email,'')) LIKE $1
-            OR LOWER(COALESCE(u.phone,'')) LIKE $1
+            (COALESCE(c.first_name,'') || ' ' || COALESCE(c.last_name,'')) ILIKE $1
+            OR c.email ILIKE $1
+            OR COALESCE(c.phone,'') ILIKE $1
 
           UNION ALL
 
           SELECT
-            l.public_id,
-            l.email,
+            l.public_id::text AS public_id,
+            l.email::text AS email,
             l.first_name,
             l.last_name,
             l.phone,
@@ -62,9 +59,9 @@ router.get("/", requireAuth, requireRole("admin"), async (req, res, next) => {
             'lead'::text AS kind
           FROM leads l
           WHERE
-            LOWER(COALESCE(l.first_name,'') || ' ' || COALESCE(l.last_name,'')) LIKE $1
-            OR LOWER(COALESCE(l.email,'')) LIKE $1
-            OR LOWER(COALESCE(l.phone,'')) LIKE $1
+            (COALESCE(l.first_name,'') || ' ' || COALESCE(l.last_name,'')) ILIKE $1
+            OR l.email ILIKE $1
+            OR COALESCE(l.phone,'') ILIKE $1
         ) x
         ORDER BY x.created_at DESC
         LIMIT $2
@@ -72,21 +69,21 @@ router.get("/", requireAuth, requireRole("admin"), async (req, res, next) => {
       : `
         SELECT * FROM (
           SELECT
-            u.public_id,
-            u.email,
-            u.first_name,
-            u.last_name,
-            u.phone,
-            u.address,
-            u.created_at,
+            c.public_id::text AS public_id,
+            c.email::text AS email,
+            c.first_name,
+            c.last_name,
+            c.phone,
+            c.address,
+            c.created_at,
             'registered'::text AS kind
-          FROM customers u
+          FROM customers c
 
           UNION ALL
 
           SELECT
-            l.public_id,
-            l.email,
+            l.public_id::text AS public_id,
+            l.email::text AS email,
             l.first_name,
             l.last_name,
             l.phone,
@@ -99,12 +96,10 @@ router.get("/", requireAuth, requireRole("admin"), async (req, res, next) => {
         LIMIT $1
       `;
 
+    const params = q ? [like, limit] : [limit];
     const { rows } = await pool.query(sql, params);
 
-    res.json({
-      ok: true,
-      results: rows,
-    });
+    res.json({ ok: true, results: rows });
   } catch (e) {
     next(e);
   }
