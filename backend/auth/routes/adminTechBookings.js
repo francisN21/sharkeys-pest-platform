@@ -41,8 +41,8 @@ router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
 
     // 2) assigned bookings (current assignment only)
     const assignedRes = await pool.query(
-      `
-      SELECT
+    `
+    SELECT
         b.public_id,
         b.status,
         b.starts_at,
@@ -51,22 +51,34 @@ router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
         b.notes,
         s.title AS service_title,
 
+        -- registered customer fields (nullable for leads)
         cu.first_name AS customer_first_name,
         cu.last_name  AS customer_last_name,
         cu.email      AS customer_email,
         cu.phone      AS customer_phone,
         cu.account_type AS customer_account_type,
 
+        -- lead fields (nullable for registered)
+        l.public_id   AS lead_public_id,
+        l.first_name  AS lead_first_name,
+        l.last_name   AS lead_last_name,
+        l.email       AS lead_email,
+        l.phone       AS lead_phone,
+        l.account_type AS lead_account_type,
+
         ba.worker_user_id
 
-      FROM bookings b
-      JOIN booking_assignments ba ON ba.booking_id = b.id
-      JOIN services s ON s.id = b.service_id
-      JOIN users cu ON cu.id = b.customer_user_id
+    FROM bookings b
+    JOIN booking_assignments ba ON ba.booking_id = b.id
+    JOIN services s ON s.id = b.service_id
 
-      WHERE b.status = 'assigned'
-      ORDER BY ba.worker_user_id, b.starts_at ASC
-      `
+    -- IMPORTANT: must be LEFT JOIN so lead bookings don't get filtered out
+    LEFT JOIN users cu ON cu.id = b.customer_user_id
+    LEFT JOIN leads l  ON l.id = b.lead_id
+
+    WHERE b.status = 'assigned'
+    ORDER BY ba.worker_user_id, b.starts_at ASC
+    `
     );
 
     // Build lookup
@@ -83,12 +95,16 @@ router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
     const byId = new Map(techs.map((t) => [String(t.user_id), t]));
 
     for (const r of assignedRes.rows) {
-      const tech = byId.get(String(r.worker_user_id));
-      if (!tech) continue;
+    const tech = byId.get(String(r.worker_user_id));
+    if (!tech) continue;
 
-      const customerName = `${r.customer_first_name || ""} ${r.customer_last_name || ""}`.trim() || null;
+    const leadName = `${r.lead_first_name || ""} ${r.lead_last_name || ""}`.trim();
+    const customerName = `${r.customer_first_name || ""} ${r.customer_last_name || ""}`.trim();
 
-      tech.bookings.push({
+    const displayName =
+        (customerName || leadName || r.customer_email || r.lead_email || "").trim() || null;
+
+    tech.bookings.push({
         public_id: r.public_id,
         status: r.status,
         starts_at: r.starts_at,
@@ -97,11 +113,13 @@ router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
         notes: r.notes ?? null,
         service_title: r.service_title,
 
-        customer_name: customerName,
-        customer_email: r.customer_email ?? null,
-        customer_phone: r.customer_phone ?? null,
-        customer_account_type: r.customer_account_type ?? null,
-      });
+        // unified display fields
+        customer_name: displayName,
+        customer_email: r.customer_email ?? r.lead_email ?? null,
+        customer_phone: r.customer_phone ?? r.lead_phone ?? null,
+        customer_account_type:
+        r.customer_account_type ?? r.lead_account_type ?? null,
+    });
     }
 
     return res.json({ ok: true, technicians: techs, generated_at: new Date().toISOString() });
