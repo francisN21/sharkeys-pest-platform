@@ -40,9 +40,10 @@ router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
     );
 
     // 2) assigned bookings (current assignment only)
+    // IMPORTANT: LEFT JOIN users + LEFT JOIN leads so lead bookings are included.
     const assignedRes = await pool.query(
-    `
-    SELECT
+      `
+      SELECT
         b.public_id,
         b.status,
         b.starts_at,
@@ -68,22 +69,21 @@ router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
 
         ba.worker_user_id
 
-    FROM bookings b
-    JOIN booking_assignments ba ON ba.booking_id = b.id
-    JOIN services s ON s.id = b.service_id
+      FROM bookings b
+      JOIN booking_assignments ba ON ba.booking_id = b.id
+      JOIN services s ON s.id = b.service_id
+      LEFT JOIN users cu ON cu.id = b.customer_user_id
+      LEFT JOIN leads l  ON l.id = b.lead_id
 
-    -- IMPORTANT: must be LEFT JOIN so lead bookings don't get filtered out
-    LEFT JOIN users cu ON cu.id = b.customer_user_id
-    LEFT JOIN leads l  ON l.id = b.lead_id
-
-    WHERE b.status = 'assigned'
-    ORDER BY ba.worker_user_id, b.starts_at ASC
-    `
+      WHERE b.status = 'assigned'
+      ORDER BY ba.worker_user_id, b.starts_at ASC
+      `
     );
 
     // Build lookup
     const techs = techRes.rows.map((t) => ({
-      user_id: t.user_id, // keep as number; frontend can stringify in select if needed
+      // Keep this as a number to match previous behavior; frontend can stringify if needed
+      user_id: t.user_id,
       public_id: t.public_id ?? null,
       email: t.email ?? null,
       first_name: t.first_name ?? null,
@@ -95,16 +95,16 @@ router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
     const byId = new Map(techs.map((t) => [String(t.user_id), t]));
 
     for (const r of assignedRes.rows) {
-    const tech = byId.get(String(r.worker_user_id));
-    if (!tech) continue;
+      const tech = byId.get(String(r.worker_user_id));
+      if (!tech) continue;
 
-    const leadName = `${r.lead_first_name || ""} ${r.lead_last_name || ""}`.trim();
-    const customerName = `${r.customer_first_name || ""} ${r.customer_last_name || ""}`.trim();
+      const leadName = `${r.lead_first_name || ""} ${r.lead_last_name || ""}`.trim();
+      const customerName = `${r.customer_first_name || ""} ${r.customer_last_name || ""}`.trim();
 
-    const displayName =
+      const displayName =
         (customerName || leadName || r.customer_email || r.lead_email || "").trim() || null;
 
-    tech.bookings.push({
+      tech.bookings.push({
         public_id: r.public_id,
         status: r.status,
         starts_at: r.starts_at,
@@ -113,13 +113,20 @@ router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
         notes: r.notes ?? null,
         service_title: r.service_title,
 
-        // unified display fields
+        // Backwards-compatible fields (what your current UI uses)
         customer_name: displayName,
         customer_email: r.customer_email ?? r.lead_email ?? null,
         customer_phone: r.customer_phone ?? r.lead_phone ?? null,
-        customer_account_type:
-        r.customer_account_type ?? r.lead_account_type ?? null,
-    });
+        customer_account_type: r.customer_account_type ?? r.lead_account_type ?? null,
+
+        // NEW: include lead fields so frontend can show Lead/Registered pill + lead name cleanly
+        lead_public_id: r.lead_public_id ?? null,
+        lead_first_name: r.lead_first_name ?? null,
+        lead_last_name: r.lead_last_name ?? null,
+        lead_email: r.lead_email ?? null,
+        lead_phone: r.lead_phone ?? null,
+        lead_account_type: r.lead_account_type ?? null,
+      });
     }
 
     return res.json({ ok: true, technicians: techs, generated_at: new Date().toISOString() });
@@ -143,10 +150,9 @@ router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, 
     await client.query("BEGIN");
 
     // lock booking
-    const bRes = await client.query(
-      `SELECT id, status FROM bookings WHERE public_id = $1 FOR UPDATE`,
-      [bookingPublicId]
-    );
+    const bRes = await client.query(`SELECT id, status FROM bookings WHERE public_id = $1 FOR UPDATE`, [
+      bookingPublicId,
+    ]);
     if (bRes.rowCount === 0) {
       await client.query("ROLLBACK");
       return res.status(404).json({ ok: false, message: "Booking not found" });
@@ -168,7 +174,7 @@ router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, 
       return res.status(400).json({ ok: false, message: "Target user is not a technician" });
     }
 
-    // ✅ UPSERT current assignment (booking_assignments has UNIQUE(booking_id))
+    // UPSERT current assignment (booking_assignments has UNIQUE(booking_id))
     await client.query(
       `
       INSERT INTO booking_assignments (booking_id, worker_user_id, assigned_by_user_id, assigned_at)
@@ -184,10 +190,7 @@ router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, 
 
     // keep booking status consistent
     if (booking.status !== "assigned") {
-      await client.query(
-        `UPDATE bookings SET status = 'assigned', updated_at = now() WHERE id = $1`,
-        [booking.id]
-      );
+      await client.query(`UPDATE bookings SET status = 'assigned', updated_at = now() WHERE id = $1`, [booking.id]);
     }
 
     await client.query("COMMIT");
