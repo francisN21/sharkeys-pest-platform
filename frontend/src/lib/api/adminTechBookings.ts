@@ -5,7 +5,9 @@ const API_BASE = process.env.NEXT_PUBLIC_AUTH_API_BASE;
 
 function resolveUrl(path: string) {
   if (!API_BASE && !path.startsWith("http")) {
-    throw new Error("Missing NEXT_PUBLIC_AUTH_API_BASE. Set it in .env.local (e.g. http://localhost:4000).");
+    throw new Error(
+      "Missing NEXT_PUBLIC_AUTH_API_BASE. Set it in .env.local (e.g. http://localhost:4000)."
+    );
   }
   return path.startsWith("http") ? path : `${API_BASE}${path}`;
 }
@@ -39,14 +41,24 @@ export type TechBookingRow = {
 
   service_title: string;
 
+  // unified / legacy fields used by UI
   customer_name: string | null;
   customer_email: string | null;
   customer_phone: string | null;
   customer_account_type: string | null;
+
+  // ✅ lead fields (nullable for registered customers)
+  lead_public_id: string | null;
+  lead_first_name: string | null;
+  lead_last_name: string | null;
+  lead_email: string | null;
+  lead_phone: string | null;
+  lead_account_type: string | null;
 };
 
 export type TechRow = {
-  user_id: number;
+  // Your API payload currently returns user_id as a string ("23"), so accept both.
+  user_id: number | string;
   public_id: string | null;
   email: string | null;
   first_name: string | null;
@@ -66,8 +78,11 @@ export function getAdminTechBookings() {
 }
 
 export function reassignBooking(publicId: string, workerUserId: number) {
-  return jsonFetch<{ ok: boolean }>(`/admin/tech-bookings/${encodeURIComponent(publicId)}/reassign`, {
-    method: "POST",
-    body: JSON.stringify({ worker_user_id: workerUserId }),
-  });
+  return jsonFetch<{ ok: boolean }>(
+    `/admin/tech-bookings/${encodeURIComponent(publicId)}/reassign`,
+    {
+      method: "POST",
+      body: JSON.stringify({ worker_user_id: workerUserId }),
+    }
+  );
 }

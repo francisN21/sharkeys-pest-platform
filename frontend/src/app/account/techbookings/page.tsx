@@ -257,7 +257,7 @@ export default function TechBookingsPage() {
                             type="button"
                             className="rounded-xl border px-3 py-2 text-xs font-semibold hover:opacity-90 disabled:opacity-60"
                             style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-                            onClick={() => openReassignModal(b.public_id, t.user_id)}
+                            onClick={() => openReassignModal(b.public_id, Number(t.user_id))}
                             disabled={reassigning}
                             title="Re-assign this booking"
                           >
