@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { AdminBookingRow } from "../../../lib/api/adminBookings";
 import type { WorkerBookingRow } from "../../../lib/api/workerBookings";
 import {
   workerCompleteBooking,
