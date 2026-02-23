@@ -35,19 +35,34 @@ router.get("/assigned", requireAuth, requireRole("worker"), async (req, res, nex
         b.cancelled_at,
         s.title AS service_title,
 
+        -- registered customer fields (nullable for leads)
         cu.public_id AS customer_public_id,
         cu.first_name AS customer_first_name,
         cu.last_name AS customer_last_name,
         cu.phone AS customer_phone,
         cu.email AS customer_email,
         cu.address AS customer_address,
-        cu.account_type AS customer_account_type
+        cu.account_type AS customer_account_type,
+
+        -- lead fields (nullable for registered customers)
+        l.public_id AS lead_public_id,
+        l.first_name AS lead_first_name,
+        l.last_name AS lead_last_name,
+        l.email AS lead_email,
+        l.phone AS lead_phone,
+        l.account_type AS lead_account_type
+
       FROM bookings b
       JOIN booking_assignments ba ON ba.booking_id = b.id
       JOIN services s ON s.id = b.service_id
-      JOIN users cu ON cu.id = b.customer_user_id
+
+      -- IMPORTANT: LEFT JOIN so lead bookings don't get filtered out
+      LEFT JOIN users cu ON cu.id = b.customer_user_id
+      LEFT JOIN leads l ON l.id = b.lead_id
+
       WHERE b.status = 'assigned'
         AND ba.worker_user_id = $1
+
       ORDER BY b.starts_at ASC
       LIMIT 200
       `,
@@ -100,18 +115,33 @@ router.get("/history", requireAuth, requireRole("worker"), async (req, res, next
         b.cancelled_at,
         s.title AS service_title,
 
+        -- registered customer fields (nullable for leads)
         cu.public_id AS customer_public_id,
         cu.first_name AS customer_first_name,
         cu.last_name AS customer_last_name,
         cu.phone AS customer_phone,
         cu.email AS customer_email,
         cu.address AS customer_address,
-        cu.account_type AS customer_account_type
+        cu.account_type AS customer_account_type,
+
+        -- lead fields (nullable for registered customers)
+        l.public_id AS lead_public_id,
+        l.first_name AS lead_first_name,
+        l.last_name AS lead_last_name,
+        l.email AS lead_email,
+        l.phone AS lead_phone,
+        l.account_type AS lead_account_type
+
       FROM bookings b
       JOIN services s ON s.id = b.service_id
-      JOIN users cu ON cu.id = b.customer_user_id
+
+      -- IMPORTANT: LEFT JOIN so lead bookings don't get filtered out
+      LEFT JOIN users cu ON cu.id = b.customer_user_id
+      LEFT JOIN leads l ON l.id = b.lead_id
+
       WHERE b.status = 'completed'
         AND b.completed_worker_user_id = $1
+
       ORDER BY b.completed_at DESC NULLS LAST, b.starts_at DESC
       LIMIT $2
       OFFSET $3

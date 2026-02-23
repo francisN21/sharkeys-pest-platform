@@ -60,6 +60,87 @@ function formatDateTime(ts: string) {
   return d.toLocaleString();
 }
 
+/** ---------- Lead/Registered helpers ---------- */
+
+type PersonKind = "lead" | "registered";
+
+function getKind(b: AdminBookingRow): PersonKind {
+  return b.lead_public_id ? "lead" : "registered";
+}
+
+function KindPill({ kind }: { kind: PersonKind }) {
+  const isLead = kind === "lead";
+  return (
+    <span
+      className="rounded-full border px-2 py-1 text-xs font-semibold"
+      style={{
+        borderColor: "rgb(var(--border))",
+        background: isLead ? "rgba(245, 158, 11, 0.18)" : "rgba(var(--bg), 0.20)",
+      }}
+      title={isLead ? "Unregistered lead" : "Registered customer"}
+    >
+      {isLead ? "Lead" : "Registered"}
+    </span>
+  );
+}
+
+function getBookee(b: AdminBookingRow) {
+  // Prefer your unified fields if present, fallback to customer/lead legacy fields.
+  const isLead = !!b.lead_public_id;
+
+  const first =
+    b.bookee_first_name ??
+    b.customer_first_name ??
+    b.lead_first_name ??
+    null;
+
+  const last =
+    b.bookee_last_name ??
+    b.customer_last_name ??
+    b.lead_last_name ??
+    null;
+
+  const email =
+    b.bookee_email ??
+    b.customer_email ??
+    b.lead_email ??
+    null;
+
+  const phone =
+    b.bookee_phone ??
+    b.customer_phone ??
+    b.lead_phone ??
+    null;
+
+  const accountType =
+    b.bookee_account_type ??
+    b.customer_account_type ??
+    b.lead_account_type ??
+    null;
+
+  const name = [first, last].filter(Boolean).join(" ").trim();
+
+  // If lead, strongly prefer lead name when it exists (even if customer fields exist)
+  const leadName = `${(b.lead_first_name ?? "").trim()} ${(b.lead_last_name ?? "").trim()}`.trim();
+  const customerName = `${(b.customer_first_name ?? "").trim()} ${(b.customer_last_name ?? "").trim()}`.trim();
+
+  const displayName =
+    (isLead ? leadName : customerName) ||
+    name ||
+    customerName ||
+    leadName ||
+    email ||
+    "—";
+
+  return {
+    displayName,
+    email: email ?? "—",
+    phone: phone ?? "—",
+    accountType: accountType ?? "—",
+    customerAddress: b.customer_address ?? null,
+  };
+}
+
 export default function AdminCompletedJobsTab() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -357,6 +438,8 @@ export default function AdminCompletedJobsTab() {
           <div className="grid gap-3">
             {sorted.map((b) => {
               const meta = formatCompletedBy(b);
+              const kind = getKind(b);
+              const bookee = getBookee(b);
 
               return (
                 <div
@@ -366,25 +449,29 @@ export default function AdminCompletedJobsTab() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-sm font-semibold truncate">{b.service_title}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm font-semibold truncate">{b.service_title}</div>
+                        <KindPill kind={kind} />
+                      </div>
+
                       <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
                         {formatRange(b.starts_at, b.ends_at)}
                       </div>
 
                       <div className="mt-2 text-sm">
-                        <div className="font-semibold">
-                          {b.customer_first_name} {b.customer_last_name}
-                          <span className="ml-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                            ({b.customer_account_type || "—"})
+                        <div className="font-semibold flex items-center gap-2">
+                          <span className="truncate">{bookee.displayName}</span>
+                          <span className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                            ({bookee.accountType})
                           </span>
                         </div>
 
                         <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                          Phone: {b.customer_phone || "—"} • Email: {b.customer_email}
+                          Phone: {bookee.phone} • Email: {bookee.email}
                         </div>
 
                         <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                          Location: {b.address || b.customer_address || "—"}
+                          Location: {b.address || bookee.customerAddress || "—"}
                         </div>
                       </div>
 
@@ -445,12 +532,12 @@ export default function AdminCompletedJobsTab() {
               <button
                 type="button"
                 onClick={async () => {
-                  if (!canPrev) return;
+                  if (page <= 1) return;
                   const nextPage = page - 1;
                   setPage(nextPage);
                   await refresh({ page: nextPage });
                 }}
-                disabled={!canPrev}
+                disabled={page <= 1}
                 className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
                 style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
               >
@@ -464,12 +551,12 @@ export default function AdminCompletedJobsTab() {
               <button
                 type="button"
                 onClick={async () => {
-                  if (!canNext) return;
+                  if (page >= totalPages) return;
                   const nextPage = page + 1;
                   setPage(nextPage);
                   await refresh({ page: nextPage });
                 }}
-                disabled={!canNext}
+                disabled={page >= totalPages}
                 className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
                 style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
               >

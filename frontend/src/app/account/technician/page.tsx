@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { AdminBookingRow } from "../../../lib/api/adminBookings";
+import type { WorkerBookingRow } from "../../../lib/api/workerBookings";
 import {
   workerCompleteBooking,
   workerListAssignedBookings,
   workerListJobHistory,
 } from "../../../lib/api/workerBookings";
+
 
 function formatRange(startsAt: string, endsAt: string) {
   const s = new Date(startsAt);
@@ -45,6 +47,68 @@ function formatElapsedSince(ts: string) {
 function formatNotes(notes: string | null) {
   const n = (notes ?? "").trim();
   return n.length ? n : null;
+}
+
+/** ---------- Lead / Registered helpers ---------- */
+
+type BookeeKind = "lead" | "registered";
+
+function getBookeeKind(b: WorkerBookingRow): BookeeKind {
+  return b.lead_public_id ? "lead" : "registered";
+}
+
+function BookeePill({ kind }: { kind: BookeeKind }) {
+  const isLead = kind === "lead";
+  return (
+    <span
+      className="rounded-full border px-2 py-1 text-xs font-semibold"
+      style={{
+        borderColor: "rgb(var(--border))",
+        background: isLead ? "rgba(245, 158, 11, 0.18)" : "rgba(var(--bg), 0.20)",
+      }}
+      title={isLead ? "Unregistered lead" : "Registered customer"}
+    >
+      {isLead ? "Lead" : "Registered"}
+    </span>
+  );
+}
+
+function pickDisplayName(b: WorkerBookingRow) {
+  const kind = getBookeeKind(b);
+
+  const leadName = `${(b.lead_first_name ?? "").trim()} ${(b.lead_last_name ?? "").trim()}`.trim();
+  const customerName = `${(b.customer_first_name ?? "").trim()} ${(b.customer_last_name ?? "").trim()}`.trim();
+
+  const name = (kind === "lead" ? leadName : customerName) || customerName || leadName || "";
+
+  const email =
+    (kind === "lead" ? b.lead_email : b.customer_email) ??
+    b.customer_email ??
+    b.lead_email ??
+    null;
+
+  const phone =
+    (kind === "lead" ? b.lead_phone : b.customer_phone) ??
+    b.customer_phone ??
+    b.lead_phone ??
+    null;
+
+  const accountType =
+    (kind === "lead" ? b.lead_account_type : b.customer_account_type) ??
+    b.customer_account_type ??
+    b.lead_account_type ??
+    null;
+
+  const displayName = (name || email || "—").trim() || "—";
+
+  return {
+    kind,
+    displayName,
+    email: email ?? "—",
+    phone: phone ?? "—",
+    accountType: accountType ?? "—",
+    customerAddress: b.customer_address ?? null,
+  };
 }
 
 function ConfirmWorkerActionModal({
@@ -164,11 +228,12 @@ export default function WorkerJobsPage() {
 
   const [tab, setTab] = useState<"assigned" | "history">("assigned");
 
-  const [assignedRows, setAssignedRows] = useState<AdminBookingRow[]>([]);
-  const [historyRows, setHistoryRows] = useState<AdminBookingRow[]>([]);
+  const [assignedRows, setAssignedRows] = useState<WorkerBookingRow[]>([]);
+  const [historyRows, setHistoryRows] = useState<WorkerBookingRow[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const [sortBy, setSortBy] = useState<"created" | "scheduled">("scheduled");
+  
 
   // ✅ pagination (history only)
   const HISTORY_PAGE_SIZE = 30;
@@ -176,7 +241,7 @@ export default function WorkerJobsPage() {
   const [historyTotalPages, setHistoryTotalPages] = useState(1);
   const [historyTotal, setHistoryTotal] = useState(0);
 
-  // Modal state (replaces confirm())
+  // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [modalBookingId, setModalBookingId] = useState<string | null>(null);
   const [modalBookingTitle, setModalBookingTitle] = useState<string | null>(null);
@@ -219,10 +284,9 @@ export default function WorkerJobsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ when switching to history, load current page
+  // when switching to history, load current page
   useEffect(() => {
     if (tab !== "history") return;
-    // no need to setLoading global; keep it light
     refresh().catch((e: unknown) => {
       setErr(e instanceof Error ? e.message : "Failed to load history");
     });
@@ -236,12 +300,11 @@ export default function WorkerJobsPage() {
       const bKey = sortBy === "created" ? b.created_at : b.starts_at;
       const at = new Date(aKey).getTime();
       const bt = new Date(bKey).getTime();
-      return sortBy === "scheduled" ? at - bt : bt - at; // scheduled: soonest first
+      return sortBy === "scheduled" ? at - bt : bt - at;
     });
     return copy;
   }, [assignedRows, sortBy]);
 
-  // History is already ordered by backend (completed_at DESC), but keep your existing sort behavior if you want:
   const sortedHistory = useMemo(() => {
     const copy = [...historyRows];
     copy.sort((a, b) => {
@@ -280,7 +343,7 @@ export default function WorkerJobsPage() {
 
       await workerCompleteBooking(modalBookingId);
 
-      // ✅ after completing, refresh assigned + history page 1
+      // after completing, refresh assigned + history page 1
       await refresh({ historyPage: 1 });
 
       closeModal();
@@ -300,7 +363,6 @@ export default function WorkerJobsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Modal replaces confirm() */}
       <ConfirmWorkerActionModal
         open={modalOpen}
         title="Mark this job as completed?"
@@ -409,7 +471,6 @@ export default function WorkerJobsPage() {
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-base font-semibold">{tab === "assigned" ? "Assigned" : "Job History"}</h3>
 
-            {/* ✅ History meta */}
             {tab === "history" ? (
               <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
                 Showing {historyRows.length} of {historyTotal} • Page {historyPage} / {historyTotalPages}
@@ -421,6 +482,7 @@ export default function WorkerJobsPage() {
             {rows.map((b) => {
               const busy = busyId === b.public_id;
               const notes = formatNotes(b.notes);
+              const bookee = pickDisplayName(b);
 
               return (
                 <div
@@ -430,25 +492,29 @@ export default function WorkerJobsPage() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-sm font-semibold truncate">{b.service_title}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm font-semibold truncate">{b.service_title}</div>
+                        <BookeePill kind={bookee.kind} />
+                      </div>
+
                       <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
                         {formatRange(b.starts_at, b.ends_at)}
                       </div>
 
                       <div className="mt-2 text-sm">
                         <div className="font-semibold">
-                          {b.customer_first_name} {b.customer_last_name}
+                          {bookee.displayName}
                           <span className="ml-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                            ({b.customer_account_type || "—"})
+                            ({bookee.accountType})
                           </span>
                         </div>
 
                         <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                          Phone: {b.customer_phone || "—"} • Email: {b.customer_email}
+                          Phone: {bookee.phone} • Email: {bookee.email}
                         </div>
 
                         <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                          Location: {b.address || b.customer_address || "—"}
+                          Location: {b.address || bookee.customerAddress || "—"}
                         </div>
                       </div>
 
@@ -497,7 +563,6 @@ export default function WorkerJobsPage() {
             })}
           </div>
 
-          {/* ✅ Pagination controls for history */}
           {tab === "history" && historyTotalPages > 1 ? (
             <div className="flex items-center justify-between pt-2">
               <button
