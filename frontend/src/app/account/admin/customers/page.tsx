@@ -16,6 +16,26 @@ function displayName(c: AdminCustomerRow) {
   return name || "—";
 }
 
+function KindPill({ kind }: { kind: AdminCustomerRow["kind"] }) {
+  const isLead = kind === "lead";
+  return (
+    <span
+      className="rounded-full border px-2 py-1 text-xs font-semibold"
+      style={{
+        borderColor: "rgb(var(--border))",
+        background: isLead ? "rgba(245, 158, 11, 0.18)" : "rgba(var(--bg), 0.20)",
+      }}
+      title={isLead ? "Unregistered lead" : "Registered customer"}
+    >
+      {isLead ? "Lead" : "Registered"}
+    </span>
+  );
+}
+
+function idLabel(kind: AdminCustomerRow["kind"]) {
+  return kind === "lead" ? "Lead ID" : "Customer ID";
+}
+
 export default function AdminCustomersPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -23,7 +43,7 @@ export default function AdminCustomersPage() {
   const [rows, setRows] = useState<AdminCustomerRow[]>([]);
 
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(30); // keep simple like you asked
+  const [pageSize] = useState(30);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
 
@@ -73,7 +93,7 @@ export default function AdminCustomersPage() {
         <div>
           <h2 className="text-xl font-bold">Customers</h2>
           <p className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-            Customer-only accounts (excludes admin/technician). Includes booking counts.
+            Registered customers and leads. Includes booking counts.
           </p>
         </div>
 
@@ -159,21 +179,23 @@ export default function AdminCustomersPage() {
           <div className="grid gap-3">
             {sorted.map((c) => (
               <div
-                key={c.public_id}
+                key={`${c.kind}:${c.public_id}`}
                 className="rounded-2xl border p-4 space-y-3"
                 style={{ borderColor: "rgb(var(--border))" }}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold truncate">
-                      {displayName(c)}
-                      <span className="ml-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                        ({c.account_type || "—"})
-                      </span>
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-semibold truncate">
+                        {displayName(c)}
+                        <span className="ml-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                          ({c.account_type || "—"})
+                        </span>
+                      </div>
                     </div>
 
                     <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
-                      Phone: {c.phone || "—"} • Email: {c.email}
+                      Phone: {c.phone || "—"} • Email: {c.email || "—"}
                     </div>
 
                     <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
@@ -181,14 +203,13 @@ export default function AdminCustomersPage() {
                     </div>
 
                     <div className="mt-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                      Customer ID: <span className="font-mono">{c.public_id}</span>
+                      {idLabel(c.kind)}: <span className="font-mono">{c.public_id}</span>
                     </div>
 
                     <div className="mt-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
                       Created: {formatCreated(c.created_at)}
                     </div>
 
-                    {/* Stats box (same style as notes/metadata blocks) */}
                     <div
                       className="mt-2 rounded-xl border p-3 text-sm"
                       style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
@@ -197,16 +218,20 @@ export default function AdminCustomersPage() {
                         Booking Summary:
                       </div>
                       <div className="mt-1 space-y-1">
-                        <div>Open Bookings: <span className="font-semibold">{c.open_bookings}</span></div>
-                        <div>Total completed bookings: <span className="font-semibold">{c.completed_bookings}</span></div>
-                        <div>Cancelled Bookings: <span className="font-semibold">{c.cancelled_bookings}</span></div>
+                        <div>
+                          Open Bookings: <span className="font-semibold">{c.open_bookings}</span>
+                        </div>
+                        <div>
+                          Total completed bookings: <span className="font-semibold">{c.completed_bookings}</span>
+                        </div>
+                        <div>
+                          Cancelled Bookings: <span className="font-semibold">{c.cancelled_bookings}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <span className="rounded-full border px-2 py-1 text-xs" style={{ borderColor: "rgb(var(--border))" }}>
-                    Customer
-                  </span>
+                  <KindPill kind={c.kind} />
                 </div>
               </div>
             ))}

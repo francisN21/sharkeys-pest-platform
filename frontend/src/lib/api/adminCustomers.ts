@@ -1,15 +1,13 @@
 import { jsonFetch } from "../api/bookings";
 export type AdminCustomerRow = {
-  id: number;
+  kind: "registered" | "lead";
   public_id: string;
-
   first_name: string | null;
   last_name: string | null;
   phone: string | null;
-  email: string;
+  email: string | null;
   address: string | null;
   account_type: string | null;
-
   created_at: string;
 
   open_bookings: number;
