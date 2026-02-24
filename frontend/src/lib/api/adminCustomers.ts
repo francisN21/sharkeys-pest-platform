@@ -1,6 +1,9 @@
 import { jsonFetch } from "../api/bookings";
+
+export type AdminCustomerKind = "registered" | "lead";
+
 export type AdminCustomerRow = {
-  kind: "registered" | "lead";
+  kind: AdminCustomerKind;
   public_id: string;
   first_name: string | null;
   last_name: string | null;
@@ -9,7 +12,6 @@ export type AdminCustomerRow = {
   address: string | null;
   account_type: string | null;
   created_at: string;
-
   open_bookings: number;
   completed_bookings: number;
   cancelled_bookings: number;
@@ -25,17 +27,62 @@ export type AdminListCustomersResponse = {
   q?: string;
 };
 
-export function adminListCustomers(args?: { page?: number; pageSize?: number; q?: string }) {
-  const page = args?.page ?? 1;
-  const pageSize = args?.pageSize ?? 30;
-
+export function adminListCustomers(opts: { page?: number; pageSize?: number; q?: string }) {
   const qs = new URLSearchParams();
-  qs.set("page", String(page));
-  qs.set("pageSize", String(pageSize));
-  if (args?.q && args.q.trim()) qs.set("q", args.q.trim());
-
+  if (opts.page) qs.set("page", String(opts.page));
+  if (opts.pageSize) qs.set("pageSize", String(opts.pageSize));
+  if (opts.q) qs.set("q", opts.q);
   return jsonFetch<AdminListCustomersResponse>(`/admin/customers?${qs.toString()}`);
 }
+
+export type AdminCustomerBookingRow = {
+  public_id: string;
+  status: string;
+  starts_at: string;
+  ends_at: string;
+  address: string | null;
+  notes: string | null;
+  created_at: string;
+  accepted_at: string | null;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  service_title: string;
+};
+
+export type AdminCustomerDetailResponse = {
+  ok: boolean;
+  customer: {
+    kind: AdminCustomerKind;
+    public_id: string;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    phone: string | null;
+    address: string | null;
+    account_type: string | null;
+    created_at: string;
+  };
+  tag: {
+    tag: string | null;
+    note: string | null;
+    updated_at: string | null;
+    updated_by_user_id: number | null;
+  };
+  summary: {
+    lifetime_value: number;
+    counts: {
+      in_progress: number;
+      completed: number;
+      cancelled: number;
+    };
+  };
+  bookings: {
+    in_progress: AdminCustomerBookingRow[];
+    completed: AdminCustomerBookingRow[];
+    cancelled: AdminCustomerBookingRow[];
+  };
+  generated_at?: string;
+};
 
 export type SearchPersonKind = "registered" | "lead";
 
@@ -63,4 +110,15 @@ export function adminSearchCustomersAndLeads(args?: { q?: string; limit?: number
 
   // ✅ matches backend route: GET /admin/customers/search
   return jsonFetch<AdminSearchCustomersAndLeadsResponse>(`/admin/customers/search?${qs.toString()}`);
+}
+
+export function adminGetCustomerDetail(kind: AdminCustomerKind, publicId: string) {
+  return jsonFetch<AdminCustomerDetailResponse>(`/admin/customers/${kind}/${encodeURIComponent(publicId)}`);
+}
+
+export function adminSetCustomerTag(kind: AdminCustomerKind, publicId: string, tag: string | null, note?: string | null) {
+  return jsonFetch<{ ok: boolean }>(`/admin/customers/${kind}/${encodeURIComponent(publicId)}/tag`, {
+    method: "PATCH",
+    body: JSON.stringify({ tag, note: note ?? null }),
+  });
 }
