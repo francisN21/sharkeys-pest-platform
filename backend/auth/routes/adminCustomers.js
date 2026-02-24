@@ -126,6 +126,16 @@ router.get("/", requireAuth, requireRole("admin"), async (req, res, next) => {
             (d.kind = 'lead' AND b.lead_id = d.entity_id)
           )
         GROUP BY d.kind, d.entity_id
+      ),
+      tags AS (
+        SELECT
+          ct.kind,
+          ct.entity_id,
+          ct.tag,
+          ct.note,
+          ct.updated_at,
+          ct.updated_by_user_id
+        FROM customer_tags ct
       )
       SELECT
         d.kind,
@@ -137,11 +147,21 @@ router.get("/", requireAuth, requireRole("admin"), async (req, res, next) => {
         d.address,
         d.account_type,
         d.created_at,
+
         COALESCE(s.open_bookings, 0) AS open_bookings,
         COALESCE(s.completed_bookings, 0) AS completed_bookings,
-        COALESCE(s.cancelled_bookings, 0) AS cancelled_bookings
+        COALESCE(s.cancelled_bookings, 0) AS cancelled_bookings,
+
+        -- ✅ include tag fields so main list can show pills
+        t.tag AS crm_tag,
+        t.note AS crm_tag_note,
+        t.updated_at AS crm_tag_updated_at,
+        t.updated_by_user_id AS crm_tag_updated_by_user_id
+
       FROM directory d
       LEFT JOIN stats s ON s.kind = d.kind AND s.entity_id = d.entity_id
+      LEFT JOIN tags  t ON t.kind = d.kind AND t.entity_id = d.entity_id
+
       WHERE
         ($1::text IS NULL)
         OR (
@@ -198,6 +218,7 @@ router.get("/search", requireAuth, requireRole("admin"), async (req, res, next) 
         ? `
         SELECT * FROM (
           SELECT
+            u.id AS entity_id,
             u.public_id::text AS public_id,
             u.email::text AS email,
             u.first_name,
@@ -222,6 +243,7 @@ router.get("/search", requireAuth, requireRole("admin"), async (req, res, next) 
           UNION ALL
 
           SELECT
+            l.id AS entity_id,
             l.public_id::text AS public_id,
             l.email::text AS email,
             l.first_name,
@@ -239,12 +261,15 @@ router.get("/search", requireAuth, requireRole("admin"), async (req, res, next) 
             OR COALESCE(l.phone,'') ILIKE $1
             OR COALESCE(l.address,'') ILIKE $1
         ) x
+        LEFT JOIN customer_tags ct
+          ON ct.kind = x.kind AND ct.entity_id = x.entity_id
         ORDER BY x.created_at DESC
         LIMIT $2
       `
         : `
         SELECT * FROM (
           SELECT
+            u.id AS entity_id,
             u.public_id::text AS public_id,
             u.email::text AS email,
             u.first_name,
@@ -261,6 +286,7 @@ router.get("/search", requireAuth, requireRole("admin"), async (req, res, next) 
           UNION ALL
 
           SELECT
+            l.id AS entity_id,
             l.public_id::text AS public_id,
             l.email::text AS email,
             l.first_name,
@@ -271,6 +297,8 @@ router.get("/search", requireAuth, requireRole("admin"), async (req, res, next) 
             'lead'::text AS kind
           FROM leads l
         ) x
+        LEFT JOIN customer_tags ct
+          ON ct.kind = x.kind AND ct.entity_id = x.entity_id
         ORDER BY x.created_at DESC
         LIMIT $1
       `;
@@ -278,7 +306,23 @@ router.get("/search", requireAuth, requireRole("admin"), async (req, res, next) 
     const params = q.length > 0 ? [like, limit] : [limit];
     const { rows } = await pool.query(sql, params);
 
-    res.json({ ok: true, results: rows });
+    // Normalize tag fields for frontend convenience
+    const results = rows.map((r) => ({
+      public_id: r.public_id,
+      kind: r.kind,
+      email: r.email,
+      first_name: r.first_name,
+      last_name: r.last_name,
+      phone: r.phone,
+      address: r.address,
+      created_at: r.created_at,
+      crm_tag: r.tag ?? null,
+      crm_tag_note: r.note ?? null,
+      crm_tag_updated_at: r.updated_at ?? null,
+      crm_tag_updated_by_user_id: r.updated_by_user_id ?? null,
+    }));
+
+    res.json({ ok: true, results });
   } catch (e) {
     next(e);
   }
@@ -362,10 +406,6 @@ router.get("/:kind/:publicId", requireAuth, requireRole("admin"), async (req, re
         b.completed_at,
         b.cancelled_at,
         s.title AS service_title
-
-        -- If/when you have a price column, add it here and sum it below:
-        -- , COALESCE(b.total_amount, 0) AS total_amount
-
       FROM bookings b
       JOIN services s ON s.id = b.service_id
       WHERE
@@ -382,12 +422,9 @@ router.get("/:kind/:publicId", requireAuth, requireRole("admin"), async (req, re
 
     const bookings = bookingsRes.rows;
 
-    // Basic summary counts
     const counts = { in_progress: 0, completed: 0, cancelled: 0 };
     for (const b of bookings) counts[groupStatus(b.status)]++;
 
-    // Lifetime value placeholder
-    // Replace this logic when you add real money fields:
     const lifetime_value = 0;
 
     res.json({
