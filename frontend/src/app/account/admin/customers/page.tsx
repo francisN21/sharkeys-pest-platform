@@ -50,16 +50,31 @@ function KindPill({ kind }: { kind: AdminCustomerKind }) {
   );
 }
 
-function CrmTagPill({ tag }: { tag: string | null | undefined }) {
+function TagPill({ tag }: { tag: string | null | undefined }) {
   const t = (tag ?? "").trim();
   if (!t) return null;
+
+  // optional: normalize
+  const key = t.toLowerCase();
+
+  // Optional palette: tweak to match your CRM tags
+  const bg =
+    key === "vip"
+      ? "rgba(34, 197, 94, 0.16)" // green
+      : key === "hot"
+      ? "rgba(239, 68, 68, 0.16)" // red
+      : key === "warm"
+      ? "rgba(245, 158, 11, 0.16)" // amber
+      : key === "cold"
+      ? "rgba(59, 130, 246, 0.14)" // blue
+      : "rgba(59, 130, 246, 0.14)"; // default blue
 
   return (
     <span
       className="rounded-full border px-2 py-1 text-xs font-semibold"
       style={{
         borderColor: "rgb(var(--border))",
-        background: "rgba(59, 130, 246, 0.14)", // subtle blue-ish pill
+        background: bg,
       }}
       title={`CRM Tag: ${t}`}
     >
@@ -567,7 +582,7 @@ export default function AdminCustomersPage() {
                   </div>
                     <div className="flex items-center gap-2">
                         <KindPill kind={c.kind} />
-                        <CrmTagPill tag={c.crm_tag} />
+                        <TagPill tag={c.crm_tag} />
                     </div>
                 </div>
               </button>

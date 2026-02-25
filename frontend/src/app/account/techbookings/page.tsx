@@ -36,6 +36,7 @@ type PersonKind = "lead" | "registered";
 // We’ll support both: (a) new lead fields, and (b) older “coalesced into customer_*” shape.
 // This keeps the page working even if backend isn’t fully unified yet.
 type TechBookingWithLead = TechBookingRow & {
+  crm_tag?: string | null;
   lead_public_id?: string | null;
   lead_first_name?: string | null;
   lead_last_name?: string | null;
@@ -64,6 +65,39 @@ function KindPill({ kind }: { kind: PersonKind }) {
   );
 }
 
+function TagPill({ tag }: { tag: string | null | undefined }) {
+  const t = (tag ?? "").trim();
+  if (!t) return null;
+
+  // optional: normalize
+  const key = t.toLowerCase();
+
+  // Optional palette: tweak to match your CRM tags
+  const bg =
+    key === "vip"
+      ? "rgba(34, 197, 94, 0.16)" // green
+      : key === "hot"
+      ? "rgba(239, 68, 68, 0.16)" // red
+      : key === "warm"
+      ? "rgba(245, 158, 11, 0.16)" // amber
+      : key === "cold"
+      ? "rgba(59, 130, 246, 0.14)" // blue
+      : "rgba(59, 130, 246, 0.14)"; // default blue
+
+  return (
+    <span
+      className="rounded-full border px-2 py-1 text-xs font-semibold"
+      style={{
+        borderColor: "rgb(var(--border))",
+        background: bg,
+      }}
+      title={`CRM Tag: ${t}`}
+    >
+      {t}
+    </span>
+  );
+}
+
 function getBookee(b: TechBookingWithLead) {
   // If backend already coalesced into “customer_*”, this still works.
   const leadName = `${(b.lead_first_name ?? "").trim()} ${(b.lead_last_name ?? "").trim()}`.trim();
@@ -73,7 +107,7 @@ function getBookee(b: TechBookingWithLead) {
   const email = b.customer_email ?? b.lead_email ?? null;
   const phone = b.customer_phone ?? b.lead_phone ?? null;
   const accountType = b.customer_account_type ?? b.lead_account_type ?? null;
-
+  console.log(b)
   return {
     displayName: name.length ? name : email || "—",
     email,
@@ -233,7 +267,10 @@ export default function TechBookingsPage() {
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
                               <div className="text-sm font-semibold truncate">{b.service_title}</div>
-                              <KindPill kind={kind} />
+                                <div className="flex items-center gap-2">
+                                  <KindPill kind={kind} />
+                                  <TagPill tag={b.crm_tag} />
+                                </div>
                             </div>
 
                             <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
