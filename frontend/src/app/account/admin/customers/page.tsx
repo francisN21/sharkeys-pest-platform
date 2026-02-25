@@ -50,6 +50,24 @@ function KindPill({ kind }: { kind: AdminCustomerKind }) {
   );
 }
 
+function CrmTagPill({ tag }: { tag: string | null | undefined }) {
+  const t = (tag ?? "").trim();
+  if (!t) return null;
+
+  return (
+    <span
+      className="rounded-full border px-2 py-1 text-xs font-semibold"
+      style={{
+        borderColor: "rgb(var(--border))",
+        background: "rgba(59, 130, 246, 0.14)", // subtle blue-ish pill
+      }}
+      title={`CRM Tag: ${t}`}
+    >
+      {t}
+    </span>
+  );
+}
+
 function BookingCard({ b }: { b: AdminCustomerBookingRow }) {
   return (
     <div className="rounded-2xl border p-4 space-y-2" style={{ borderColor: "rgb(var(--border))" }}>
@@ -167,6 +185,7 @@ export default function AdminCustomersPage() {
       setDetail(d);
       setTagValue(d.tag?.tag ?? "");
       setTagNote(d.tag?.note ?? "");
+      refresh()
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to save tag");
     } finally {
@@ -546,8 +565,10 @@ export default function AdminCustomersPage() {
                       </div>
                     </div>
                   </div>
-
-                  <KindPill kind={c.kind} />
+                    <div className="flex items-center gap-2">
+                        <KindPill kind={c.kind} />
+                        <CrmTagPill tag={c.crm_tag} />
+                    </div>
                 </div>
               </button>
             ))}
