@@ -69,20 +69,18 @@ function TagPill({ tag }: { tag: string | null | undefined }) {
   const t = (tag ?? "").trim();
   if (!t) return null;
 
-  // optional: normalize
   const key = t.toLowerCase();
 
-  // Optional palette: tweak to match your CRM tags
   const bg =
     key === "vip"
-      ? "rgba(34, 197, 94, 0.16)" // green
+      ? "rgba(34, 197, 94, 0.16)"
       : key === "hot"
-      ? "rgba(239, 68, 68, 0.16)" // red
+      ? "rgba(239, 68, 68, 0.16)"
       : key === "warm"
-      ? "rgba(245, 158, 11, 0.16)" // amber
+      ? "rgba(245, 158, 11, 0.16)"
       : key === "cold"
-      ? "rgba(59, 130, 246, 0.14)" // blue
-      : "rgba(59, 130, 246, 0.14)"; // default blue
+      ? "rgba(59, 130, 246, 0.14)"
+      : "rgba(59, 130, 246, 0.14)";
 
   return (
     <span
@@ -99,7 +97,6 @@ function TagPill({ tag }: { tag: string | null | undefined }) {
 }
 
 function getBookee(b: TechBookingWithLead) {
-  // If backend already coalesced into “customer_*”, this still works.
   const leadName = `${(b.lead_first_name ?? "").trim()} ${(b.lead_last_name ?? "").trim()}`.trim();
   const customerName = String(b.customer_name ?? "").trim();
 
@@ -107,7 +104,6 @@ function getBookee(b: TechBookingWithLead) {
   const email = b.customer_email ?? b.lead_email ?? null;
   const phone = b.customer_phone ?? b.lead_phone ?? null;
   const accountType = b.customer_account_type ?? b.lead_account_type ?? null;
-  console.log(b)
   return {
     displayName: name.length ? name : email || "—",
     email,
@@ -256,7 +252,6 @@ export default function TechBookingsPage() {
                   {list.map((b) => {
                     const kind = getKind(b);
                     const bookee = getBookee(b);
-                    console.log(getBookee)
                     return (
                       <div
                         key={b.public_id}

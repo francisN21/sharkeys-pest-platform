@@ -43,46 +43,85 @@ router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
     // IMPORTANT: LEFT JOIN users + LEFT JOIN leads so lead bookings are included.
     const assignedRes = await pool.query(
       `
-      SELECT
-        b.public_id,
-        b.status,
-        b.starts_at,
-        b.ends_at,
-        b.address,
-        b.notes,
-        s.title AS service_title,
+  SELECT
+    b.public_id,
+    b.status,
+    b.starts_at,
+    b.ends_at,
+    b.address,
+    b.notes,
+    s.title AS service_title,
 
-        -- registered customer fields (nullable for leads)
-        cu.first_name AS customer_first_name,
-        cu.last_name  AS customer_last_name,
-        cu.email      AS customer_email,
-        cu.phone      AS customer_phone,
-        cu.account_type AS customer_account_type,
+    -- registered customer fields (nullable for lead bookings)
+    cu.first_name AS customer_first_name,
+    cu.last_name  AS customer_last_name,
+    cu.email      AS customer_email,
+    cu.phone      AS customer_phone,
+    cu.account_type AS customer_account_type,
 
-        -- lead fields (nullable for registered)
-        l.public_id   AS lead_public_id,
-        l.first_name  AS lead_first_name,
-        l.last_name   AS lead_last_name,
-        l.email       AS lead_email,
-        l.phone       AS lead_phone,
-        l.account_type AS lead_account_type,
+    -- lead fields (nullable for registered bookings)
+    l.public_id   AS lead_public_id,
+    l.first_name  AS lead_first_name,
+    l.last_name   AS lead_last_name,
+    l.email       AS lead_email,
+    l.phone       AS lead_phone,
+    l.account_type AS lead_account_type,
 
-        ba.worker_user_id
+    -- tags stored in customer_tags
+    ct_reg.tag  AS registered_crm_tag,
+    ct_lead.tag AS lead_crm_tag,
 
-      FROM bookings b
-      JOIN booking_assignments ba ON ba.booking_id = b.id
-      JOIN services s ON s.id = b.service_id
-      LEFT JOIN users cu ON cu.id = b.customer_user_id
-      LEFT JOIN leads l  ON l.id = b.lead_id
+    -- optional: if booking is a lead, attempt to match a registered user by email/phone
+    ct_guess.tag AS guessed_registered_crm_tag,
 
-      WHERE b.status = 'assigned'
-      ORDER BY ba.worker_user_id, b.starts_at ASC
+    -- the final crm_tag we want to show in UI
+    COALESCE(ct_reg.tag, ct_lead.tag, ct_guess.tag) AS crm_tag,
+
+    ba.worker_user_id
+
+  FROM bookings b
+  JOIN booking_assignments ba ON ba.booking_id = b.id
+  JOIN services s ON s.id = b.service_id
+  LEFT JOIN users cu ON cu.id = b.customer_user_id
+  LEFT JOIN leads l  ON l.id = b.lead_id
+
+  -- direct tags: registered booking
+  LEFT JOIN customer_tags ct_reg
+    ON ct_reg.kind = 'registered' AND ct_reg.entity_id = b.customer_user_id
+
+  -- direct tags: lead booking
+  LEFT JOIN customer_tags ct_lead
+    ON ct_lead.kind = 'lead' AND ct_lead.entity_id = b.lead_id
+
+  -- guess a registered user from the lead (email/phone)
+  LEFT JOIN LATERAL (
+    SELECT u.id AS user_id
+    FROM users u
+    WHERE
+      (
+        l.email IS NOT NULL
+        AND lower(trim(u.email::text)) = lower(trim(l.email::text))
+      )
+      OR
+      (
+        l.phone IS NOT NULL
+        AND regexp_replace(coalesce(u.phone, ''), '[^0-9]+', '', 'g')
+            = regexp_replace(coalesce(l.phone, ''), '[^0-9]+', '', 'g')
+      )
+    ORDER BY u.id DESC
+    LIMIT 1
+  ) u_guess ON TRUE
+
+  LEFT JOIN customer_tags ct_guess
+    ON ct_guess.kind = 'registered' AND ct_guess.entity_id = u_guess.user_id
+
+  WHERE b.status = 'assigned'
+  ORDER BY ba.worker_user_id, b.starts_at ASC
       `
     );
 
     // Build lookup
     const techs = techRes.rows.map((t) => ({
-      // Keep this as a number to match previous behavior; frontend can stringify if needed
       user_id: t.user_id,
       public_id: t.public_id ?? null,
       email: t.email ?? null,
@@ -113,13 +152,14 @@ router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
         notes: r.notes ?? null,
         service_title: r.service_title,
 
-        // Backwards-compatible fields (what your current UI uses)
         customer_name: displayName,
         customer_email: r.customer_email ?? r.lead_email ?? null,
         customer_phone: r.customer_phone ?? r.lead_phone ?? null,
         customer_account_type: r.customer_account_type ?? r.lead_account_type ?? null,
 
-        // NEW: include lead fields so frontend can show Lead/Registered pill + lead name cleanly
+        // unified CRM tag
+        crm_tag: r.crm_tag ?? null,
+
         lead_public_id: r.lead_public_id ?? null,
         lead_first_name: r.lead_first_name ?? null,
         lead_last_name: r.lead_last_name ?? null,
@@ -128,7 +168,6 @@ router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
         lead_account_type: r.lead_account_type ?? null,
       });
     }
-
     return res.json({ ok: true, technicians: techs, generated_at: new Date().toISOString() });
   } catch (e) {
     next(e);
@@ -150,9 +189,10 @@ router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, 
     await client.query("BEGIN");
 
     // lock booking
-    const bRes = await client.query(`SELECT id, status FROM bookings WHERE public_id = $1 FOR UPDATE`, [
-      bookingPublicId,
-    ]);
+    const bRes = await client.query(
+      `SELECT id, status FROM bookings WHERE public_id = $1 FOR UPDATE`,
+      [bookingPublicId]
+    );
     if (bRes.rowCount === 0) {
       await client.query("ROLLBACK");
       return res.status(404).json({ ok: false, message: "Booking not found" });
@@ -161,7 +201,9 @@ router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, 
     const booking = bRes.rows[0];
     if (booking.status === "completed" || booking.status === "cancelled") {
       await client.query("ROLLBACK");
-      return res.status(409).json({ ok: false, message: "Cannot reassign a completed/cancelled booking" });
+      return res
+        .status(409)
+        .json({ ok: false, message: "Cannot reassign a completed/cancelled booking" });
     }
 
     // confirm target tech is a worker
@@ -190,7 +232,9 @@ router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, 
 
     // keep booking status consistent
     if (booking.status !== "assigned") {
-      await client.query(`UPDATE bookings SET status = 'assigned', updated_at = now() WHERE id = $1`, [booking.id]);
+      await client.query(`UPDATE bookings SET status = 'assigned', updated_at = now() WHERE id = $1`, [
+        booking.id,
+      ]);
     }
 
     await client.query("COMMIT");

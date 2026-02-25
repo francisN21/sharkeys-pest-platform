@@ -54,20 +54,18 @@ function TagPill({ tag }: { tag: string | null | undefined }) {
   const t = (tag ?? "").trim();
   if (!t) return null;
 
-  // optional: normalize
   const key = t.toLowerCase();
 
-  // Optional palette: tweak to match your CRM tags
   const bg =
     key === "vip"
-      ? "rgba(34, 197, 94, 0.16)" // green
+      ? "rgba(34, 197, 94, 0.16)"
       : key === "hot"
-      ? "rgba(239, 68, 68, 0.16)" // red
+      ? "rgba(239, 68, 68, 0.16)"
       : key === "warm"
-      ? "rgba(245, 158, 11, 0.16)" // amber
+      ? "rgba(245, 158, 11, 0.16)"
       : key === "cold"
-      ? "rgba(59, 130, 246, 0.14)" // blue
-      : "rgba(59, 130, 246, 0.14)"; // default blue
+      ? "rgba(59, 130, 246, 0.14)"
+      : "rgba(59, 130, 246, 0.14)";
 
   return (
     <span
@@ -169,7 +167,6 @@ export default function AdminCustomersPage() {
     try {
       const d = await adminGetCustomerDetail(kind, publicId);
       setDetail(d);
-
       // initialize tag controls
       setTagValue(d.tag?.tag ?? "");
       setTagNote(d.tag?.note ?? "");

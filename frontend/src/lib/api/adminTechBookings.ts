@@ -47,13 +47,14 @@ export type TechBookingRow = {
   customer_phone: string | null;
   customer_account_type: string | null;
 
-  // ✅ lead fields (nullable for registered customers)
+  // lead fields (nullable for registered customers)
   lead_public_id: string | null;
   lead_first_name: string | null;
   lead_last_name: string | null;
   lead_email: string | null;
   lead_phone: string | null;
   lead_account_type: string | null;
+  crm_tag: string | null;
 };
 
 export type TechRow = {
