@@ -54,6 +54,7 @@ export type TechBookingRow = {
   lead_email: string | null;
   lead_phone: string | null;
   lead_account_type: string | null;
+
   crm_tag: string | null;
 };
 
@@ -85,5 +86,34 @@ export function reassignBooking(publicId: string, workerUserId: number) {
       method: "POST",
       body: JSON.stringify({ worker_user_id: workerUserId }),
     }
+  );
+}
+
+/** booking detail for Expand page */
+export type TechBookingDetail = {
+  public_id: string;
+  status: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+
+  address_line1: string | null;
+  address_line2: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+
+  booking_notes: string | null;
+  initial_notes: string | null;
+
+  customer_first_name: string | null;
+  customer_last_name: string | null;
+  customer_email: string | null;
+  customer_phone: string | null;
+};
+
+export function getAdminTechBookingDetail(publicId: string) {
+  return jsonFetch<{ ok: boolean; booking: TechBookingDetail }>(
+    `/admin/tech-bookings/${encodeURIComponent(publicId)}`,
+    { method: "GET" }
   );
 }
