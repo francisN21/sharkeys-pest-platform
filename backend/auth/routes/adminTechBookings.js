@@ -6,12 +6,38 @@ const { requireAuth } = require("../middleware/requireAuth");
 
 const router = express.Router();
 
-async function requireAdminOrSuperByDb(userId) {
+async function getRolesByDb(userId) {
   const rolesRes = await pool.query(`SELECT role FROM user_roles WHERE user_id = $1`, [userId]);
-  const roles = rolesRes.rows
+  return rolesRes.rows
     .map((r) => String(r.role || "").trim().toLowerCase())
     .filter(Boolean);
+}
+
+async function requireAdminOrSuperByDb(userId) {
+  const roles = await getRolesByDb(userId);
   return roles.includes("admin") || roles.includes("superuser");
+}
+
+async function canAccessBooking({ userId, roles, bookingId }) {
+  const isAdminish = roles.includes("admin") || roles.includes("superuser");
+  if (isAdminish) return true;
+
+  // worker can see only their assigned booking
+  if (roles.includes("worker")) {
+    const r = await pool.query(
+      `
+      SELECT 1
+      FROM booking_assignments ba
+      WHERE ba.booking_id = $1 AND ba.worker_user_id = $2
+      LIMIT 1
+      `,
+      [bookingId, userId]
+    );
+    return r.rowCount > 0;
+  }
+
+  // If later you want customer access, add here.
+  return false;
 }
 
 const reassignSchema = z.object({
@@ -19,6 +45,7 @@ const reassignSchema = z.object({
     .union([z.number().int().positive(), z.string().regex(/^\d+$/)])
     .transform((v) => Number(v)),
 });
+
 
 router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
   try {
@@ -43,80 +70,80 @@ router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
     // IMPORTANT: LEFT JOIN users + LEFT JOIN leads so lead bookings are included.
     const assignedRes = await pool.query(
       `
-  SELECT
-    b.public_id,
-    b.status,
-    b.starts_at,
-    b.ends_at,
-    b.address,
-    b.notes,
-    s.title AS service_title,
+      SELECT
+        b.public_id,
+        b.status,
+        b.starts_at,
+        b.ends_at,
+        b.address,
+        b.notes,
+        s.title AS service_title,
 
-    -- registered customer fields (nullable for lead bookings)
-    cu.first_name AS customer_first_name,
-    cu.last_name  AS customer_last_name,
-    cu.email      AS customer_email,
-    cu.phone      AS customer_phone,
-    cu.account_type AS customer_account_type,
+        -- registered customer fields (nullable for lead bookings)
+        cu.first_name AS customer_first_name,
+        cu.last_name  AS customer_last_name,
+        cu.email      AS customer_email,
+        cu.phone      AS customer_phone,
+        cu.account_type AS customer_account_type,
 
-    -- lead fields (nullable for registered bookings)
-    l.public_id   AS lead_public_id,
-    l.first_name  AS lead_first_name,
-    l.last_name   AS lead_last_name,
-    l.email       AS lead_email,
-    l.phone       AS lead_phone,
-    l.account_type AS lead_account_type,
+        -- lead fields (nullable for registered bookings)
+        l.public_id   AS lead_public_id,
+        l.first_name  AS lead_first_name,
+        l.last_name   AS lead_last_name,
+        l.email       AS lead_email,
+        l.phone       AS lead_phone,
+        l.account_type AS lead_account_type,
 
-    -- tags stored in customer_tags
-    ct_reg.tag  AS registered_crm_tag,
-    ct_lead.tag AS lead_crm_tag,
+        -- tags stored in customer_tags
+        ct_reg.tag  AS registered_crm_tag,
+        ct_lead.tag AS lead_crm_tag,
 
-    -- optional: if booking is a lead, attempt to match a registered user by email/phone
-    ct_guess.tag AS guessed_registered_crm_tag,
+        -- optional: if booking is a lead, attempt to match a registered user by email/phone
+        ct_guess.tag AS guessed_registered_crm_tag,
 
-    -- the final crm_tag we want to show in UI
-    COALESCE(ct_reg.tag, ct_lead.tag, ct_guess.tag) AS crm_tag,
+        -- the final crm_tag we want to show in UI
+        COALESCE(ct_reg.tag, ct_lead.tag, ct_guess.tag) AS crm_tag,
 
-    ba.worker_user_id
+        ba.worker_user_id
 
-  FROM bookings b
-  JOIN booking_assignments ba ON ba.booking_id = b.id
-  JOIN services s ON s.id = b.service_id
-  LEFT JOIN users cu ON cu.id = b.customer_user_id
-  LEFT JOIN leads l  ON l.id = b.lead_id
+      FROM bookings b
+      JOIN booking_assignments ba ON ba.booking_id = b.id
+      JOIN services s ON s.id = b.service_id
+      LEFT JOIN users cu ON cu.id = b.customer_user_id
+      LEFT JOIN leads l  ON l.id = b.lead_id
 
-  -- direct tags: registered booking
-  LEFT JOIN customer_tags ct_reg
-    ON ct_reg.kind = 'registered' AND ct_reg.entity_id = b.customer_user_id
+      -- direct tags: registered booking
+      LEFT JOIN customer_tags ct_reg
+        ON ct_reg.kind = 'registered' AND ct_reg.entity_id = b.customer_user_id
 
-  -- direct tags: lead booking
-  LEFT JOIN customer_tags ct_lead
-    ON ct_lead.kind = 'lead' AND ct_lead.entity_id = b.lead_id
+      -- direct tags: lead booking
+      LEFT JOIN customer_tags ct_lead
+        ON ct_lead.kind = 'lead' AND ct_lead.entity_id = b.lead_id
 
-  -- guess a registered user from the lead (email/phone)
-  LEFT JOIN LATERAL (
-    SELECT u.id AS user_id
-    FROM users u
-    WHERE
-      (
-        l.email IS NOT NULL
-        AND lower(trim(u.email::text)) = lower(trim(l.email::text))
-      )
-      OR
-      (
-        l.phone IS NOT NULL
-        AND regexp_replace(coalesce(u.phone, ''), '[^0-9]+', '', 'g')
-            = regexp_replace(coalesce(l.phone, ''), '[^0-9]+', '', 'g')
-      )
-    ORDER BY u.id DESC
-    LIMIT 1
-  ) u_guess ON TRUE
+      -- guess a registered user from the lead (email/phone)
+      LEFT JOIN LATERAL (
+        SELECT u.id AS user_id
+        FROM users u
+        WHERE
+          (
+            l.email IS NOT NULL
+            AND lower(trim(u.email::text)) = lower(trim(l.email::text))
+          )
+          OR
+          (
+            l.phone IS NOT NULL
+            AND regexp_replace(coalesce(u.phone, ''), '[^0-9]+', '', 'g')
+                = regexp_replace(coalesce(l.phone, ''), '[^0-9]+', '', 'g')
+          )
+        ORDER BY u.id DESC
+        LIMIT 1
+      ) u_guess ON TRUE
 
-  LEFT JOIN customer_tags ct_guess
-    ON ct_guess.kind = 'registered' AND ct_guess.entity_id = u_guess.user_id
+      LEFT JOIN customer_tags ct_guess
+        ON ct_guess.kind = 'registered' AND ct_guess.entity_id = u_guess.user_id
 
-  WHERE b.status = 'assigned'
-  ORDER BY ba.worker_user_id, b.starts_at ASC
+      WHERE b.status = 'assigned'
+      ORDER BY ba.worker_user_id, b.starts_at ASC
       `
     );
 
@@ -157,7 +184,6 @@ router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
         customer_phone: r.customer_phone ?? r.lead_phone ?? null,
         customer_account_type: r.customer_account_type ?? r.lead_account_type ?? null,
 
-        // unified CRM tag
         crm_tag: r.crm_tag ?? null,
 
         lead_public_id: r.lead_public_id ?? null,
@@ -168,7 +194,95 @@ router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
         lead_account_type: r.lead_account_type ?? null,
       });
     }
+
     return res.json({ ok: true, technicians: techs, generated_at: new Date().toISOString() });
+  } catch (e) {
+    next(e);
+  }
+});
+
+
+router.get("/admin/tech-bookings/:publicId", requireAuth, async (req, res, next) => {
+  try {
+    const userId = req.user?.id ?? req.auth?.userId ?? null;
+    if (!userId) return res.status(401).json({ ok: false, message: "Not authenticated" });
+
+    const roles = await getRolesByDb(userId);
+
+    const publicId = String(req.params.publicId || "").trim();
+    if (!publicId) return res.status(400).json({ ok: false, message: "Missing booking id" });
+
+    const idRes = await pool.query(`SELECT id FROM bookings WHERE public_id = $1 LIMIT 1`, [publicId]);
+    if (idRes.rowCount === 0) return res.status(404).json({ ok: false, message: "Booking not found" });
+
+    const bookingId = idRes.rows[0].id;
+
+    const allowed = await canAccessBooking({ userId, roles, bookingId });
+    if (!allowed) return res.status(403).json({ ok: false, message: "Forbidden" });
+
+    // Return a consistent shape for BookingInfoCards
+    const detailRes = await pool.query(
+      `
+      SELECT
+        b.public_id,
+        b.status,
+        b.starts_at,
+        b.ends_at,
+
+        -- address components (preferred)
+        b.address_line1,
+        b.address_line2,
+        b.city,
+        b.state,
+        b.zip,
+
+        -- fallback "address" if you only have a single string column
+        b.address AS address_full,
+
+        b.notes AS booking_notes,
+        b.initial_notes AS initial_notes,
+
+        u.first_name AS customer_first_name,
+        u.last_name  AS customer_last_name,
+        u.email      AS customer_email,
+        u.phone      AS customer_phone
+
+      FROM bookings b
+      LEFT JOIN users u ON u.id = b.customer_user_id
+      WHERE b.id = $1
+      LIMIT 1
+      `,
+      [bookingId]
+    );
+
+    const row = detailRes.rows[0];
+
+    // If address_line1 is null but address_full exists, map it into address_line1 for UI compatibility.
+    const address_line1 = row.address_line1 ?? row.address_full ?? null;
+
+    return res.json({
+      ok: true,
+      booking: {
+        public_id: row.public_id,
+        status: row.status,
+        starts_at: row.starts_at,
+        ends_at: row.ends_at,
+
+        address_line1,
+        address_line2: row.address_line2 ?? null,
+        city: row.city ?? null,
+        state: row.state ?? null,
+        zip: row.zip ?? null,
+
+        booking_notes: row.booking_notes ?? null,
+        initial_notes: row.initial_notes ?? null,
+
+        customer_first_name: row.customer_first_name ?? null,
+        customer_last_name: row.customer_last_name ?? null,
+        customer_email: row.customer_email ?? null,
+        customer_phone: row.customer_phone ?? null,
+      },
+    });
   } catch (e) {
     next(e);
   }
