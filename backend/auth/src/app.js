@@ -32,6 +32,8 @@ const adminMetricsSurveyRouter = require("../routes/adminMetricsSurvey");
 const bookingSurveyRouter = require("../routes/bookingSurvey");
 const adminMetricsBookingsExportRouter = require("../routes/adminMetricsBookingsExport");
 
+// Messaging system pipeline
+const messages = require("./routes/messages");
 
 const app = express();
 
@@ -103,7 +105,8 @@ app.use(bookingSurveyRouter);
 app.use(adminMetricsBookingsExportRouter);
 app.use(adminTechBookingsRouter);
 
-
+// Messaging system pipeline
+app.use(messages);
 
 // Service routes pipeline
 app.use("/services", servicesRouter);
