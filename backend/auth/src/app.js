@@ -33,7 +33,7 @@ const bookingSurveyRouter = require("../routes/bookingSurvey");
 const adminMetricsBookingsExportRouter = require("../routes/adminMetricsBookingsExport");
 
 // Messaging system pipeline
-const messages = require("./routes/messages");
+const messages = require("../routes/messages");
 
 const app = express();
 

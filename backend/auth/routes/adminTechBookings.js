@@ -207,82 +207,142 @@ router.get("/admin/tech-bookings/:publicId", requireAuth, async (req, res, next)
     const userId = req.user?.id ?? req.auth?.userId ?? null;
     if (!userId) return res.status(401).json({ ok: false, message: "Not authenticated" });
 
-    const roles = await getRolesByDb(userId);
+    const ok = await requireAdminOrSuperByDb(userId);
+    if (!ok) return res.status(403).json({ ok: false, message: "Forbidden" });
 
-    const publicId = String(req.params.publicId || "").trim();
-    if (!publicId) return res.status(400).json({ ok: false, message: "Missing booking id" });
+    const bookingPublicId = String(req.params.publicId || "").trim();
+    if (!bookingPublicId) return res.status(400).json({ ok: false, message: "Missing booking id" });
 
-    const idRes = await pool.query(`SELECT id FROM bookings WHERE public_id = $1 LIMIT 1`, [publicId]);
-    if (idRes.rowCount === 0) return res.status(404).json({ ok: false, message: "Booking not found" });
-
-    const bookingId = idRes.rows[0].id;
-
-    const allowed = await canAccessBooking({ userId, roles, bookingId });
-    if (!allowed) return res.status(403).json({ ok: false, message: "Forbidden" });
-
-    // Return a consistent shape for BookingInfoCards
-    const detailRes = await pool.query(
+    // IMPORTANT:
+    // Your bookings table has `address` (single field), not address_line1/2/city/state/zip.
+    // So we return address_line1 = b.address and keep the rest null.
+    const q = await pool.query(
       `
       SELECT
         b.public_id,
         b.status,
         b.starts_at,
         b.ends_at,
+        b.address,
+        b.notes,
+        s.title AS service_title,
 
-        -- address components (preferred)
-        b.address_line1,
-        b.address_line2,
-        b.city,
-        b.state,
-        b.zip,
+        -- assignment (current)
+        ba.worker_user_id,
 
-        -- fallback "address" if you only have a single string column
-        b.address AS address_full,
+        -- registered customer (nullable)
+        cu.first_name AS customer_first_name,
+        cu.last_name  AS customer_last_name,
+        cu.email      AS customer_email,
+        cu.phone      AS customer_phone,
+        cu.account_type AS customer_account_type,
 
-        b.notes AS booking_notes,
-        b.initial_notes AS initial_notes,
+        -- lead (nullable)
+        l.public_id   AS lead_public_id,
+        l.first_name  AS lead_first_name,
+        l.last_name   AS lead_last_name,
+        l.email       AS lead_email,
+        l.phone       AS lead_phone,
+        l.account_type AS lead_account_type,
 
-        u.first_name AS customer_first_name,
-        u.last_name  AS customer_last_name,
-        u.email      AS customer_email,
-        u.phone      AS customer_phone
+        -- CRM tag (same logic as list)
+        ct_reg.tag  AS registered_crm_tag,
+        ct_lead.tag AS lead_crm_tag,
+        ct_guess.tag AS guessed_registered_crm_tag,
+        COALESCE(ct_reg.tag, ct_lead.tag, ct_guess.tag) AS crm_tag
 
       FROM bookings b
-      LEFT JOIN users u ON u.id = b.customer_user_id
-      WHERE b.id = $1
+      LEFT JOIN booking_assignments ba ON ba.booking_id = b.id
+      JOIN services s ON s.id = b.service_id
+      LEFT JOIN users cu ON cu.id = b.customer_user_id
+      LEFT JOIN leads l  ON l.id = b.lead_id
+
+      LEFT JOIN customer_tags ct_reg
+        ON ct_reg.kind = 'registered' AND ct_reg.entity_id = b.customer_user_id
+
+      LEFT JOIN customer_tags ct_lead
+        ON ct_lead.kind = 'lead' AND ct_lead.entity_id = b.lead_id
+
+      LEFT JOIN LATERAL (
+        SELECT u.id AS user_id
+        FROM users u
+        WHERE
+          (
+            l.email IS NOT NULL
+            AND lower(trim(u.email::text)) = lower(trim(l.email::text))
+          )
+          OR
+          (
+            l.phone IS NOT NULL
+            AND regexp_replace(coalesce(u.phone, ''), '[^0-9]+', '', 'g')
+                = regexp_replace(coalesce(l.phone, ''), '[^0-9]+', '', 'g')
+          )
+        ORDER BY u.id DESC
+        LIMIT 1
+      ) u_guess ON TRUE
+
+      LEFT JOIN customer_tags ct_guess
+        ON ct_guess.kind = 'registered' AND ct_guess.entity_id = u_guess.user_id
+
+      WHERE b.public_id = $1
       LIMIT 1
       `,
-      [bookingId]
+      [bookingPublicId]
     );
 
-    const row = detailRes.rows[0];
+    if (q.rowCount === 0) {
+      return res.status(404).json({ ok: false, message: "Booking not found" });
+    }
 
-    // If address_line1 is null but address_full exists, map it into address_line1 for UI compatibility.
-    const address_line1 = row.address_line1 ?? row.address_full ?? null;
+    const r = q.rows[0];
 
-    return res.json({
-      ok: true,
-      booking: {
-        public_id: row.public_id,
-        status: row.status,
-        starts_at: row.starts_at,
-        ends_at: row.ends_at,
+    // unify "bookee" like your getBookee helper (works for lead or registered)
+    const leadName = `${(r.lead_first_name ?? "").trim()} ${(r.lead_last_name ?? "").trim()}`.trim();
+    const customerName = `${(r.customer_first_name ?? "").trim()} ${(r.customer_last_name ?? "").trim()}`.trim();
+    const displayName =
+      (customerName || leadName || r.customer_email || r.lead_email || "").trim() || null;
 
-        address_line1,
-        address_line2: row.address_line2 ?? null,
-        city: row.city ?? null,
-        state: row.state ?? null,
-        zip: row.zip ?? null,
+    const booking = {
+      public_id: r.public_id,
+      status: r.status ?? null,
+      starts_at: r.starts_at ?? null,
+      ends_at: r.ends_at ?? null,
+      service_title: r.service_title ?? null,
+      worker_user_id: r.worker_user_id ?? null,
 
-        booking_notes: row.booking_notes ?? null,
-        initial_notes: row.initial_notes ?? null,
+      // Address shape expected by BookingInfoCards (but your DB only has b.address)
+      address_line1: r.address ?? null,
+      address_line2: null,
+      city: null,
+      state: null,
+      zip: null,
 
-        customer_first_name: row.customer_first_name ?? null,
-        customer_last_name: row.customer_last_name ?? null,
-        customer_email: row.customer_email ?? null,
-        customer_phone: row.customer_phone ?? null,
-      },
-    });
+      // Notes (you currently only have one notes field)
+      // We'll support both fields in the response so UI can separate them
+      initial_notes: r.notes ?? null,
+      booking_notes: r.notes ?? null,
+
+      // unified customer display + contact info
+      customer_first_name: r.customer_first_name ?? r.lead_first_name ?? null,
+      customer_last_name: r.customer_last_name ?? r.lead_last_name ?? null,
+      customer_email: r.customer_email ?? r.lead_email ?? null,
+      customer_phone: r.customer_phone ?? r.lead_phone ?? null,
+      customer_account_type: r.customer_account_type ?? r.lead_account_type ?? null,
+      customer_name: displayName,
+
+      // lead fields (optional)
+      lead_public_id: r.lead_public_id ?? null,
+      lead_first_name: r.lead_first_name ?? null,
+      lead_last_name: r.lead_last_name ?? null,
+      lead_email: r.lead_email ?? null,
+      lead_phone: r.lead_phone ?? null,
+      lead_account_type: r.lead_account_type ?? null,
+
+      // crm tag
+      crm_tag: r.crm_tag ?? null,
+    };
+
+    return res.json({ ok: true, booking });
   } catch (e) {
     next(e);
   }

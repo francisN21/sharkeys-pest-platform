@@ -96,20 +96,41 @@ export type TechBookingDetail = {
   starts_at: string | null;
   ends_at: string | null;
 
+  // booking/service
+  service_title: string | null;
+  worker_user_id?: number | null;
+
+  // address (your DB currently coalesces into address_line1)
   address_line1: string | null;
   address_line2: string | null;
   city: string | null;
   state: string | null;
   zip: string | null;
 
+  // notes
   booking_notes: string | null;
   initial_notes: string | null;
 
+  // unified customer fields (works for registered + lead)
+  customer_name: string | null;
   customer_first_name: string | null;
   customer_last_name: string | null;
   customer_email: string | null;
   customer_phone: string | null;
+  customer_account_type?: string | null;
+
+  // crm
+  crm_tag?: string | null;
+
+  // lead fields (present when booking is a lead; optional for registered)
+  lead_public_id?: string | null;
+  lead_first_name?: string | null;
+  lead_last_name?: string | null;
+  lead_email?: string | null;
+  lead_phone?: string | null;
+  lead_account_type?: string | null;
 };
+
 
 export function getAdminTechBookingDetail(publicId: string) {
   return jsonFetch<{ ok: boolean; booking: TechBookingDetail }>(
