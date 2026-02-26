@@ -321,7 +321,7 @@ router.get("/search", requireAuth, requireRole("admin"), async (req, res, next) 
       crm_tag_updated_at: r.updated_at ?? null,
       crm_tag_updated_by_user_id: r.updated_by_user_id ?? null,
     }));
-    console.log(results)
+
     res.json({ ok: true, results });
   } catch (e) {
     next(e);
