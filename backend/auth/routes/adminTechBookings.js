@@ -230,6 +230,12 @@ router.get("/admin/tech-bookings/:publicId", requireAuth, async (req, res, next)
         -- assignment (current)
         ba.worker_user_id,
 
+        -- assigned tech info
+        wu.first_name AS worker_first_name,
+        wu.last_name  AS worker_last_name,
+        wu.email      AS worker_email,
+        wu.phone      AS worker_phone,
+
         -- registered customer (nullable)
         cu.first_name AS customer_first_name,
         cu.last_name  AS customer_last_name,
@@ -253,6 +259,7 @@ router.get("/admin/tech-bookings/:publicId", requireAuth, async (req, res, next)
 
       FROM bookings b
       LEFT JOIN booking_assignments ba ON ba.booking_id = b.id
+      LEFT JOIN users wu ON wu.id = ba.worker_user_id
       JOIN services s ON s.id = b.service_id
       LEFT JOIN users cu ON cu.id = b.customer_user_id
       LEFT JOIN leads l  ON l.id = b.lead_id
