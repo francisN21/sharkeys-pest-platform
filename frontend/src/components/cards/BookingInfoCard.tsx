@@ -1,4 +1,3 @@
-// frontend/src/components/cards/BookingInfoCard.tsx
 "use client";
 
 import React, { useMemo, useState } from "react";
@@ -112,8 +111,10 @@ function CopyField({ label, value }: { label: string; value: string | null | und
   }
 
   const disabled = !String(value ?? "").trim();
+
   return (
-    <div className="rounded-xl flex items-center border p-3 justify-between gap-3"
+    <div
+      className="rounded-xl flex items-center border p-3 justify-between gap-3"
       style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.20)" }}
     >
       <div className="min-w-0">
@@ -145,8 +146,65 @@ function SectionCard({ title, children }: { title: string; children: React.React
   );
 }
 
+function MoneyRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 text-sm">
+      <div style={{ color: "rgb(var(--muted))" }}>{label}</div>
+      <div className="font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function QuoteCard() {
+  // TEMP: hardcoded quote values
+  const subtotal = 149;
+  const tax = 0;
+  const discount = 0;
+  const total = subtotal + tax - discount;
+
+  return (
+    <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: "rgb(var(--border))" }}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-sm font-semibold">Quote</div>
+        <span
+          className="rounded-full border px-2 py-1 text-xs font-semibold"
+          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.20)" }}
+          title="Temporary - hardcoded"
+        >
+          Temp
+        </span>
+      </div>
+
+      <div className="space-y-2">
+        <MoneyRow label="Service" value="$149.00" />
+        <MoneyRow label="Tax" value="$0.00" />
+        <MoneyRow label="Discount" value="$0.00" />
+      </div>
+
+      <div className="pt-2 border-t" style={{ borderColor: "rgb(var(--border))" }}>
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-semibold">Total</div>
+          <div className="text-lg font-bold">${total.toFixed(2)}</div>
+        </div>
+        <div className="mt-1 text-xs" style={{ color: "rgb(var(--muted))" }}>
+          Later this will come from booking totals / invoice.
+        </div>
+      </div>
+
+      <div
+        className="rounded-xl border p-3 text-sm"
+        style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.20)" }}
+      >
+        <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+          Notes
+        </div>
+        <div className="mt-1">“Customer approved quote on-site.”</div>
+      </div>
+    </div>
+  );
+}
+
 export default function BookingInfoCard({ booking }: { booking: TechBookingDetail }) {
-  // simple derived values (no memo needed)
   const kind: PersonKind = booking.lead_public_id ? "lead" : "registered";
 
   const addressText = useMemo(() => {
@@ -193,20 +251,28 @@ export default function BookingInfoCard({ booking }: { booking: TechBookingDetai
 
   return (
     <div className="space-y-4">
-      {/* Top summary card */}
+      {/* Top summary area: left info + right quote */}
       <div
-        className="rounded-2xl border p-4 space-y-3"
+        className="rounded-2xl border p-4"
         style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 space-y-2">
-            <div className="text-base font-semibold truncate">{normalizeText(booking.service_title)}</div>
+        <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+          {/* LEFT */}
+          <div className="min-w-0 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-base font-semibold truncate">{normalizeText(booking.service_title)}</div>
+                <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
+                  {formatRange(booking.starts_at, booking.ends_at)}
+                </div>
+              </div>
+
+              <span className="rounded-full border px-2 py-1 text-xs" style={{ borderColor: "rgb(var(--border))" }}>
+                {booking.status ?? "—"}
+              </span>
+            </div>
 
             <CopyField label="Service Address" value={addressText || null} />
-
-            <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-              {formatRange(booking.starts_at, booking.ends_at)}
-            </div>
 
             <div
               className="rounded-xl border p-3 text-sm"
@@ -223,10 +289,9 @@ export default function BookingInfoCard({ booking }: { booking: TechBookingDetai
             </div>
           </div>
 
-          <div className="flex flex-col items-end gap-2">
-            <span className="rounded-full border px-2 py-1 text-xs" style={{ borderColor: "rgb(var(--border))" }}>
-              {booking.status ?? "—"}
-            </span>
+          {/* RIGHT (red area): Quote / Pricing */}
+          <div className="lg:pl-2">
+            <QuoteCard />
           </div>
         </div>
       </div>
@@ -261,13 +326,7 @@ export default function BookingInfoCard({ booking }: { booking: TechBookingDetai
             <div className="text-sm font-semibold truncate">{normalizeText(techName)}</div>
 
             <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-              {booking.worker_user_id ? (
-                <>
-                  Tech ID: <span className="font-mono">{String(booking.worker_user_id)}</span>
-                </>
-              ) : (
-                "—"
-              )}
+
             </div>
 
             <div className="grid gap-3 pt-1">
