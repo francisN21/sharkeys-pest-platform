@@ -1,3 +1,4 @@
+// frontend/src/components/cards/BookingInfoCard.tsx
 "use client";
 
 import React, { useMemo, useState } from "react";
@@ -9,6 +10,7 @@ function normalizeText(v: string | null | undefined) {
 }
 
 type PersonKind = "lead" | "registered";
+type QuoteStatus = "pending" | "approved" | "paid" | "balance_due";
 
 function KindPill({ kind }: { kind: PersonKind }) {
   const isLead = kind === "lead";
@@ -155,38 +157,107 @@ function MoneyRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function QuoteStatusPill({ status }: { status: QuoteStatus }) {
+  const meta: Record<
+    QuoteStatus,
+    { label: string; bg: string; border: string; title: string }
+  > = {
+    pending: {
+      label: "Pending",
+      bg: "rgba(245, 158, 11, 0.16)",
+      border: "rgba(245, 158, 11, 0.55)",
+      title: "Quote sent, awaiting approval",
+    },
+    approved: {
+      label: "Approved",
+      bg: "rgba(34, 197, 94, 0.14)",
+      border: "rgba(34, 197, 94, 0.55)",
+      title: "Customer approved the quote",
+    },
+    paid: {
+      label: "Paid",
+      bg: "rgba(59, 130, 246, 0.14)",
+      border: "rgba(59, 130, 246, 0.55)",
+      title: "Invoice is fully paid",
+    },
+    balance_due: {
+      label: "Balance Due",
+      bg: "rgba(239, 68, 68, 0.14)",
+      border: "rgba(239, 68, 68, 0.55)",
+      title: "Balance remaining on invoice",
+    },
+  };
+
+  const m = meta[status];
+
+  return (
+    <span
+      className="rounded-full border px-2 py-1 text-xs font-semibold"
+      style={{
+        borderColor: m.border,
+        background: m.bg,
+      }}
+      title={m.title}
+    >
+      {m.label}
+    </span>
+  );
+}
+
 function QuoteCard() {
   // TEMP: hardcoded quote values
+  const status: QuoteStatus = "approved"; // change to: "pending" | "approved" | "paid" | "balance_due"
+
   const subtotal = 149;
   const tax = 0;
   const discount = 0;
+
   const total = subtotal + tax - discount;
+
+  // TEMP: if you want balance due behavior, change paidAmount
+  const paidAmount = status === "paid" ? total : 0;
+  const balanceDue = Math.max(0, total - paidAmount);
+
+  const showPaid = status === "paid" || paidAmount > 0;
+  const showBalance = status === "balance_due" || balanceDue > 0;
 
   return (
     <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: "rgb(var(--border))" }}>
       <div className="flex items-center justify-between gap-3">
         <div className="text-sm font-semibold">Quote</div>
-        <span
-          className="rounded-full border px-2 py-1 text-xs font-semibold"
-          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.20)" }}
-          title="Temporary - hardcoded"
-        >
-          Temp
-        </span>
+        <div className="flex items-center gap-2">
+          <QuoteStatusPill status={status} />
+          <span
+            className="rounded-full border px-2 py-1 text-xs font-semibold"
+            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.20)" }}
+            title="Temporary - hardcoded"
+          >
+            Temp
+          </span>
+        </div>
       </div>
 
       <div className="space-y-2">
-        <MoneyRow label="Service" value="$149.00" />
-        <MoneyRow label="Tax" value="$0.00" />
-        <MoneyRow label="Discount" value="$0.00" />
+        <MoneyRow label="Service" value={`$${subtotal.toFixed(2)}`} />
+        <MoneyRow label="Tax" value={`$${tax.toFixed(2)}`} />
+        <MoneyRow label="Discount" value={`-$${discount.toFixed(2)}`} />
       </div>
 
-      <div className="pt-2 border-t" style={{ borderColor: "rgb(var(--border))" }}>
+      <div className="pt-2 border-t space-y-2" style={{ borderColor: "rgb(var(--border))" }}>
         <div className="flex items-center justify-between">
           <div className="text-sm font-semibold">Total</div>
           <div className="text-lg font-bold">${total.toFixed(2)}</div>
         </div>
-        <div className="mt-1 text-xs" style={{ color: "rgb(var(--muted))" }}>
+
+        {showPaid ? <MoneyRow label="Paid" value={`$${paidAmount.toFixed(2)}`} /> : null}
+        {showBalance ? (
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold">Balance Due</div>
+            <div className="text-sm font-bold">${balanceDue.toFixed(2)}</div>
+          </div>
+        ) : null}
+
+        <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
           Later this will come from booking totals / invoice.
         </div>
       </div>
@@ -224,13 +295,7 @@ export default function BookingInfoCard({ booking }: { booking: TechBookingDetai
     const name = String(booking.customer_name ?? "").trim() || leadName;
     const email = booking.customer_email ?? booking.lead_email ?? null;
     return name || email || "—";
-  }, [
-    booking.customer_name,
-    booking.customer_email,
-    booking.lead_first_name,
-    booking.lead_last_name,
-    booking.lead_email,
-  ]);
+  }, [booking.customer_name, booking.customer_email, booking.lead_first_name, booking.lead_last_name, booking.lead_email]);
 
   const customerEmail = booking.customer_email ?? booking.lead_email ?? null;
   const customerPhone = booking.customer_phone ?? booking.lead_phone ?? null;
@@ -242,9 +307,8 @@ export default function BookingInfoCard({ booking }: { booking: TechBookingDetai
 
     if (full) return full;
     if (booking.worker_email) return booking.worker_email;
-    if (booking.worker_user_id) return `Tech #${booking.worker_user_id}`;
     return "—";
-  }, [booking.worker_first_name, booking.worker_last_name, booking.worker_email, booking.worker_user_id]);
+  }, [booking.worker_first_name, booking.worker_last_name, booking.worker_email]);
 
   const techEmail = booking.worker_email ?? null;
   const techPhone = booking.worker_phone ?? null;
@@ -289,7 +353,7 @@ export default function BookingInfoCard({ booking }: { booking: TechBookingDetai
             </div>
           </div>
 
-          {/* RIGHT (red area): Quote / Pricing */}
+          {/* RIGHT: Quote / Pricing */}
           <div className="lg:pl-2">
             <QuoteCard />
           </div>
@@ -324,10 +388,6 @@ export default function BookingInfoCard({ booking }: { booking: TechBookingDetai
         <SectionCard title="Assigned Technician">
           <div className="space-y-2">
             <div className="text-sm font-semibold truncate">{normalizeText(techName)}</div>
-
-            <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-
-            </div>
 
             <div className="grid gap-3 pt-1">
               <CopyField label="Phone" value={techPhone} />
