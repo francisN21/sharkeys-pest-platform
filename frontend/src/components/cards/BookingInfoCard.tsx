@@ -1,18 +1,15 @@
 // frontend/src/components/cards/BookingInfoCard.tsx
 "use client";
 
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import type { TechBookingDetail } from "../../lib/api/adminTechBookings";
 
 function normalizeText(v: string | null | undefined) {
   const s = String(v ?? "").trim();
   return s.length ? s : "—";
 }
-type PersonKind = "lead" | "registered";
 
-function getKindFromDetail(b: TechBookingDetail): PersonKind {
-  return b.lead_public_id ? "lead" : "registered";
-}
+type PersonKind = "lead" | "registered";
 
 function KindPill({ kind }: { kind: PersonKind }) {
   const isLead = kind === "lead";
@@ -62,6 +59,7 @@ function formatRange(startsAt: string | null | undefined, endsAt: string | null 
   const s = new Date(startsAt);
   const e = new Date(endsAt);
   if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return `${startsAt} → ${endsAt}`;
+
   const date = s.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
   const start = s.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   const end = e.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
@@ -104,14 +102,20 @@ function CopyField({ label, value }: { label: string; value: string | null | und
         ta.select();
         document.execCommand("copy");
         document.body.removeChild(ta);
+
         setCopied(true);
         window.setTimeout(() => setCopied(false), 1100);
-      } catch {}
+      } catch {
+        // ignore
+      }
     }
   }
 
+  const disabled = !String(value ?? "").trim();
   return (
-    <div className="flex items-center justify-between gap-3">
+    <div className="rounded-xl flex items-center border p-3 justify-between gap-3"
+      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.20)" }}
+    >
       <div className="min-w-0">
         <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
           {label}
@@ -122,7 +126,7 @@ function CopyField({ label, value }: { label: string; value: string | null | und
       <button
         type="button"
         onClick={onCopy}
-        disabled={!String(value ?? "").trim()}
+        disabled={disabled}
         className="hover:opacity-90 disabled:opacity-60"
         title={copied ? "Copied" : "Copy"}
       >
@@ -132,7 +136,18 @@ function CopyField({ label, value }: { label: string; value: string | null | und
   );
 }
 
+function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: "rgb(var(--border))" }}>
+      <div className="text-sm font-semibold">{title}</div>
+      {children}
+    </div>
+  );
+}
+
 export default function BookingInfoCard({ booking }: { booking: TechBookingDetail }) {
+  // simple derived values (no memo needed)
+  const kind: PersonKind = booking.lead_public_id ? "lead" : "registered";
 
   const addressText = useMemo(() => {
     const parts = [
@@ -159,67 +174,108 @@ export default function BookingInfoCard({ booking }: { booking: TechBookingDetai
     booking.lead_email,
   ]);
 
-  const email = booking.customer_email ?? booking.lead_email ?? null;
-  const phone = booking.customer_phone ?? booking.lead_phone ?? null;
-  const kind = useMemo<PersonKind>(() => getKindFromDetail(booking), [booking.lead_public_id]);
+  const customerEmail = booking.customer_email ?? booking.lead_email ?? null;
+  const customerPhone = booking.customer_phone ?? booking.lead_phone ?? null;
+
+  const techName = useMemo(() => {
+    const fn = String(booking.worker_first_name ?? "").trim();
+    const ln = String(booking.worker_last_name ?? "").trim();
+    const full = [fn, ln].filter(Boolean).join(" ").trim();
+
+    if (full) return full;
+    if (booking.worker_email) return booking.worker_email;
+    if (booking.worker_user_id) return `Tech #${booking.worker_user_id}`;
+    return "—";
+  }, [booking.worker_first_name, booking.worker_last_name, booking.worker_email, booking.worker_user_id]);
+
+  const techEmail = booking.worker_email ?? null;
+  const techPhone = booking.worker_phone ?? null;
+
   return (
-    <div className="space-y-3">
-      {/* Header */}
-      <div className="rounded-2xl border p-4 space-y-2" style={{ borderColor: "rgb(var(--border))" }}>
+    <div className="space-y-4">
+      {/* Top summary card */}
+      <div
+        className="rounded-2xl border p-4 space-y-3"
+        style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
+      >
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+          <div className="min-w-0 space-y-2">
             <div className="text-base font-semibold truncate">{normalizeText(booking.service_title)}</div>
-            <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
+
+            <CopyField label="Service Address" value={addressText || null} />
+
+            <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
               {formatRange(booking.starts_at, booking.ends_at)}
             </div>
-            <div className="mt-1 text-xs" style={{ color: "rgb(var(--muted))" }}>
+
+            <div
+              className="rounded-xl border p-3 text-sm"
+              style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.20)" }}
+            >
+              <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+                Notes
+              </div>
+              <div className="mt-1 whitespace-pre-wrap break-words">{normalizeText(booking.initial_notes)}</div>
+            </div>
+
+            <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
               Booking ID: <span className="font-mono">{booking.public_id}</span>
             </div>
           </div>
 
-          <span className="rounded-full border px-2 py-1 text-xs" style={{ borderColor: "rgb(var(--border))" }}>
-            {booking.status ?? "—"}
-          </span>
+          <div className="flex flex-col items-end gap-2">
+            <span className="rounded-full border px-2 py-1 text-xs" style={{ borderColor: "rgb(var(--border))" }}>
+              {booking.status ?? "—"}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Customer */}
-      <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: "rgb(var(--border))" }}>
-        <div className="text-sm font-semibold">Customer</div>
+      {/* 2-column info cards */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <SectionCard title="Customer">
+          <div className="space-y-2">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold truncate">{displayName}</div>
+                <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                  Account type: {normalizeText(booking.customer_account_type ?? booking.lead_account_type ?? null)}
+                </div>
+              </div>
 
-        <div className="text-sm">
-          <div className="font-semibold truncate">{displayName}</div>
-                                        <div className="flex items-center gap-2">
-                                <KindPill kind={kind} />
-                                <TagPill tag={booking.crm_tag} />
-                              </div>
-          <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-            Account type: {normalizeText(booking.customer_account_type ?? booking.lead_account_type ?? null)}
-            {booking.crm_tag ? ` • Tag: ${booking.crm_tag}` : ""}
+              <div className="flex items-center gap-2">
+                <KindPill kind={kind} />
+                <TagPill tag={booking.crm_tag} />
+              </div>
+            </div>
+
+            <div className="grid gap-3 pt-1">
+              <CopyField label="Phone" value={customerPhone} />
+              <CopyField label="Email" value={customerEmail} />
+            </div>
           </div>
-        </div>
+        </SectionCard>
 
-        <div className="grid gap-3">
-          <CopyField label="Phone" value={phone} />
-          <CopyField label="Email" value={email} />
-        </div>
-      </div>
+        <SectionCard title="Assigned Technician">
+          <div className="space-y-2">
+            <div className="text-sm font-semibold truncate">{normalizeText(techName)}</div>
 
-      {/* Booking Info */}
-      <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: "rgb(var(--border))" }}>
-        <div className="text-sm font-semibold">Booking Info</div>
+            <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+              {booking.worker_user_id ? (
+                <>
+                  Tech ID: <span className="font-mono">{String(booking.worker_user_id)}</span>
+                </>
+              ) : (
+                "—"
+              )}
+            </div>
 
-        <CopyField label="Address" value={addressText || null} />
-
-        <div
-          className="rounded-xl border p-3 text-sm"
-          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.20)" }}
-        >
-          <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-            Notes
+            <div className="grid gap-3 pt-1">
+              <CopyField label="Phone" value={techPhone} />
+              <CopyField label="Email" value={techEmail} />
+            </div>
           </div>
-          <div className="mt-1 whitespace-pre-wrap break-words">{normalizeText(booking.initial_notes)}</div>
-        </div>
+        </SectionCard>
       </div>
     </div>
   );
