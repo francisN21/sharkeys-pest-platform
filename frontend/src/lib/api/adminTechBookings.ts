@@ -31,6 +31,9 @@ async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
+/* ---------------------------
+   LIST types
+---------------------------- */
 export type TechBookingRow = {
   public_id: string;
   status: "assigned";
@@ -41,13 +44,11 @@ export type TechBookingRow = {
 
   service_title: string;
 
-  // unified / legacy fields used by UI
   customer_name: string | null;
   customer_email: string | null;
   customer_phone: string | null;
   customer_account_type: string | null;
 
-  // lead fields (nullable for registered customers)
   lead_public_id: string | null;
   lead_first_name: string | null;
   lead_last_name: string | null;
@@ -59,7 +60,6 @@ export type TechBookingRow = {
 };
 
 export type TechRow = {
-  // Your API payload currently returns user_id as a string ("23"), so accept both.
   user_id: number | string;
   public_id: string | null;
   email: string | null;
@@ -80,16 +80,15 @@ export function getAdminTechBookings() {
 }
 
 export function reassignBooking(publicId: string, workerUserId: number) {
-  return jsonFetch<{ ok: boolean }>(
-    `/admin/tech-bookings/${encodeURIComponent(publicId)}/reassign`,
-    {
-      method: "POST",
-      body: JSON.stringify({ worker_user_id: workerUserId }),
-    }
-  );
+  return jsonFetch<{ ok: boolean }>(`/admin/tech-bookings/${encodeURIComponent(publicId)}/reassign`, {
+    method: "POST",
+    body: JSON.stringify({ worker_user_id: workerUserId }),
+  });
 }
 
-/** booking detail for Expand page */
+/* ---------------------------
+   DETAIL types (Expand view)
+---------------------------- */
 export type TechBookingDetail = {
   public_id: string;
   status: string | null;
@@ -98,7 +97,13 @@ export type TechBookingDetail = {
 
   // booking/service
   service_title: string | null;
-  worker_user_id?: number | null;
+
+  // assignment
+  worker_user_id: number | null;
+  worker_first_name: string | null;
+  worker_last_name: string | null;
+  worker_email: string | null;
+  worker_phone: string | null;
 
   // address (your DB currently coalesces into address_line1)
   address_line1: string | null;
@@ -117,20 +122,19 @@ export type TechBookingDetail = {
   customer_last_name: string | null;
   customer_email: string | null;
   customer_phone: string | null;
-  customer_account_type?: string | null;
+  customer_account_type: string | null;
 
   // crm
-  crm_tag?: string | null;
+  crm_tag: string | null;
 
-  // lead fields (present when booking is a lead; optional for registered)
-  lead_public_id?: string | null;
-  lead_first_name?: string | null;
-  lead_last_name?: string | null;
-  lead_email?: string | null;
-  lead_phone?: string | null;
-  lead_account_type?: string | null;
+  // lead fields (present when booking is a lead; null otherwise)
+  lead_public_id: string | null;
+  lead_first_name: string | null;
+  lead_last_name: string | null;
+  lead_email: string | null;
+  lead_phone: string | null;
+  lead_account_type: string | null;
 };
-
 
 export function getAdminTechBookingDetail(publicId: string) {
   return jsonFetch<{ ok: boolean; booking: TechBookingDetail }>(

@@ -18,35 +18,15 @@ async function requireAdminOrSuperByDb(userId) {
   return roles.includes("admin") || roles.includes("superuser");
 }
 
-async function canAccessBooking({ userId, roles, bookingId }) {
-  const isAdminish = roles.includes("admin") || roles.includes("superuser");
-  if (isAdminish) return true;
-
-  // worker can see only their assigned booking
-  if (roles.includes("worker")) {
-    const r = await pool.query(
-      `
-      SELECT 1
-      FROM booking_assignments ba
-      WHERE ba.booking_id = $1 AND ba.worker_user_id = $2
-      LIMIT 1
-      `,
-      [bookingId, userId]
-    );
-    return r.rowCount > 0;
-  }
-
-  // If later you want customer access, add here.
-  return false;
-}
-
 const reassignSchema = z.object({
   worker_user_id: z
     .union([z.number().int().positive(), z.string().regex(/^\d+$/)])
     .transform((v) => Number(v)),
 });
 
-
+/* -----------------------------------------
+   LIST: /admin/tech-bookings
+------------------------------------------ */
 router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
   try {
     const userId = req.user?.id ?? req.auth?.userId ?? null;
@@ -201,7 +181,9 @@ router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
   }
 });
 
-
+/* -----------------------------------------
+   DETAIL: /admin/tech-bookings/:publicId
+------------------------------------------ */
 router.get("/admin/tech-bookings/:publicId", requireAuth, async (req, res, next) => {
   try {
     const userId = req.user?.id ?? req.auth?.userId ?? null;
@@ -213,9 +195,6 @@ router.get("/admin/tech-bookings/:publicId", requireAuth, async (req, res, next)
     const bookingPublicId = String(req.params.publicId || "").trim();
     if (!bookingPublicId) return res.status(400).json({ ok: false, message: "Missing booking id" });
 
-    // IMPORTANT:
-    // Your bookings table has `address` (single field), not address_line1/2/city/state/zip.
-    // So we return address_line1 = b.address and keep the rest null.
     const q = await pool.query(
       `
       SELECT
@@ -303,7 +282,6 @@ router.get("/admin/tech-bookings/:publicId", requireAuth, async (req, res, next)
 
     const r = q.rows[0];
 
-    // unify "bookee" like your getBookee helper (works for lead or registered)
     const leadName = `${(r.lead_first_name ?? "").trim()} ${(r.lead_last_name ?? "").trim()}`.trim();
     const customerName = `${(r.customer_first_name ?? "").trim()} ${(r.customer_last_name ?? "").trim()}`.trim();
     const displayName =
@@ -314,30 +292,37 @@ router.get("/admin/tech-bookings/:publicId", requireAuth, async (req, res, next)
       status: r.status ?? null,
       starts_at: r.starts_at ?? null,
       ends_at: r.ends_at ?? null,
+
+      // booking/service
       service_title: r.service_title ?? null,
       worker_user_id: r.worker_user_id ?? null,
 
-      // Address shape expected by BookingInfoCards (but your DB only has b.address)
+      // assigned tech info
+      worker_first_name: r.worker_first_name ?? null,
+      worker_last_name: r.worker_last_name ?? null,
+      worker_email: r.worker_email ?? null,
+      worker_phone: r.worker_phone ?? null,
+
+      // Address shape expected by UI (DB only has b.address)
       address_line1: r.address ?? null,
       address_line2: null,
       city: null,
       state: null,
       zip: null,
 
-      // Notes (you currently only have one notes field)
-      // We'll support both fields in the response so UI can separate them
+      // Notes (currently single field)
       initial_notes: r.notes ?? null,
       booking_notes: r.notes ?? null,
 
-      // unified customer display + contact info
+      // unified customer fields
+      customer_name: displayName,
       customer_first_name: r.customer_first_name ?? r.lead_first_name ?? null,
       customer_last_name: r.customer_last_name ?? r.lead_last_name ?? null,
       customer_email: r.customer_email ?? r.lead_email ?? null,
       customer_phone: r.customer_phone ?? r.lead_phone ?? null,
       customer_account_type: r.customer_account_type ?? r.lead_account_type ?? null,
-      customer_name: displayName,
 
-      // lead fields (optional)
+      // lead fields
       lead_public_id: r.lead_public_id ?? null,
       lead_first_name: r.lead_first_name ?? null,
       lead_last_name: r.lead_last_name ?? null,
@@ -345,7 +330,7 @@ router.get("/admin/tech-bookings/:publicId", requireAuth, async (req, res, next)
       lead_phone: r.lead_phone ?? null,
       lead_account_type: r.lead_account_type ?? null,
 
-      // crm tag
+      // crm
       crm_tag: r.crm_tag ?? null,
     };
 
@@ -355,6 +340,9 @@ router.get("/admin/tech-bookings/:publicId", requireAuth, async (req, res, next)
   }
 });
 
+/* -----------------------------------------
+   REASSIGN: /admin/tech-bookings/:publicId/reassign
+------------------------------------------ */
 router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, res, next) => {
   const client = await pool.connect();
   try {
@@ -369,7 +357,6 @@ router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, 
 
     await client.query("BEGIN");
 
-    // lock booking
     const bRes = await client.query(
       `SELECT id, status FROM bookings WHERE public_id = $1 FOR UPDATE`,
       [bookingPublicId]
@@ -387,7 +374,6 @@ router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, 
         .json({ ok: false, message: "Cannot reassign a completed/cancelled booking" });
     }
 
-    // confirm target tech is a worker
     const techRes = await client.query(
       `SELECT 1 FROM user_roles WHERE user_id = $1 AND role = 'worker' LIMIT 1`,
       [worker_user_id]
@@ -397,7 +383,6 @@ router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, 
       return res.status(400).json({ ok: false, message: "Target user is not a technician" });
     }
 
-    // UPSERT current assignment (booking_assignments has UNIQUE(booking_id))
     await client.query(
       `
       INSERT INTO booking_assignments (booking_id, worker_user_id, assigned_by_user_id, assigned_at)
@@ -411,7 +396,6 @@ router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, 
       [booking.id, worker_user_id, userId]
     );
 
-    // keep booking status consistent
     if (booking.status !== "assigned") {
       await client.query(`UPDATE bookings SET status = 'assigned', updated_at = now() WHERE id = $1`, [
         booking.id,
