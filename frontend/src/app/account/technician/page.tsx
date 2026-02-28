@@ -1,13 +1,38 @@
+// frontend/src/app/account/technician/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type { WorkerBookingRow } from "../../../lib/api/workerBookings";
 import {
   workerCompleteBooking,
   workerListAssignedBookings,
   workerListJobHistory,
+  // OPTIONAL: if you have this endpoint, use it for detail fetch
+  // workerGetBookingDetail,
 } from "../../../lib/api/workerBookings";
 
+import { me as apiMe } from "../../../lib/api/auth";
+
+import BookingInfoCard from "../../../components/cards/BookingInfoCard";
+import Messenger, { type MessengerMessage } from "../../../components/messenger/Messenger";
+
+import {
+  listBookingMessages,
+  sendBookingMessage,
+  editBookingMessage,
+  ApiError as MsgApiError,
+} from "../../../lib/api/messages";
+
+type MeShape = { id: number; first_name?: string | null; last_name?: string | null };
+
+function safeToNumber(v: unknown): number | null {
+  const n = typeof v === "string" ? Number(v) : typeof v === "number" ? v : NaN;
+  if (!Number.isFinite(n) || n <= 0) return null;
+  if (!Number.isSafeInteger(n)) return null;
+  return n;
+}
+
+/** ---------- Format helpers ---------- */
 
 function formatRange(startsAt: string, endsAt: string) {
   const s = new Date(startsAt);
@@ -110,6 +135,8 @@ function pickDisplayName(b: WorkerBookingRow) {
   };
 }
 
+/** ---------- Complete modal ---------- */
+
 function ConfirmWorkerActionModal({
   open,
   title,
@@ -146,7 +173,6 @@ function ConfirmWorkerActionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* overlay */}
       <button
         type="button"
         aria-label="Close"
@@ -156,7 +182,6 @@ function ConfirmWorkerActionModal({
         disabled={busy}
       />
 
-      {/* modal */}
       <div
         className="relative w-full max-w-md rounded-2xl border p-4 shadow-lg"
         style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
@@ -232,7 +257,6 @@ export default function WorkerJobsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const [sortBy, setSortBy] = useState<"created" | "scheduled">("scheduled");
-  
 
   // ✅ pagination (history only)
   const HISTORY_PAGE_SIZE = 30;
@@ -240,7 +264,24 @@ export default function WorkerJobsPage() {
   const [historyTotalPages, setHistoryTotalPages] = useState(1);
   const [historyTotal, setHistoryTotal] = useState(0);
 
-  // Modal state
+  // ✅ view state like admin
+  const [view, setView] = useState<"list" | "detail">("list");
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<WorkerBookingRow | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailErr, setDetailErr] = useState<string | null>(null);
+
+  // ✅ me
+  const [me, setMe] = useState<MeShape | null>(null);
+
+  // ✅ messages (detail view)
+  const [messages, setMessages] = useState<MessengerMessage[]>([]);
+  const [msgLoading, setMsgLoading] = useState(false);
+  const [msgErr, setMsgErr] = useState<string | null>(null);
+  const [msgSending, setMsgSending] = useState(false);
+  const [msgLocked, setMsgLocked] = useState(false);
+
+  // Complete modal
   const [modalOpen, setModalOpen] = useState(false);
   const [modalBookingId, setModalBookingId] = useState<string | null>(null);
   const [modalBookingTitle, setModalBookingTitle] = useState<string | null>(null);
@@ -260,6 +301,243 @@ export default function WorkerJobsPage() {
     setHistoryTotal(h.total || 0);
   }
 
+  async function loadMessages(publicId: string) {
+    setMsgErr(null);
+    setMsgLocked(false);
+    setMsgLoading(true);
+
+    try {
+      const res = await listBookingMessages(publicId);
+
+      const mapped: MessengerMessage[] = (res.messages ?? [])
+        .map((m: any) => {
+          const senderId = typeof m.sender_user_id === "string" ? Number(m.sender_user_id) : Number(m.sender_user_id);
+          if (!Number.isFinite(senderId) || senderId <= 0) return null;
+          return {
+            id: Number(m.id),
+            sender_user_id: senderId,
+            sender_role: m.sender_role,
+            body: m.body,
+            created_at: m.created_at,
+            updated_at: m.updated_at ?? null,
+            delivered_at: m.delivered_at ?? null,
+            first_name: m.first_name ?? null,
+            last_name: m.last_name ?? null,
+          } as MessengerMessage;
+        })
+        .filter(Boolean) as MessengerMessage[];
+
+      setMessages(mapped);
+    } catch (e: any) {
+      // Policy A / reassignment lockout
+      if (e instanceof MsgApiError && e.status === 403) {
+        setMsgLocked(true);
+        setMsgErr("You’re no longer part of this booking chat (it may have been reassigned).");
+        setMessages([]);
+      } else {
+        setMsgErr(e?.message || "Failed to load messages");
+        setMessages([]);
+      }
+    } finally {
+      setMsgLoading(false);
+    }
+  }
+
+  async function openDetail(publicId: string) {
+    setDetailErr(null);
+    setView("detail");
+    setSelectedBookingId(publicId);
+
+    setDetail(null);
+    setDetailLoading(true);
+
+    // load messages in parallel
+    loadMessages(publicId);
+
+    try {
+      // ✅ We reuse existing list data to populate detail (fast, no new endpoint required)
+      const all = [...assignedRows, ...historyRows];
+      const found = all.find((x) => x.public_id === publicId) ?? null;
+      setDetail(found);
+
+      // OPTIONAL: if you have a worker detail endpoint, call it here to enrich `detail`
+      // const res = await workerGetBookingDetail(publicId);
+      // setDetail(res.booking);
+
+      if (!found) {
+        setDetailErr("Booking not found in current list (try Refresh).");
+      }
+    } catch (e: unknown) {
+      setDetailErr(e instanceof Error ? e.message : "Failed to load booking detail");
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
+  function backToList() {
+    setView("list");
+    setSelectedBookingId(null);
+    setDetail(null);
+    setDetailErr(null);
+    setDetailLoading(false);
+
+    // reset messages
+    setMessages([]);
+    setMsgErr(null);
+    setMsgLocked(false);
+    setMsgLoading(false);
+    setMsgSending(false);
+  }
+
+  async function onSendMessage(body: string) {
+    const publicId = selectedBookingId;
+    if (!publicId) return;
+
+    const senderId = me?.id;
+    if (!senderId) {
+      setMsgErr("You must be signed in to send messages.");
+      return;
+    }
+
+    const trimmed = body.trim();
+    if (!trimmed) return;
+
+    setMsgErr(null);
+    setMsgSending(true);
+
+    const tempId = -Math.floor(Math.random() * 1_000_000);
+
+    const optimistic: MessengerMessage = {
+      id: tempId,
+      sender_user_id: senderId,
+      sender_role: "worker",
+      body: trimmed,
+      created_at: new Date().toISOString(),
+      updated_at: null,
+      delivered_at: new Date().toISOString(),
+      first_name: me?.first_name ?? null,
+      last_name: me?.last_name ?? null,
+    };
+
+    setMessages((prev) => [...prev, optimistic]);
+
+    try {
+      const res = await sendBookingMessage(publicId, trimmed);
+      const saved: any = res.message;
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === tempId
+            ? {
+                id: Number(saved.id),
+                sender_user_id: Number(saved.sender_user_id),
+                sender_role: saved.sender_role,
+                body: saved.body,
+                created_at: saved.created_at,
+                updated_at: saved.updated_at ?? null,
+                delivered_at: saved.delivered_at ?? null,
+                first_name: saved.first_name ?? me?.first_name ?? null,
+                last_name: saved.last_name ?? me?.last_name ?? null,
+              }
+            : m
+        )
+      );
+    } catch (e: any) {
+      if (e instanceof MsgApiError && e.status === 403) {
+        setMsgLocked(true);
+        setMsgErr("You’re no longer part of this booking chat (it may have been reassigned).");
+      } else {
+        setMsgErr(e?.message || "Failed to send message");
+      }
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+    } finally {
+      setMsgSending(false);
+    }
+  }
+
+  async function onEditMessage(messageId: number, body: string) {
+    const publicId = selectedBookingId;
+    if (!publicId) return;
+
+    const trimmed = body.trim();
+    if (!trimmed) return;
+
+    setMsgErr(null);
+
+    const before = messages;
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, body: trimmed, updated_at: new Date().toISOString() } : m))
+    );
+
+    try {
+      const res = await editBookingMessage(publicId, messageId, trimmed);
+      const saved: any = res.message;
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                body: saved.body,
+                updated_at: saved.updated_at ?? m.updated_at,
+              }
+            : m
+        )
+      );
+    } catch (e: any) {
+      if (e instanceof MsgApiError && e.status === 403) {
+        setMsgLocked(true);
+        setMsgErr("You’re no longer part of this booking chat (it may have been reassigned).");
+      } else {
+        setMsgErr(e?.message || "Failed to edit message");
+      }
+      setMessages(before);
+    }
+  }
+
+  function findBookingTitle(publicId: string) {
+    const all = [...assignedRows, ...historyRows];
+    const found = all.find((x) => x.public_id === publicId);
+    return found?.service_title ?? null;
+  }
+
+  function openCompleteModal(publicId: string) {
+    setModalBookingId(publicId);
+    setModalBookingTitle(findBookingTitle(publicId));
+    setModalOpen(true);
+  }
+
+  function closeModal() {
+    if (modalBookingId && busyId === modalBookingId) return;
+    setModalOpen(false);
+    setModalBookingId(null);
+    setModalBookingTitle(null);
+  }
+
+  async function confirmComplete() {
+    if (!modalBookingId) return;
+
+    try {
+      setBusyId(modalBookingId);
+      setErr(null);
+
+      await workerCompleteBooking(modalBookingId);
+
+      await refresh({ historyPage: 1 });
+      closeModal();
+
+      // if viewing this booking in detail, refresh detail list snapshot
+      if (view === "detail" && selectedBookingId === modalBookingId) {
+        await openDetail(modalBookingId);
+      }
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Failed to complete job");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // load jobs + me
   useEffect(() => {
     let alive = true;
 
@@ -267,10 +545,27 @@ export default function WorkerJobsPage() {
       try {
         setLoading(true);
         setErr(null);
+
         await refresh({ historyPage: 1 });
+
+        const res = await apiMe();
         if (!alive) return;
+
+        const user = res.user ?? null;
+        const idNum = safeToNumber((user as any)?.id);
+
+        if (user && idNum) {
+          setMe({
+            id: idNum,
+            first_name: (user as any).first_name ?? null,
+            last_name: (user as any).last_name ?? null,
+          });
+        } else {
+          setMe(null);
+        }
       } catch (e: unknown) {
         if (!alive) return;
+        setMe(null);
         setErr(e instanceof Error ? e.message : "Failed to load jobs");
       } finally {
         if (alive) setLoading(false);
@@ -314,45 +609,6 @@ export default function WorkerJobsPage() {
     return copy;
   }, [historyRows]);
 
-  function findBookingTitle(publicId: string) {
-    const all = [...assignedRows, ...historyRows];
-    const found = all.find((x) => x.public_id === publicId);
-    return found?.service_title ?? null;
-  }
-
-  function openCompleteModal(publicId: string) {
-    setModalBookingId(publicId);
-    setModalBookingTitle(findBookingTitle(publicId));
-    setModalOpen(true);
-  }
-
-  function closeModal() {
-    if (modalBookingId && busyId === modalBookingId) return;
-    setModalOpen(false);
-    setModalBookingId(null);
-    setModalBookingTitle(null);
-  }
-
-  async function confirmComplete() {
-    if (!modalBookingId) return;
-
-    try {
-      setBusyId(modalBookingId);
-      setErr(null);
-
-      await workerCompleteBooking(modalBookingId);
-
-      // after completing, refresh assigned + history page 1
-      await refresh({ historyPage: 1 });
-
-      closeModal();
-    } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Failed to complete job");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
   const rows = tab === "assigned" ? sortedAssigned : sortedHistory;
 
   const canPrev = historyPage > 1;
@@ -360,6 +616,119 @@ export default function WorkerJobsPage() {
 
   const modalBusy = !!modalBookingId && busyId === modalBookingId;
 
+  // ✅ DETAIL VIEW (admin style)
+  if (view === "detail") {
+    const b = detail;
+
+    return (
+      <main className="space-y-6">
+        <section className="space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <button
+                type="button"
+                onClick={backToList}
+                className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
+                style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+              >
+                ← Back to Jobs
+              </button>
+
+              <h2 className="text-xl font-bold">{b ? `Booking ${b.public_id}` : "Booking"}</h2>
+              <p className="text-sm" style={{ color: "rgb(var(--muted))" }}>
+                Booking details and message thread.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => selectedBookingId && openDetail(selectedBookingId)}
+                className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+                style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                disabled={detailLoading || !selectedBookingId}
+                title="Refresh booking + messages"
+              >
+                Refresh
+              </button>
+
+              {/* Optional: mark completed button in detail view if currently assigned */}
+              {selectedBookingId && tab === "assigned" ? (
+                <button
+                  type="button"
+                  onClick={() => openCompleteModal(selectedBookingId)}
+                  className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+                  style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                  disabled={!!busyId}
+                  title="Mark as completed"
+                >
+                  Mark Completed
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          {detailErr ? (
+            <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(239 68 68)" }}>
+              {detailErr}
+            </div>
+          ) : null}
+
+          {detailLoading ? (
+            <div className="rounded-2xl border p-4 text-sm" style={{ borderColor: "rgb(var(--border))" }}>
+              Loading…
+            </div>
+          ) : null}
+
+          {!detailLoading && b ? <BookingInfoCard booking={b as any} /> : null}
+        </section>
+
+        <section className="space-y-3">
+          {msgErr ? (
+            <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(239 68 68)" }}>
+              {msgErr}
+            </div>
+          ) : null}
+
+          <Messenger
+            meUserId={me?.id ?? null}
+            meFirstName={me?.first_name ?? null}
+            meLastName={me?.last_name ?? null}
+            messages={messages}
+            onSend={onSendMessage}
+            onEdit={onEditMessage}
+            sending={msgSending || msgLoading}
+            locked={msgLocked}
+            lockedMessage={msgLocked ? "You’re no longer part of this booking chat (it may have been reassigned)." : undefined}
+          />
+        </section>
+
+        <ConfirmWorkerActionModal
+          open={modalOpen}
+          title="Mark this job as completed?"
+          message="This will move it to Job History."
+          busy={modalBusy}
+          confirmLabel="Mark Completed"
+          cancelLabel="Close"
+          onConfirm={confirmComplete}
+          onClose={closeModal}
+          details={
+            <div className="space-y-1">
+              <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+                Booking
+              </div>
+              <div className="font-semibold truncate">{modalBookingTitle ?? "—"}</div>
+              <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                Booking ID: <span className="font-mono">{modalBookingId ?? "—"}</span>
+              </div>
+            </div>
+          }
+        />
+      </main>
+    );
+  }
+
+  // ✅ LIST VIEW
   return (
     <div className="space-y-6">
       <ConfirmWorkerActionModal
@@ -467,16 +836,6 @@ export default function WorkerJobsPage() {
 
       {!loading && rows.length > 0 ? (
         <section className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-base font-semibold">{tab === "assigned" ? "Assigned" : "Job History"}</h3>
-
-            {tab === "history" ? (
-              <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                Showing {historyRows.length} of {historyTotal} • Page {historyPage} / {historyTotalPages}
-              </div>
-            ) : null}
-          </div>
-
           <div className="grid gap-3">
             {rows.map((b) => {
               const busy = busyId === b.public_id;
@@ -543,8 +902,19 @@ export default function WorkerJobsPage() {
                     </span>
                   </div>
 
-                  {tab === "assigned" ? (
-                    <div className="flex items-center justify-end gap-2">
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openDetail(b.public_id)}
+                      className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+                      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                      disabled={!!busyId}
+                      title="View details"
+                    >
+                      Details
+                    </button>
+
+                    {tab === "assigned" ? (
                       <button
                         type="button"
                         onClick={() => openCompleteModal(b.public_id)}
@@ -555,8 +925,8 @@ export default function WorkerJobsPage() {
                       >
                         {busy ? "Working…" : "Mark Completed"}
                       </button>
-                    </div>
-                  ) : null}
+                    ) : null}
+                  </div>
                 </div>
               );
             })}
@@ -567,7 +937,7 @@ export default function WorkerJobsPage() {
               <button
                 type="button"
                 onClick={async () => {
-                  if (!canPrev) return;
+                  if (historyPage <= 1) return;
                   const nextPage = historyPage - 1;
                   setHistoryPage(nextPage);
                   await refresh({ historyPage: nextPage });
@@ -586,7 +956,7 @@ export default function WorkerJobsPage() {
               <button
                 type="button"
                 onClick={async () => {
-                  if (!canNext) return;
+                  if (historyPage >= historyTotalPages) return;
                   const nextPage = historyPage + 1;
                   setHistoryPage(nextPage);
                   await refresh({ historyPage: nextPage });
