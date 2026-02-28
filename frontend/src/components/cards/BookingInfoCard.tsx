@@ -16,10 +16,10 @@ type QuoteStatus = "pending" | "approved" | "paid" | "balance_due";
 type ViewerRole = "customer" | "worker" | "admin" | "superuser" | string;
 
 /**
- * BookingInfoCard can now take:
+ * BookingInfoCard can take:
  * - Admin detail: TechBookingDetail
  * - Worker list row: WorkerBookingRow
- * - Customer detail: arbitrary shape (record)
+ * - Customer detail/list: arbitrary record
  */
 type BookingLike = TechBookingDetail | WorkerBookingRow | Record<string, unknown>;
 
@@ -43,15 +43,24 @@ function hasKey(obj: unknown, key: string): boolean {
   return isRecord(obj) && key in obj;
 }
 
+/**
+ * ✅ IMPORTANT:
+ * Customer bookings can have `address` and `notes`,
+ * so don't use those to identify WorkerBookingRow.
+ */
 function isWorkerRow(b: BookingLike): b is WorkerBookingRow {
   return (
     isRecord(b) &&
     typeof b.public_id === "string" &&
     typeof b.starts_at === "string" &&
     (hasKey(b, "customer_first_name") ||
+      hasKey(b, "customer_last_name") ||
+      hasKey(b, "customer_email") ||
+      hasKey(b, "customer_phone") ||
       hasKey(b, "lead_first_name") ||
-      hasKey(b, "address") ||
-      hasKey(b, "notes"))
+      hasKey(b, "lead_last_name") ||
+      hasKey(b, "lead_email") ||
+      hasKey(b, "lead_phone"))
   );
 }
 
@@ -59,9 +68,14 @@ function isAdminDetail(b: BookingLike): b is TechBookingDetail {
   return isRecord(b) && typeof b.public_id === "string" && (hasKey(b, "address_line1") || hasKey(b, "initial_notes"));
 }
 
-function normalizeViewerRole(role?: ViewerRole): "adminish" | "worker" | "customer" | "unknown" {
+/**
+ * ✅ Revert to prior semantics (no "adminish"):
+ * This matches your previously working logic.
+ */
+function normalizeViewerRole(role?: ViewerRole): "admin" | "superuser" | "worker" | "customer" | "unknown" {
   const r = String(role ?? "").trim().toLowerCase();
-  if (r === "admin" || r === "superuser") return "adminish";
+  if (r === "admin") return "admin";
+  if (r === "superuser") return "superuser";
   if (r === "worker") return "worker";
   if (r === "customer") return "customer";
   return "unknown";
@@ -347,12 +361,14 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
       const me = await getMeCached();
       if (!alive) return;
 
+      // prefer user_role
       const ur = String(me?.user_role ?? "").trim().toLowerCase();
       if (ur) {
         setViewerRole(ur);
         return;
       }
 
+      // fallback: roles array
       const roles = me?.roles ?? [];
       const lower = roles.map((r) => String(r ?? "").trim().toLowerCase()).filter(Boolean);
 
@@ -370,9 +386,9 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
 
   const viewer = normalizeViewerRole(viewerRole);
 
-  // Visibility rules
-  const showCustomerSection = viewer === "adminish" || viewer === "worker" || viewer === "unknown";
-  const showTechSection = viewer === "adminish" || viewer === "customer" || viewer === "unknown";
+  // ✅ Visibility rules (matches your old behavior)
+  const showCustomerSection = viewer === "admin" || viewer === "superuser" || viewer === "worker" || viewer === "unknown";
+  const showTechSection = viewer === "admin" || viewer === "superuser" || viewer === "customer" || viewer === "unknown";
 
   // Shared basics
   const publicId = getString(booking, "public_id") ?? "—";
@@ -498,7 +514,7 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
     );
   })();
 
-  // Tech display
+  // Tech display (supports admin + customer)
   const techName = (() => {
     if (isAdminDetail(booking)) {
       const fn = String(booking.worker_first_name ?? "").trim();
@@ -509,26 +525,55 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
       return "—";
     }
 
-    if (isWorkerRow(booking)) return "You";
+    // only show "You" in worker view
+    if (viewer === "worker" && isWorkerRow(booking)) return "You";
+
+    const af = getString(booking, "assigned_worker_first_name");
+    const al = getString(booking, "assigned_worker_last_name");
+    const assignedFull = [af, al].filter(Boolean).join(" ").trim();
+    if (assignedFull) return assignedFull;
+
+    const assignedToName = getString(booking, "assigned_to_name");
+    if (assignedToName && assignedToName.trim()) return assignedToName.trim();
 
     const wf = getString(booking, "worker_first_name");
     const wl = getString(booking, "worker_last_name");
     const full = [wf, wl].filter(Boolean).join(" ").trim();
     if (full) return full;
 
-    const email = getString(booking, "worker_email");
+    const email =
+      getString(booking, "assigned_worker_email") ??
+      getString(booking, "assigned_to_email") ??
+      getString(booking, "worker_email");
+
     return email?.trim() || "—";
   })();
 
   const techEmail = (() => {
     if (isAdminDetail(booking)) return booking.worker_email ?? null;
-    if (isWorkerRow(booking)) return null;
+    if (viewer === "worker" && isWorkerRow(booking)) return null;
+
+    const a =
+      getNullableString(booking, "assigned_worker_email") ??
+      getNullableString(booking, "assigned_to_email") ??
+      null;
+
+    if (a && String(a).trim()) return a;
+
     return getNullableString(booking, "worker_email") ?? null;
   })();
 
   const techPhone = (() => {
     if (isAdminDetail(booking)) return booking.worker_phone ?? null;
-    if (isWorkerRow(booking)) return null;
+    if (viewer === "worker" && isWorkerRow(booking)) return null;
+
+    const a =
+      getNullableString(booking, "assigned_worker_phone") ??
+      getNullableString(booking, "assigned_to_phone") ??
+      null;
+
+    if (a && String(a).trim()) return a;
+
     return getNullableString(booking, "worker_phone") ?? null;
   })();
 
@@ -614,7 +659,7 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
                 <CopyField label="Email" value={techEmail} />
               </div>
 
-              {isWorkerRow(booking) ? (
+              {viewer === "worker" ? (
                 <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
                   (Technician view — showing your assignment)
                 </div>
