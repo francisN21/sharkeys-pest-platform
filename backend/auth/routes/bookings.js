@@ -6,14 +6,18 @@ const { requireRole } = require("../middleware/requireRole");
 
 const router = express.Router();
 
-const createBookingSchema = z.object({
-  servicePublicId: z.string().uuid(),
-  startsAt: z.string().datetime(),
-  endsAt: z.string().datetime(),
-  address: z.string().min(5),
-  notes: z.string().max(2000).optional(),
+const createBookingSchema = z
+  .object({
+    servicePublicId: z.string().uuid(),
+    startsAt: z.string().datetime(),
+    endsAt: z.string().datetime(),
 
-    // Payload for the new Leads, 
+    // Customer booking always sends address
+    address: z.string().min(5),
+
+    notes: z.string().max(2000).optional(),
+
+    // Admin/CRM payloads (optional)
     customerPublicId: z.string().uuid().optional(),
     lead: z
       .object({
@@ -26,10 +30,19 @@ const createBookingSchema = z.object({
       })
       .optional(),
 
-    address: z.string().min(5).optional(), // optional override when booking for existing
-  }).refine((x) => (x.customerPublicId ? !x.lead : !!x.lead), {
-    message: "Provide either customerPublicId OR lead",
-});
+    // Optional override address when booking for an existing customer (admin use)
+    addressOverride: z.string().min(5).optional(),
+  })
+  .superRefine((x, ctx) => {
+    // Can't send both
+    if (x.customerPublicId && x.lead) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [],
+        message: "Provide either customerPublicId OR lead (not both)",
+      });
+    }
+  });
 
 // New Update booking schema
 const updateBookingSchema = z.object({

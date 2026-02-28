@@ -496,7 +496,7 @@ export default function BookPage() {
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold">Book a Service</h1>
           <p className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-            Pick a service, choose a date/time, and confirm your booking.
+            Pick a service, choose a date/time, and confirm your booking. CustomerView
           </p>
         </div>
 

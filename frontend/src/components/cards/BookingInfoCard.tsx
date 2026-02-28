@@ -652,7 +652,11 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
         {showTechSection ? (
           <SectionCard title="Assigned Technician">
             <div className="space-y-2">
-              <div className="text-sm font-semibold truncate">{normalizeText(techName)}</div>
+              <div className="text-sm font-semibold truncate">
+                {normalizeText(techName) === "—"
+                  ? "Pending assignment"
+                  : normalizeText(techName)}
+              </div>
 
               <div className="grid gap-3 pt-1">
                 <CopyField label="Phone" value={techPhone} />
