@@ -1,9 +1,10 @@
 // frontend/src/components/cards/BookingInfoCard.tsx
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import type { TechBookingDetail } from "../../lib/api/adminTechBookings";
 import type { WorkerBookingRow } from "../../lib/api/workerBookings";
+import { me as apiMe } from "../../lib/api/auth";
 
 function normalizeText(v: string | null | undefined) {
   const s = String(v ?? "").trim();
@@ -12,18 +13,103 @@ function normalizeText(v: string | null | undefined) {
 
 type PersonKind = "lead" | "registered";
 type QuoteStatus = "pending" | "approved" | "paid" | "balance_due";
+type ViewerRole = "customer" | "worker" | "admin" | "superuser" | string;
 
 /**
- * Accept either:
- * - admin detail shape (TechBookingDetail)
- * - worker list row shape (WorkerBookingRow)
+ * BookingInfoCard can now take:
+ * - Admin detail: TechBookingDetail
+ * - Worker list row: WorkerBookingRow
+ * - Customer detail: arbitrary shape (record)
  */
-type BookingLike = TechBookingDetail | WorkerBookingRow;
+type BookingLike = TechBookingDetail | WorkerBookingRow | Record<string, unknown>;
 
-function isTechBookingDetail(b: BookingLike): b is TechBookingDetail {
-  // admin detail has address_line1/city/zip and initial_notes
-  return "address_line1" in b || "initial_notes" in b;
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return !!v && typeof v === "object";
 }
+
+function getString(obj: unknown, key: string): string | undefined {
+  if (!isRecord(obj)) return undefined;
+  const v = obj[key];
+  return typeof v === "string" ? v : undefined;
+}
+
+function getNullableString(obj: unknown, key: string): string | null | undefined {
+  if (!isRecord(obj)) return undefined;
+  const v = obj[key];
+  return typeof v === "string" ? v : v === null ? null : undefined;
+}
+
+function hasKey(obj: unknown, key: string): boolean {
+  return isRecord(obj) && key in obj;
+}
+
+function isWorkerRow(b: BookingLike): b is WorkerBookingRow {
+  return (
+    isRecord(b) &&
+    typeof b.public_id === "string" &&
+    typeof b.starts_at === "string" &&
+    (hasKey(b, "customer_first_name") ||
+      hasKey(b, "lead_first_name") ||
+      hasKey(b, "address") ||
+      hasKey(b, "notes"))
+  );
+}
+
+function isAdminDetail(b: BookingLike): b is TechBookingDetail {
+  return isRecord(b) && typeof b.public_id === "string" && (hasKey(b, "address_line1") || hasKey(b, "initial_notes"));
+}
+
+function normalizeViewerRole(role?: ViewerRole): "adminish" | "worker" | "customer" | "unknown" {
+  const r = String(role ?? "").trim().toLowerCase();
+  if (r === "admin" || r === "superuser") return "adminish";
+  if (r === "worker") return "worker";
+  if (r === "customer") return "customer";
+  return "unknown";
+}
+
+/** ------------------ Me cache (prevents refetch spam) ------------------ */
+type MeLite = { user_role?: string; roles?: string[] } | null;
+let ME_CACHE: { status: "idle" | "loading" | "ready"; value: MeLite } = {
+  status: "idle",
+  value: null,
+};
+
+async function getMeCached(): Promise<MeLite> {
+  if (ME_CACHE.status === "ready") return ME_CACHE.value;
+
+  if (ME_CACHE.status === "loading") {
+    while (ME_CACHE.status === "loading") {
+      await new Promise((r) => setTimeout(r, 40));
+    }
+    return ME_CACHE.value;
+  }
+
+  ME_CACHE.status = "loading";
+  try {
+    const res = await apiMe();
+    const user = res?.user ?? null;
+
+    const rolesRaw =
+      isRecord(user) && Array.isArray((user as Record<string, unknown>).roles)
+        ? ((user as Record<string, unknown>).roles as unknown[]).filter((x): x is string => typeof x === "string")
+        : undefined;
+
+    const userRole =
+      isRecord(user) && typeof (user as Record<string, unknown>).user_role === "string"
+        ? String((user as Record<string, unknown>).user_role)
+        : undefined;
+
+    ME_CACHE.value = { user_role: userRole, roles: rolesRaw };
+  } catch {
+    ME_CACHE.value = null;
+  } finally {
+    ME_CACHE.status = "ready";
+  }
+
+  return ME_CACHE.value;
+}
+
+/** ------------------ UI helpers ------------------ */
 
 function KindPill({ kind }: { kind: PersonKind }) {
   const isLead = kind === "lead";
@@ -115,7 +201,6 @@ function CopyField({ label, value }: { label: string; value: string | null | und
         ta.select();
         document.execCommand("copy");
         document.body.removeChild(ta);
-
         setCopied(true);
         window.setTimeout(() => setCopied(false), 1100);
       } catch {
@@ -171,30 +256,10 @@ function MoneyRow({ label, value }: { label: string; value: string }) {
 
 function QuoteStatusPill({ status }: { status: QuoteStatus }) {
   const meta: Record<QuoteStatus, { label: string; bg: string; border: string; title: string }> = {
-    pending: {
-      label: "Pending",
-      bg: "rgba(245, 158, 11, 0.16)",
-      border: "rgba(245, 158, 11, 0.55)",
-      title: "Quote sent, awaiting approval",
-    },
-    approved: {
-      label: "Approved",
-      bg: "rgba(34, 197, 94, 0.14)",
-      border: "rgba(34, 197, 94, 0.55)",
-      title: "Customer approved the quote",
-    },
-    paid: {
-      label: "Paid",
-      bg: "rgba(59, 130, 246, 0.14)",
-      border: "rgba(59, 130, 246, 0.55)",
-      title: "Invoice is fully paid",
-    },
-    balance_due: {
-      label: "Balance Due",
-      bg: "rgba(239, 68, 68, 0.14)",
-      border: "rgba(239, 68, 68, 0.55)",
-      title: "Balance remaining on invoice",
-    },
+    pending: { label: "Pending", bg: "rgba(245, 158, 11, 0.16)", border: "rgba(245, 158, 11, 0.55)", title: "Quote sent, awaiting approval" },
+    approved: { label: "Approved", bg: "rgba(34, 197, 94, 0.14)", border: "rgba(34, 197, 94, 0.55)", title: "Customer approved the quote" },
+    paid: { label: "Paid", bg: "rgba(59, 130, 246, 0.14)", border: "rgba(59, 130, 246, 0.55)", title: "Invoice is fully paid" },
+    balance_due: { label: "Balance Due", bg: "rgba(239, 68, 68, 0.14)", border: "rgba(239, 68, 68, 0.55)", title: "Balance remaining on invoice" },
   };
 
   const m = meta[status];
@@ -207,14 +272,12 @@ function QuoteStatusPill({ status }: { status: QuoteStatus }) {
 }
 
 function QuoteCard() {
-  // TEMP: hardcoded quote values
   const status: QuoteStatus = "approved";
   const subtotal = 149;
   const tax = 0;
   const discount = 0;
 
   const total = subtotal + tax - discount;
-
   const paidAmount = status === "paid" ? total : 0;
   const balanceDue = Math.max(0, total - paidAmount);
 
@@ -272,16 +335,62 @@ function QuoteCard() {
   );
 }
 
+/** ------------------ COMPONENT ------------------ */
+
 export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
-  const kind: PersonKind = (booking as any).lead_public_id ? "lead" : "registered";
+  const [viewerRole, setViewerRole] = useState<ViewerRole>("unknown");
 
-  // ✅ address normalization:
-  // - admin detail: address_line1/address_line2/city/state/zip
-  // - worker row: address (string)
-  const addressText = useMemo(() => {
-    if (!booking) return "—";
+  useEffect(() => {
+    let alive = true;
 
-    if (isTechBookingDetail(booking)) {
+    (async () => {
+      const me = await getMeCached();
+      if (!alive) return;
+
+      const ur = String(me?.user_role ?? "").trim().toLowerCase();
+      if (ur) {
+        setViewerRole(ur);
+        return;
+      }
+
+      const roles = me?.roles ?? [];
+      const lower = roles.map((r) => String(r ?? "").trim().toLowerCase()).filter(Boolean);
+
+      if (lower.includes("superuser")) setViewerRole("superuser");
+      else if (lower.includes("admin")) setViewerRole("admin");
+      else if (lower.includes("worker")) setViewerRole("worker");
+      else if (lower.includes("customer")) setViewerRole("customer");
+      else setViewerRole("unknown");
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const viewer = normalizeViewerRole(viewerRole);
+
+  // Visibility rules
+  const showCustomerSection = viewer === "adminish" || viewer === "worker" || viewer === "unknown";
+  const showTechSection = viewer === "adminish" || viewer === "customer" || viewer === "unknown";
+
+  // Shared basics
+  const publicId = getString(booking, "public_id") ?? "—";
+  const serviceTitle = getString(booking, "service_title") ?? "—";
+  const startsAt = getNullableString(booking, "starts_at") ?? null;
+  const endsAt = getNullableString(booking, "ends_at") ?? null;
+  const status = getString(booking, "status") ?? "—";
+
+  const kind: PersonKind = (() => {
+    if (isAdminDetail(booking)) return booking.lead_public_id ? "lead" : "registered";
+    if (isWorkerRow(booking)) return booking.lead_public_id ? "lead" : "registered";
+    const lp = getString(booking, "lead_public_id");
+    return lp ? "lead" : "registered";
+  })();
+
+  // Address
+  const addressText = (() => {
+    if (isAdminDetail(booking)) {
       const parts = [
         booking.address_line1,
         booking.address_line2,
@@ -292,124 +401,143 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
       return parts.join(", ") || "—";
     }
 
-    const maybeAddress = String((booking as WorkerBookingRow).address ?? "").trim();
-    return maybeAddress || "—";
-  }, [booking]);
-
-  // ✅ notes normalization:
-  // - admin detail: initial_notes
-  // - worker row: notes
-  const notesText = useMemo(() => {
-    if (!booking) return "—";
-
-    if (isTechBookingDetail(booking)) {
-      return normalizeText(booking.initial_notes);
+    if (isWorkerRow(booking)) {
+      const a = String(booking.address ?? "").trim();
+      return a || "—";
     }
 
-    return normalizeText((booking as WorkerBookingRow).notes ?? null);
-  }, [booking]);
+    const line1 = getString(booking, "address_line1");
+    const line2 = getString(booking, "address_line2");
+    const city = getString(booking, "city");
+    const state = getString(booking, "state");
+    const zip = getString(booking, "zip");
 
-  // ✅ display name normalization:
-  // - admin detail: customer_name OR lead_first/last OR email
-  // - worker row: customer_first/last OR lead_first/last OR email(s)
-  const displayName = useMemo(() => {
-    if (!booking) return "—";
+    const parts = [line1, line2, [city, state, zip].filter(Boolean).join(" ")]
+      .map((x) => String(x ?? "").trim())
+      .filter(Boolean);
 
-    if (isTechBookingDetail(booking)) {
+    if (parts.length) return parts.join(", ");
+
+    const fallback = getString(booking, "address");
+    return String(fallback ?? "").trim() || "—";
+  })();
+
+  // Notes
+  const notesText = (() => {
+    if (isAdminDetail(booking)) return normalizeText(booking.initial_notes);
+    if (isWorkerRow(booking)) return normalizeText(booking.notes ?? null);
+
+    const initial = getNullableString(booking, "initial_notes");
+    const notes = getNullableString(booking, "notes");
+    return normalizeText((initial ?? notes) ?? null);
+  })();
+
+  const crmTag = getNullableString(booking, "crm_tag") ?? null;
+
+  // Customer display
+  const displayName = (() => {
+    if (isAdminDetail(booking)) {
       const leadName = `${(booking.lead_first_name ?? "").trim()} ${(booking.lead_last_name ?? "").trim()}`.trim();
       const name = String(booking.customer_name ?? "").trim() || leadName;
       const email = booking.customer_email ?? booking.lead_email ?? null;
       return name || email || "—";
     }
 
-    const b = booking as WorkerBookingRow;
+    if (isWorkerRow(booking)) {
+      const leadName = `${(booking.lead_first_name ?? "").trim()} ${(booking.lead_last_name ?? "").trim()}`.trim();
+      const custName = `${(booking.customer_first_name ?? "").trim()} ${(booking.customer_last_name ?? "").trim()}`.trim();
 
-    const leadName = `${(b.lead_first_name ?? "").trim()} ${(b.lead_last_name ?? "").trim()}`.trim();
-    const custName = `${(b.customer_first_name ?? "").trim()} ${(b.customer_last_name ?? "").trim()}`.trim();
+      const name = (booking.lead_public_id ? leadName : custName) || custName || leadName;
+      const email =
+        (booking.lead_public_id ? booking.lead_email : booking.customer_email) ??
+        booking.customer_email ??
+        booking.lead_email ??
+        null;
 
-    const name = (b.lead_public_id ? leadName : custName) || custName || leadName;
-    const email = (b.lead_public_id ? b.lead_email : b.customer_email) ?? b.customer_email ?? b.lead_email ?? null;
+      return (name || email || "—").trim();
+    }
 
-    return name || email || "—";
-  }, [booking]);
+    const customerName = getString(booking, "customer_name");
+    if (customerName && customerName.trim()) return customerName.trim();
 
-  // ✅ customer contact normalization
-  const customerEmail = useMemo(() => {
-    if (!booking) return null;
+    const cf = getString(booking, "customer_first_name");
+    const cl = getString(booking, "customer_last_name");
+    const full = [cf, cl].filter(Boolean).join(" ").trim();
+    if (full) return full;
 
-    if (isTechBookingDetail(booking)) return booking.customer_email ?? booking.lead_email ?? null;
+    const email = getString(booking, "customer_email") ?? getString(booking, "lead_email") ?? getString(booking, "email");
+    return String(email ?? "—").trim() || "—";
+  })();
 
-    const b = booking as WorkerBookingRow;
-    return (b.lead_public_id ? b.lead_email : b.customer_email) ?? b.customer_email ?? b.lead_email ?? null;
-  }, [booking]);
+  const customerEmail = (() => {
+    if (isAdminDetail(booking)) return booking.customer_email ?? booking.lead_email ?? null;
+    if (isWorkerRow(booking)) {
+      return (booking.lead_public_id ? booking.lead_email : booking.customer_email) ?? booking.customer_email ?? booking.lead_email ?? null;
+    }
+    return getNullableString(booking, "customer_email") ?? getNullableString(booking, "lead_email") ?? getNullableString(booking, "email") ?? null;
+  })();
 
-  const customerPhone = useMemo(() => {
-    if (!booking) return null;
+  const customerPhone = (() => {
+    if (isAdminDetail(booking)) return booking.customer_phone ?? booking.lead_phone ?? null;
+    if (isWorkerRow(booking)) {
+      return (booking.lead_public_id ? booking.lead_phone : booking.customer_phone) ?? booking.customer_phone ?? booking.lead_phone ?? null;
+    }
+    return getNullableString(booking, "customer_phone") ?? getNullableString(booking, "lead_phone") ?? getNullableString(booking, "phone") ?? null;
+  })();
 
-    if (isTechBookingDetail(booking)) return booking.customer_phone ?? booking.lead_phone ?? null;
+  const accountType = (() => {
+    if (isAdminDetail(booking)) return booking.customer_account_type ?? booking.lead_account_type ?? null;
+    if (isWorkerRow(booking)) {
+      return (booking.lead_public_id ? booking.lead_account_type : booking.customer_account_type) ?? booking.customer_account_type ?? booking.lead_account_type ?? null;
+    }
+    return (
+      getNullableString(booking, "customer_account_type") ??
+      getNullableString(booking, "lead_account_type") ??
+      getNullableString(booking, "account_type") ??
+      null
+    );
+  })();
 
-    const b = booking as WorkerBookingRow;
-    return (b.lead_public_id ? b.lead_phone : b.customer_phone) ?? b.customer_phone ?? b.lead_phone ?? null;
-  }, [booking]);
-
-  // ✅ account type normalization
-  const accountType = useMemo(() => {
-    if (!booking) return null;
-
-    if (isTechBookingDetail(booking)) return booking.customer_account_type ?? booking.lead_account_type ?? null;
-
-    const b = booking as WorkerBookingRow;
-    return (b.lead_public_id ? b.lead_account_type : b.customer_account_type) ?? b.customer_account_type ?? b.lead_account_type ?? null;
-  }, [booking]);
-
-  // ✅ crm tag normalization (admin only, but safe)
-  const crmTag = useMemo(() => {
-    const t = (booking as any).crm_tag ?? null;
-    return t;
-  }, [booking]);
-
-  // ✅ technician info normalization:
-  // - admin detail: worker_first/last/email/phone
-  // - worker row: may not include worker_* (you are the worker), so just show "You"
-  const techName = useMemo(() => {
-    if (!booking) return "—";
-
-    if (isTechBookingDetail(booking)) {
+  // Tech display
+  const techName = (() => {
+    if (isAdminDetail(booking)) {
       const fn = String(booking.worker_first_name ?? "").trim();
       const ln = String(booking.worker_last_name ?? "").trim();
       const full = [fn, ln].filter(Boolean).join(" ").trim();
-
       if (full) return full;
       if (booking.worker_email) return booking.worker_email;
       return "—";
     }
 
-    // worker view (you are the assignee)
-    return "You";
-  }, [booking]);
+    if (isWorkerRow(booking)) return "You";
 
-  const techEmail = useMemo(() => {
-    if (!booking) return null;
-    if (isTechBookingDetail(booking)) return booking.worker_email ?? null;
-    return null;
-  }, [booking]);
+    const wf = getString(booking, "worker_first_name");
+    const wl = getString(booking, "worker_last_name");
+    const full = [wf, wl].filter(Boolean).join(" ").trim();
+    if (full) return full;
 
-  const techPhone = useMemo(() => {
-    if (!booking) return null;
-    if (isTechBookingDetail(booking)) return booking.worker_phone ?? null;
-    return null;
-  }, [booking]);
+    const email = getString(booking, "worker_email");
+    return email?.trim() || "—";
+  })();
 
-  // ✅ core fields shared by both types
-  const serviceTitle = (booking as any).service_title ?? "—";
-  const publicId = (booking as any).public_id ?? "—";
-  const startsAt = (booking as any).starts_at ?? null;
-  const endsAt = (booking as any).ends_at ?? null;
-  const status = (booking as any).status ?? "—";
+  const techEmail = (() => {
+    if (isAdminDetail(booking)) return booking.worker_email ?? null;
+    if (isWorkerRow(booking)) return null;
+    return getNullableString(booking, "worker_email") ?? null;
+  })();
+
+  const techPhone = (() => {
+    if (isAdminDetail(booking)) return booking.worker_phone ?? null;
+    if (isWorkerRow(booking)) return null;
+    return getNullableString(booking, "worker_phone") ?? null;
+  })();
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border p-4" style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}>
+      <div
+        className="rounded-2xl border p-4"
+        style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
+      >
         <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="min-w-0 space-y-3">
             <div className="flex items-start justify-between gap-3">
@@ -427,7 +555,10 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
 
             <CopyField label="Service Address" value={addressText || null} />
 
-            <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.20)" }}>
+            <div
+              className="rounded-xl border p-3 text-sm"
+              style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.20)" }}
+            >
               <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
                 Notes
               </div>
@@ -446,45 +577,53 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <SectionCard title="Customer">
-          <div className="space-y-2">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-sm font-semibold truncate">{displayName}</div>
-                <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                  Account type: {normalizeText(accountType)}
+        {showCustomerSection ? (
+          <SectionCard title="Customer">
+            <div className="space-y-2">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold truncate">{displayName}</div>
+                  <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                    Account type: {normalizeText(accountType)}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <KindPill kind={kind} />
+                  <TagPill tag={crmTag} />
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <KindPill kind={kind} />
-                <TagPill tag={crmTag} />
+              <div className="grid gap-3 pt-1">
+                <CopyField label="Phone" value={customerPhone} />
+                <CopyField label="Email" value={customerEmail} />
               </div>
             </div>
+          </SectionCard>
+        ) : (
+          <div className="hidden md:block" />
+        )}
 
-            <div className="grid gap-3 pt-1">
-              <CopyField label="Phone" value={customerPhone} />
-              <CopyField label="Email" value={customerEmail} />
-            </div>
-          </div>
-        </SectionCard>
+        {showTechSection ? (
+          <SectionCard title="Assigned Technician">
+            <div className="space-y-2">
+              <div className="text-sm font-semibold truncate">{normalizeText(techName)}</div>
 
-        <SectionCard title="Assigned Technician">
-          <div className="space-y-2">
-            <div className="text-sm font-semibold truncate">{normalizeText(techName)}</div>
-
-            <div className="grid gap-3 pt-1">
-              <CopyField label="Phone" value={techPhone} />
-              <CopyField label="Email" value={techEmail} />
-            </div>
-
-            {!isTechBookingDetail(booking) ? (
-              <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                (Technician view — showing your assignment)
+              <div className="grid gap-3 pt-1">
+                <CopyField label="Phone" value={techPhone} />
+                <CopyField label="Email" value={techEmail} />
               </div>
-            ) : null}
-          </div>
-        </SectionCard>
+
+              {isWorkerRow(booking) ? (
+                <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                  (Technician view — showing your assignment)
+                </div>
+              ) : null}
+            </div>
+          </SectionCard>
+        ) : (
+          <div className="hidden md:block" />
+        )}
       </div>
     </div>
   );
