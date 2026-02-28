@@ -258,23 +258,23 @@ export default function WorkerJobsPage() {
 
   const [sortBy, setSortBy] = useState<"created" | "scheduled">("scheduled");
 
-  // ✅ pagination (history only)
+  // pagination (history only)
   const HISTORY_PAGE_SIZE = 30;
   const [historyPage, setHistoryPage] = useState(1);
   const [historyTotalPages, setHistoryTotalPages] = useState(1);
   const [historyTotal, setHistoryTotal] = useState(0);
 
-  // ✅ view state like admin
+  // view state like admin
   const [view, setView] = useState<"list" | "detail">("list");
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [detail, setDetail] = useState<WorkerBookingRow | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailErr, setDetailErr] = useState<string | null>(null);
 
-  // ✅ me
+  // me
   const [me, setMe] = useState<MeShape | null>(null);
 
-  // ✅ messages (detail view)
+  // messages (detail view)
   const [messages, setMessages] = useState<MessengerMessage[]>([]);
   const [msgLoading, setMsgLoading] = useState(false);
   const [msgErr, setMsgErr] = useState<string | null>(null);

@@ -3,6 +3,7 @@
 
 import React, { useMemo, useState } from "react";
 import type { TechBookingDetail } from "../../lib/api/adminTechBookings";
+import type { WorkerBookingRow } from "../../lib/api/workerBookings";
 
 function normalizeText(v: string | null | undefined) {
   const s = String(v ?? "").trim();
@@ -11,6 +12,18 @@ function normalizeText(v: string | null | undefined) {
 
 type PersonKind = "lead" | "registered";
 type QuoteStatus = "pending" | "approved" | "paid" | "balance_due";
+
+/**
+ * Accept either:
+ * - admin detail shape (TechBookingDetail)
+ * - worker list row shape (WorkerBookingRow)
+ */
+type BookingLike = TechBookingDetail | WorkerBookingRow;
+
+function isTechBookingDetail(b: BookingLike): b is TechBookingDetail {
+  // admin detail has address_line1/city/zip and initial_notes
+  return "address_line1" in b || "initial_notes" in b;
+}
 
 function KindPill({ kind }: { kind: PersonKind }) {
   const isLead = kind === "lead";
@@ -95,7 +108,6 @@ function CopyField({ label, value }: { label: string; value: string | null | und
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1100);
     } catch {
-      // fallback
       try {
         const ta = document.createElement("textarea");
         ta.value = text;
@@ -158,10 +170,7 @@ function MoneyRow({ label, value }: { label: string; value: string }) {
 }
 
 function QuoteStatusPill({ status }: { status: QuoteStatus }) {
-  const meta: Record<
-    QuoteStatus,
-    { label: string; bg: string; border: string; title: string }
-  > = {
+  const meta: Record<QuoteStatus, { label: string; bg: string; border: string; title: string }> = {
     pending: {
       label: "Pending",
       bg: "rgba(245, 158, 11, 0.16)",
@@ -191,14 +200,7 @@ function QuoteStatusPill({ status }: { status: QuoteStatus }) {
   const m = meta[status];
 
   return (
-    <span
-      className="rounded-full border px-2 py-1 text-xs font-semibold"
-      style={{
-        borderColor: m.border,
-        background: m.bg,
-      }}
-      title={m.title}
-    >
+    <span className="rounded-full border px-2 py-1 text-xs font-semibold" style={{ borderColor: m.border, background: m.bg }} title={m.title}>
       {m.label}
     </span>
   );
@@ -206,15 +208,13 @@ function QuoteStatusPill({ status }: { status: QuoteStatus }) {
 
 function QuoteCard() {
   // TEMP: hardcoded quote values
-  const status: QuoteStatus = "approved"; // change to: "pending" | "approved" | "paid" | "balance_due"
-
+  const status: QuoteStatus = "approved";
   const subtotal = 149;
   const tax = 0;
   const discount = 0;
 
   const total = subtotal + tax - discount;
 
-  // TEMP: if you want balance due behavior, change paidAmount
   const paidAmount = status === "paid" ? total : 0;
   const balanceDue = Math.max(0, total - paidAmount);
 
@@ -262,10 +262,7 @@ function QuoteCard() {
         </div>
       </div>
 
-      <div
-        className="rounded-xl border p-3 text-sm"
-        style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.20)" }}
-      >
+      <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.20)" }}>
         <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
           Notes
         </div>
@@ -275,92 +272,179 @@ function QuoteCard() {
   );
 }
 
-export default function BookingInfoCard({ booking }: { booking: TechBookingDetail }) {
-  const kind: PersonKind = booking.lead_public_id ? "lead" : "registered";
+export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
+  const kind: PersonKind = (booking as any).lead_public_id ? "lead" : "registered";
 
+  // ✅ address normalization:
+  // - admin detail: address_line1/address_line2/city/state/zip
+  // - worker row: address (string)
   const addressText = useMemo(() => {
-    const parts = [
-      booking.address_line1,
-      booking.address_line2,
-      [booking.city, booking.state, booking.zip].filter(Boolean).join(" "),
-    ]
-      .map((x) => String(x ?? "").trim())
-      .filter(Boolean);
+    if (!booking) return "—";
 
-    return parts.join(", ");
-  }, [booking.address_line1, booking.address_line2, booking.city, booking.state, booking.zip]);
+    if (isTechBookingDetail(booking)) {
+      const parts = [
+        booking.address_line1,
+        booking.address_line2,
+        [booking.city, booking.state, booking.zip].filter(Boolean).join(" "),
+      ]
+        .map((x) => String(x ?? "").trim())
+        .filter(Boolean);
+      return parts.join(", ") || "—";
+    }
 
+    const maybeAddress = String((booking as WorkerBookingRow).address ?? "").trim();
+    return maybeAddress || "—";
+  }, [booking]);
+
+  // ✅ notes normalization:
+  // - admin detail: initial_notes
+  // - worker row: notes
+  const notesText = useMemo(() => {
+    if (!booking) return "—";
+
+    if (isTechBookingDetail(booking)) {
+      return normalizeText(booking.initial_notes);
+    }
+
+    return normalizeText((booking as WorkerBookingRow).notes ?? null);
+  }, [booking]);
+
+  // ✅ display name normalization:
+  // - admin detail: customer_name OR lead_first/last OR email
+  // - worker row: customer_first/last OR lead_first/last OR email(s)
   const displayName = useMemo(() => {
-    const leadName = `${(booking.lead_first_name ?? "").trim()} ${(booking.lead_last_name ?? "").trim()}`.trim();
-    const name = String(booking.customer_name ?? "").trim() || leadName;
-    const email = booking.customer_email ?? booking.lead_email ?? null;
+    if (!booking) return "—";
+
+    if (isTechBookingDetail(booking)) {
+      const leadName = `${(booking.lead_first_name ?? "").trim()} ${(booking.lead_last_name ?? "").trim()}`.trim();
+      const name = String(booking.customer_name ?? "").trim() || leadName;
+      const email = booking.customer_email ?? booking.lead_email ?? null;
+      return name || email || "—";
+    }
+
+    const b = booking as WorkerBookingRow;
+
+    const leadName = `${(b.lead_first_name ?? "").trim()} ${(b.lead_last_name ?? "").trim()}`.trim();
+    const custName = `${(b.customer_first_name ?? "").trim()} ${(b.customer_last_name ?? "").trim()}`.trim();
+
+    const name = (b.lead_public_id ? leadName : custName) || custName || leadName;
+    const email = (b.lead_public_id ? b.lead_email : b.customer_email) ?? b.customer_email ?? b.lead_email ?? null;
+
     return name || email || "—";
-  }, [booking.customer_name, booking.customer_email, booking.lead_first_name, booking.lead_last_name, booking.lead_email]);
+  }, [booking]);
 
-  const customerEmail = booking.customer_email ?? booking.lead_email ?? null;
-  const customerPhone = booking.customer_phone ?? booking.lead_phone ?? null;
+  // ✅ customer contact normalization
+  const customerEmail = useMemo(() => {
+    if (!booking) return null;
 
+    if (isTechBookingDetail(booking)) return booking.customer_email ?? booking.lead_email ?? null;
+
+    const b = booking as WorkerBookingRow;
+    return (b.lead_public_id ? b.lead_email : b.customer_email) ?? b.customer_email ?? b.lead_email ?? null;
+  }, [booking]);
+
+  const customerPhone = useMemo(() => {
+    if (!booking) return null;
+
+    if (isTechBookingDetail(booking)) return booking.customer_phone ?? booking.lead_phone ?? null;
+
+    const b = booking as WorkerBookingRow;
+    return (b.lead_public_id ? b.lead_phone : b.customer_phone) ?? b.customer_phone ?? b.lead_phone ?? null;
+  }, [booking]);
+
+  // ✅ account type normalization
+  const accountType = useMemo(() => {
+    if (!booking) return null;
+
+    if (isTechBookingDetail(booking)) return booking.customer_account_type ?? booking.lead_account_type ?? null;
+
+    const b = booking as WorkerBookingRow;
+    return (b.lead_public_id ? b.lead_account_type : b.customer_account_type) ?? b.customer_account_type ?? b.lead_account_type ?? null;
+  }, [booking]);
+
+  // ✅ crm tag normalization (admin only, but safe)
+  const crmTag = useMemo(() => {
+    const t = (booking as any).crm_tag ?? null;
+    return t;
+  }, [booking]);
+
+  // ✅ technician info normalization:
+  // - admin detail: worker_first/last/email/phone
+  // - worker row: may not include worker_* (you are the worker), so just show "You"
   const techName = useMemo(() => {
-    const fn = String(booking.worker_first_name ?? "").trim();
-    const ln = String(booking.worker_last_name ?? "").trim();
-    const full = [fn, ln].filter(Boolean).join(" ").trim();
+    if (!booking) return "—";
 
-    if (full) return full;
-    if (booking.worker_email) return booking.worker_email;
-    return "—";
-  }, [booking.worker_first_name, booking.worker_last_name, booking.worker_email]);
+    if (isTechBookingDetail(booking)) {
+      const fn = String(booking.worker_first_name ?? "").trim();
+      const ln = String(booking.worker_last_name ?? "").trim();
+      const full = [fn, ln].filter(Boolean).join(" ").trim();
 
-  const techEmail = booking.worker_email ?? null;
-  const techPhone = booking.worker_phone ?? null;
+      if (full) return full;
+      if (booking.worker_email) return booking.worker_email;
+      return "—";
+    }
+
+    // worker view (you are the assignee)
+    return "You";
+  }, [booking]);
+
+  const techEmail = useMemo(() => {
+    if (!booking) return null;
+    if (isTechBookingDetail(booking)) return booking.worker_email ?? null;
+    return null;
+  }, [booking]);
+
+  const techPhone = useMemo(() => {
+    if (!booking) return null;
+    if (isTechBookingDetail(booking)) return booking.worker_phone ?? null;
+    return null;
+  }, [booking]);
+
+  // ✅ core fields shared by both types
+  const serviceTitle = (booking as any).service_title ?? "—";
+  const publicId = (booking as any).public_id ?? "—";
+  const startsAt = (booking as any).starts_at ?? null;
+  const endsAt = (booking as any).ends_at ?? null;
+  const status = (booking as any).status ?? "—";
 
   return (
     <div className="space-y-4">
-      {/* Top summary area: left info + right quote */}
-      <div
-        className="rounded-2xl border p-4"
-        style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
-      >
+      <div className="rounded-2xl border p-4" style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}>
         <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-          {/* LEFT */}
           <div className="min-w-0 space-y-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-base font-semibold truncate">{normalizeText(booking.service_title)}</div>
+                <div className="text-base font-semibold truncate">{normalizeText(serviceTitle)}</div>
                 <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
-                  {formatRange(booking.starts_at, booking.ends_at)}
+                  {formatRange(startsAt, endsAt)}
                 </div>
               </div>
 
               <span className="rounded-full border px-2 py-1 text-xs" style={{ borderColor: "rgb(var(--border))" }}>
-                {booking.status ?? "—"}
+                {status}
               </span>
             </div>
 
             <CopyField label="Service Address" value={addressText || null} />
 
-            <div
-              className="rounded-xl border p-3 text-sm"
-              style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.20)" }}
-            >
+            <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.20)" }}>
               <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
                 Notes
               </div>
-              <div className="mt-1 whitespace-pre-wrap break-words">{normalizeText(booking.initial_notes)}</div>
+              <div className="mt-1 whitespace-pre-wrap break-words">{notesText}</div>
             </div>
 
             <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-              Booking ID: <span className="font-mono">{booking.public_id}</span>
+              Booking ID: <span className="font-mono">{publicId}</span>
             </div>
           </div>
 
-          {/* RIGHT: Quote / Pricing */}
           <div className="lg:pl-2">
             <QuoteCard />
           </div>
         </div>
       </div>
 
-      {/* 2-column info cards */}
       <div className="grid gap-4 md:grid-cols-2">
         <SectionCard title="Customer">
           <div className="space-y-2">
@@ -368,13 +452,13 @@ export default function BookingInfoCard({ booking }: { booking: TechBookingDetai
               <div className="min-w-0">
                 <div className="text-sm font-semibold truncate">{displayName}</div>
                 <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                  Account type: {normalizeText(booking.customer_account_type ?? booking.lead_account_type ?? null)}
+                  Account type: {normalizeText(accountType)}
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
                 <KindPill kind={kind} />
-                <TagPill tag={booking.crm_tag} />
+                <TagPill tag={crmTag} />
               </div>
             </div>
 
@@ -393,6 +477,12 @@ export default function BookingInfoCard({ booking }: { booking: TechBookingDetai
               <CopyField label="Phone" value={techPhone} />
               <CopyField label="Email" value={techEmail} />
             </div>
+
+            {!isTechBookingDetail(booking) ? (
+              <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                (Technician view — showing your assignment)
+              </div>
+            ) : null}
           </div>
         </SectionCard>
       </div>
