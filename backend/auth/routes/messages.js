@@ -13,20 +13,11 @@ async function getRolesByDb(userId) {
     .filter(Boolean);
 }
 
-async function canAccessBooking({ userId, roles, bookingId }) {
-  const isAdminish = roles.includes("admin") || roles.includes("superuser");
-  if (isAdminish) return true;
-
-  if (roles.includes("worker")) {
-    const r = await pool.query(
-      `SELECT 1 FROM booking_assignments ba WHERE ba.booking_id = $1 AND ba.worker_user_id = $2 LIMIT 1`,
-      [bookingId, userId]
-    );
-    return r.rowCount > 0;
-  }
-
-  // Optional: customer access later
-  return false;
+function computeSenderRole(roles) {
+  if (roles.includes("superuser")) return "superuser";
+  if (roles.includes("admin")) return "admin";
+  if (roles.includes("worker")) return "worker";
+  return "customer";
 }
 
 async function getBookingIdByPublicId(publicId) {
@@ -34,11 +25,29 @@ async function getBookingIdByPublicId(publicId) {
   return r.rows[0]?.id ?? null;
 }
 
-function computeSenderRole(roles) {
-  if (roles.includes("superuser")) return "superuser";
-  if (roles.includes("admin")) return "admin";
-  if (roles.includes("worker")) return "worker";
-  return "customer";
+/**
+ * Policy A access model:
+ * - superuser/admin: access
+ * - otherwise: must be an ACTIVE booking_participant for the booking
+ *   (customer + current worker only)
+ */
+async function canAccessBooking({ userId, roles, bookingId }) {
+  const isAdminish = roles.includes("admin") || roles.includes("superuser");
+  if (isAdminish) return true;
+
+  const r = await pool.query(
+    `
+    SELECT 1
+    FROM booking_participants bp
+    WHERE bp.booking_id = $1
+      AND bp.user_id = $2
+      AND bp.removed_at IS NULL
+    LIMIT 1
+    `,
+    [bookingId, userId]
+  );
+
+  return r.rowCount > 0;
 }
 
 const sendSchema = z.object({

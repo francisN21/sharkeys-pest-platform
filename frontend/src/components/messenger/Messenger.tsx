@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 export type MessengerMessage = {
   id: number;
-  sender_user_id: number;
+  sender_user_id: number | null;
   sender_role: "customer" | "admin" | "worker" | "superuser" | string;
   body: string;
   created_at: string;
@@ -62,6 +62,8 @@ export default function Messenger({
   onSend,
   onEdit,
   sending,
+  locked,
+  lockedMessage,
 }: {
   meUserId: number | null;
   meFirstName?: string | null;
@@ -70,12 +72,13 @@ export default function Messenger({
   onSend: (body: string) => void | Promise<void>;
   onEdit: (messageId: number, body: string) => void | Promise<void>;
   sending?: boolean;
+  locked?: boolean;
+  lockedMessage?: string;
 }) {
   const [draft, setDraft] = useState("");
   const [openProfileFor, setOpenProfileFor] = useState<number | "none">("none");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState("");
-
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -104,6 +107,8 @@ export default function Messenger({
   }
 
   async function send(bodyOverride?: string) {
+    if (locked) return;
+
     const body = (bodyOverride ?? draft).trim();
     if (!body) return;
     if (!meUserId) return;
@@ -112,7 +117,8 @@ export default function Messenger({
     setDraft("");
   }
 
-  const sendDisabled = !meUserId || !!sending || !draft.trim();
+  const sendDisabled = !!locked || !meUserId || !!sending || !draft.trim();
+  console.log(sendDisabled)
 
   return (
     <div className="rounded-2xl border overflow-hidden" style={{ borderColor: "rgb(var(--border))" }}>
@@ -134,7 +140,7 @@ export default function Messenger({
             className="rounded-xl border px-3 py-2 text-sm hover:opacity-90 disabled:opacity-60"
             style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
             title="Send thumbs up"
-            disabled={!meUserId || !!sending}
+            disabled={!!locked || !meUserId || !!sending}
           >
             👍
           </button>
@@ -142,9 +148,10 @@ export default function Messenger({
           <button
             type="button"
             onClick={() => setDraft((d) => (d ? d + " 😊" : "😊"))}
-            className="rounded-xl border px-3 py-2 text-sm hover:opacity-90"
+            className="rounded-xl border px-3 py-2 text-sm hover:opacity-90 disabled:opacity-60"
             style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
             title="Add emoji"
+            disabled={!!locked || !meUserId || !!sending}
           >
             😊
           </button>
@@ -158,7 +165,7 @@ export default function Messenger({
       >
         {messages.length === 0 ? (
           <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-            No messages yet.
+            {locked ? "You don’t have access to this chat." : "No messages yet."}
           </div>
         ) : null}
 
@@ -168,7 +175,7 @@ export default function Messenger({
           const whoInitials = mine ? initials(meFirstName, meLastName) : initials(m.first_name, m.last_name);
           const whoFull = mine ? fullName(meFirstName, meLastName) : fullName(m.first_name, m.last_name);
 
-          const canEdit = mine && m.id > 0;
+          const canEdit = mine && m.id > 0 && !locked;
 
           return (
             <div key={m.id} className={`flex gap-2 ${mine ? "justify-end" : "justify-start"}`}>
@@ -308,7 +315,11 @@ export default function Messenger({
       </div>
 
       <div className="p-3 border-t" style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}>
-        {!meUserId ? (
+        {locked ? (
+          <div className="text-xs mb-2" style={{ color: "rgb(var(--muted))" }}>
+            {lockedMessage || "You don’t have access to this chat."}
+          </div>
+        ) : !meUserId ? (
           <div className="text-xs mb-2" style={{ color: "rgb(var(--muted))" }}>
             Sign in to send messages.
           </div>
@@ -328,7 +339,7 @@ export default function Messenger({
             className="flex-1 rounded-2xl border px-3 py-2 text-sm min-h-[44px]"
             style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
             rows={1}
-            disabled={!meUserId || !!sending}
+            disabled={!!locked || !meUserId || !!sending}
           />
 
           <button

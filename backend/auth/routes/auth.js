@@ -253,6 +253,7 @@ router.get("/me", requireAuth, async (req, res, next) => {
     const u = await pool.query(
       `
       SELECT
+        u.id,
         u.public_id,
         u.email,
         u.first_name,
@@ -270,7 +271,6 @@ router.get("/me", requireAuth, async (req, res, next) => {
       `,
       [userId]
     );
-
     if (u.rowCount === 0) {
       return res.status(401).json({ ok: false, message: "Not authenticated" });
     }
@@ -278,7 +278,6 @@ router.get("/me", requireAuth, async (req, res, next) => {
     const user = u.rows[0];
     const roles = user.roles || [];
     const user_role = roles.includes("admin") ? "admin" : roles.includes("worker") ? "worker" : "customer";
-
     return res.json({
       ok: true,
       user: {

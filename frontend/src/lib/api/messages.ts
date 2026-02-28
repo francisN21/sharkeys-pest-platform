@@ -5,11 +5,21 @@ const API_BASE = process.env.NEXT_PUBLIC_AUTH_API_BASE;
 
 function resolveUrl(path: string) {
   if (!API_BASE && !path.startsWith("http")) {
-    throw new Error(
-      "Missing NEXT_PUBLIC_AUTH_API_BASE. Set it in .env.local (e.g. http://localhost:4000)."
-    );
+    throw new Error("Missing NEXT_PUBLIC_AUTH_API_BASE. Set it in .env.local (e.g. http://localhost:4000).");
   }
   return path.startsWith("http") ? path : `${API_BASE}${path}`;
+}
+
+export class ApiError extends Error {
+  status: number;
+  payload?: unknown;
+
+  constructor(message: string, status: number, payload?: unknown) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.payload = payload;
+  }
 }
 
 async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -25,7 +35,7 @@ async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const msg = data?.message || data?.error || `Request failed (${res.status})`;
-    throw new Error(msg);
+    throw new ApiError(msg, res.status, data);
   }
 
   return data as T;
@@ -39,7 +49,7 @@ export type BookingMessage = {
   body: string;
   created_at: string;
   updated_at: string | null;
-  delivered_at: string;
+  delivered_at: string | null;
   first_name?: string | null;
   last_name?: string | null;
 };
