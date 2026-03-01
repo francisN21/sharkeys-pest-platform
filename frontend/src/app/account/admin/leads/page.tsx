@@ -583,8 +583,11 @@ export default function AdminLeadsPage() {
             });
 
       const pid = created?.booking?.public_id ? ` (${created.booking.public_id})` : "";
-      setSuccessMsg(`Booking created!${pid}`);
 
+      resetForm()
+      console.log("Reset form success")
+
+      setSuccessMsg(`Booking created!${pid}`);
       // refresh availability so the slot greys out immediately
       try {
         const tzOffsetMinutes = new Date().getTimezoneOffset();
