@@ -41,13 +41,9 @@ router.get("/admin/metrics/customers", requireAuth, async (req, res, next) => {
     const ok = await requireSuperUserByDb(userId);
     if (!ok) return res.status(403).json({ ok: false, message: "Forbidden" });
 
-    // ✅ Default: last 30 days rolling, ending today (exclusive end = today+1? or today)
-    // We’ll use end_exclusive = tomorrow at 00:00 UTC? Safer: end_exclusive = today + 1 day date-only.
-    // But since the UI will pass date-only, we define:
-    // - start_date inclusive
-    // - end_date exclusive
+    // Default: last 30 days rolling
     const now = new Date();
-    const endDefault = toISODateOnlyLocal(now); // today date-only
+    const endDefault = toISODateOnlyLocal(now); // end exclusive (today 00:00Z)
     const startDefault = toISODateOnlyLocal(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
 
     const startDate = parseDateOnly(start || "") || startDefault;
@@ -65,8 +61,7 @@ router.get("/admin/metrics/customers", requireAuth, async (req, res, next) => {
       return res.status(400).json({ ok: false, message: `Range too large (max ${maxDays} days)` });
     }
 
-    // We consider "customers" = users with role 'customer'
-    // account_type in users: 'residential' | 'business' | null
+    // customers = users with role 'customer'
     const r = await pool.query(
       `
       WITH params AS (
@@ -77,12 +72,21 @@ router.get("/admin/metrics/customers", requireAuth, async (req, res, next) => {
         FROM users u
         JOIN user_roles ur ON ur.user_id = u.id AND ur.role = 'customer'
       ),
+      lead_converted_customers AS (
+        -- conversion rows whose resulting user is a customer
+        SELECT lc.*
+        FROM lead_conversions lc
+        JOIN customer_users cu ON cu.id = lc.user_id
+      ),
       all_time AS (
         SELECT
           COUNT(*)::int AS customers_all_time,
           COUNT(*) FILTER (WHERE account_type = 'residential')::int AS residential_all_time,
           COUNT(*) FILTER (WHERE account_type = 'business')::int AS business_all_time,
-          COUNT(*) FILTER (WHERE account_type IS NULL OR account_type NOT IN ('residential','business'))::int AS unknown_all_time
+          COUNT(*) FILTER (WHERE account_type IS NULL OR account_type NOT IN ('residential','business'))::int AS unknown_all_time,
+
+          -- ✅ new: conversions (all time)
+          (SELECT COUNT(*)::int FROM lead_converted_customers) AS lead_conversions_all_time
         FROM customer_users
       ),
       in_range AS (
@@ -108,7 +112,14 @@ router.get("/admin/metrics/customers", requireAuth, async (req, res, next) => {
             WHERE created_at >= (SELECT start_date FROM params)
               AND created_at <  (SELECT end_date   FROM params)
               AND (account_type IS NULL OR account_type NOT IN ('residential','business'))
-          )::int AS new_unknown_in_range
+          )::int AS new_unknown_in_range,
+
+          -- ✅ new: conversions in range (based on converted_at)
+          (SELECT COUNT(*)::int
+           FROM lead_converted_customers lc
+           WHERE lc.converted_at >= (SELECT start_date FROM params)
+             AND lc.converted_at <  (SELECT end_date   FROM params)
+          ) AS lead_conversions_in_range
         FROM customer_users
       )
       SELECT
@@ -129,6 +140,11 @@ router.get("/admin/metrics/customers", requireAuth, async (req, res, next) => {
     const pctResAll = customersAll > 0 ? Math.round((resAll / customersAll) * 1000) / 10 : 0;
     const pctBizAll = customersAll > 0 ? Math.round((bizAll / customersAll) * 1000) / 10 : 0;
 
+    // ✅ new: conversion rate within the selected range
+    const newCustomers = Number(inRange.new_customers_in_range || 0);
+    const leadConversions = Number(inRange.lead_conversions_in_range || 0);
+    const leadConversionRate = newCustomers > 0 ? Math.round((leadConversions / newCustomers) * 1000) / 10 : 0;
+
     return res.json({
       ok: true,
       range: { start: startDate, end_exclusive: endDate, days: diffDays },
@@ -137,7 +153,10 @@ router.get("/admin/metrics/customers", requireAuth, async (req, res, next) => {
         residential_percent: pctResAll,
         business_percent: pctBizAll,
       },
-      in_range: inRange,
+      in_range: {
+        ...inRange,
+        lead_conversion_rate_percent: leadConversionRate,
+      },
     });
   } catch (e) {
     next(e);

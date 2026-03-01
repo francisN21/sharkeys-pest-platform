@@ -7,6 +7,10 @@ function fmt(n: number) {
   return Number.isFinite(n) ? n.toLocaleString() : "0";
 }
 
+function fmtPct(n: number) {
+  return Number.isFinite(n) ? `${n}%` : "0%";
+}
+
 function todayISO() {
   const now = new Date();
   const yyyy = now.getFullYear();
@@ -25,9 +29,8 @@ function daysAgoISO(days: number) {
 }
 
 export default function CustomersOverview() {
-  // ✅ Default: last 30 days rolling
   const [start, setStart] = useState<string>(() => daysAgoISO(30));
-  const [end, setEnd] = useState<string>(() => todayISO()); // exclusive end in API (today is fine)
+  const [end, setEnd] = useState<string>(() => todayISO()); // exclusive end in API
 
   const [data, setData] = useState<CustomersMetricsResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -60,6 +63,11 @@ export default function CustomersOverview() {
 
   const all = data?.all_time;
   const inr = data?.in_range;
+
+  // ✅ NEW fields (safe defaults)
+  const leadConversionsRange = Number(inr?.lead_conversions_in_range || 0);
+  const leadConversionRate = Number(inr?.lead_conversion_rate_percent || 0);
+  const leadConversionsAll = Number(all?.lead_conversions_all_time || 0);
 
   return (
     <section className="space-y-3">
@@ -139,10 +147,23 @@ export default function CustomersOverview() {
             <KpiCard title="New unknown (range)" value={fmt(inr.new_unknown_in_range)} />
           </div>
 
+          {/* ✅ NEW: conversions row */}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <KpiCard title="Lead conversions (range)" value={fmt(leadConversionsRange)} />
+            <KpiCard title="Lead conversion rate (range)" value={fmtPct(leadConversionRate)} />
+            <KpiCard title="Lead conversions (all-time)" value={fmt(leadConversionsAll)} />
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-4">
             <KpiCard title="Total customers (all-time)" value={fmt(all.customers_all_time)} />
-            <KpiCard title="Residential (all-time)" value={`${fmt(all.residential_all_time)} (${all.residential_percent}%)`} />
-            <KpiCard title="Business (all-time)" value={`${fmt(all.business_all_time)} (${all.business_percent}%)`} />
+            <KpiCard
+              title="Residential (all-time)"
+              value={`${fmt(all.residential_all_time)} (${all.residential_percent}%)`}
+            />
+            <KpiCard
+              title="Business (all-time)"
+              value={`${fmt(all.business_all_time)} (${all.business_percent}%)`}
+            />
             <KpiCard title="Unknown (all-time)" value={fmt(all.unknown_all_time)} />
           </div>
 
@@ -157,8 +178,10 @@ export default function CustomersOverview() {
             </div>
 
             {/* lightweight “bar” visualization */}
-            <div className="mt-3 h-3 w-full rounded-full border overflow-hidden"
-                 style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.35)" }}>
+            <div
+              className="mt-3 h-3 w-full rounded-full border overflow-hidden"
+              style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.35)" }}
+            >
               <div
                 className="h-full"
                 style={{
