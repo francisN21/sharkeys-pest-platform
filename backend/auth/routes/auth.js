@@ -73,21 +73,40 @@ router.post("/signup", async (req, res, next) => {
 
     await client.query("BEGIN");
 
-    const existing = await client.query(
-      `SELECT id FROM users WHERE email = $1`,
-      [normalizedEmail]
-    );
+    // 1) If user already exists, stop (same behavior as today)
+    const existing = await client.query(`SELECT id FROM users WHERE email = $1`, [normalizedEmail]);
     if (existing.rowCount > 0) {
       await client.query("ROLLBACK");
       return res.status(409).json({ ok: false, message: "Email already in use" });
     }
 
+    // 2) If lead exists, lock it for promotion
+    const leadRes = await client.query(
+      `SELECT id, email, crm_tag, crm_tag_note, crm_tag_updated_at, crm_tag_updated_by_user_id
+       FROM leads
+       WHERE email = $1
+       FOR UPDATE`,
+      [normalizedEmail]
+    );
+    const lead = leadRes.rows[0] || null;
+
+    // 3) If lead exists, rename its email to a placeholder to avoid trigger conflict on users insert
+    //    (Trigger checks: "does leads.email == NEW.email?")
+    if (lead) {
+      const placeholderEmail = `promoted+lead${lead.id}@example.invalid`;
+      await client.query(`UPDATE leads SET email = $1 WHERE id = $2`, [placeholderEmail, lead.id]);
+    }
+
+    // 4) Create the user
     const passwordHash = await argon2.hash(password);
 
     const created = await client.query(
       `
-      INSERT INTO users (email, password_hash, first_name, last_name, phone, account_type, address)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO users (
+        email, password_hash, first_name, last_name, phone, account_type, address,
+        crm_tag, crm_tag_note, crm_tag_updated_at, crm_tag_updated_by_user_id
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
       RETURNING id, public_id, email, first_name, last_name, phone, account_type, address, email_verified_at, created_at
       `,
       [
@@ -98,12 +117,16 @@ router.post("/signup", async (req, res, next) => {
         phone || null,
         accountType || null,
         address || null,
+        lead?.crm_tag ?? null,
+        lead?.crm_tag_note ?? null,
+        lead?.crm_tag_updated_at ?? null,
+        lead?.crm_tag_updated_by_user_id ?? null,
       ]
     );
 
     const user = created.rows[0];
 
-    // Default role: customer
+    // 5) Default role: customer
     await client.query(
       `INSERT INTO user_roles (user_id, role)
        VALUES ($1, 'customer')
@@ -111,8 +134,44 @@ router.post("/signup", async (req, res, next) => {
       [user.id]
     );
 
+    // 6) If this was a lead promotion, migrate dependent data then delete lead
+    if (lead) {
+      // IMPORTANT: migrate bookings first to satisfy bookings_customer_or_lead_chk (XOR)
+      await client.query(
+        `UPDATE bookings
+         SET customer_user_id = $1,
+             lead_id = NULL
+         WHERE lead_id = $2`,
+        [user.id, lead.id]
+      );
+
+      // Optional but recommended: migrate customer_tags lead -> registered
+      await client.query(
+        `
+        INSERT INTO customer_tags (kind, entity_id, tag, note, updated_by_user_id, updated_at)
+        SELECT 'registered', $1, ct.tag, ct.note, ct.updated_by_user_id, ct.updated_at
+        FROM customer_tags ct
+        WHERE ct.kind = 'lead' AND ct.entity_id = $2
+        ON CONFLICT (kind, entity_id)
+        DO UPDATE SET
+          tag = EXCLUDED.tag,
+          note = EXCLUDED.note,
+          updated_by_user_id = EXCLUDED.updated_by_user_id,
+          updated_at = EXCLUDED.updated_at
+        `,
+        [user.id, lead.id]
+      );
+
+      // Clean up old lead tag row
+      await client.query(`DELETE FROM customer_tags WHERE kind = 'lead' AND entity_id = $1`, [lead.id]);
+
+      // Now safe to delete the lead (bookings no longer reference it)
+      await client.query(`DELETE FROM leads WHERE id = $1`, [lead.id]);
+    }
+
     await client.query("COMMIT");
 
+    // Create session AFTER commit (keeps your current pattern)
     const { sessionId, expiresAt } = await createSession(user.id);
 
     const cookieName = process.env.SESSION_COOKIE_NAME || "sid";
@@ -140,6 +199,12 @@ router.post("/signup", async (req, res, next) => {
     try {
       await client.query("ROLLBACK");
     } catch {}
+
+    // If your cross-table uniqueness trigger throws 23505, return a clean 409
+    if (e && e.code === "23505") {
+      return res.status(409).json({ ok: false, message: "Email already in use" });
+    }
+
     next(e);
   } finally {
     client.release();
