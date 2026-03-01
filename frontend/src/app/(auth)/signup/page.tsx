@@ -1,20 +1,35 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+
 import AuthTextField from "../../../components/forms/AuthTextField";
 import { signupSchema, type SignupValues } from "../../../lib/validators/auth";
-import { signup } from "../../../lib/api/auth";
+import { signup, ApiError, me } from "../../../lib/api/auth";
 import { notifyAuthChanged } from "../../../components/AuthProvider";
+
+function friendlySignupError(e: unknown): string {
+  // Our api/auth.ts throws ApiError on non-2xx
+  if (e instanceof ApiError) {
+    // Common cases
+    if (e.status === 409) return e.message || "Email already in use.";
+    if (e.status === 400) return e.message || "Please check your input and try again.";
+    if (e.status === 401) return "Please sign in again.";
+    if (e.status === 403) return "You’re not allowed to do that.";
+    return e.message || "Signup failed.";
+  }
+
+  if (e instanceof Error) return e.message;
+  return "Signup failed.";
+}
 
 export default function SignupPage() {
   const router = useRouter();
 
   const [serverError, setServerError] = useState<string | null>(null);
-  const [okMsg, setOkMsg] = useState<string | null>(null);
 
   const {
     register,
@@ -28,14 +43,34 @@ export default function SignupPage() {
     },
   });
 
+  // Optional UX: if user is already signed in, redirect them out of signup
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const r = await me();
+        if (!alive) return;
+        if (r?.ok && r.user?.public_id) {
+          router.replace("/account");
+        }
+      } catch {
+        // ignore; not logged in
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [router]);
+
   async function onSubmit(values: SignupValues) {
     setServerError(null);
-    setOkMsg(null);
 
     await signup(values);
 
-    setOkMsg("Account created! You’re now signed in.");
+    // Backend sets cookie session; tell app to refresh auth state
     notifyAuthChanged();
+
+    // Go straight to account; avoid flashing "ok" message
     router.push("/account");
   }
 
@@ -48,9 +83,11 @@ export default function SignupPage() {
         </p>
       </div>
 
-      {serverError && <div className="rounded-xl border p-3 text-sm border-red-500">{serverError}</div>}
-
-      {okMsg && <div className="rounded-xl border p-3 text-sm border-green-500">{okMsg}</div>}
+      {serverError && (
+        <div className="rounded-xl border p-3 text-sm border-red-500">
+          {serverError}
+        </div>
+      )}
 
       <form
         className="space-y-4"
@@ -58,7 +95,7 @@ export default function SignupPage() {
           try {
             await onSubmit(v);
           } catch (e: unknown) {
-            setServerError(e instanceof Error ? e.message : "Signup failed");
+            setServerError(friendlySignupError(e));
           }
         })}
       >
@@ -96,7 +133,10 @@ export default function SignupPage() {
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <label className="text-sm font-semibold">Account type (optional)</label>
-            <select className="w-full rounded-xl border px-3 py-2 text-sm" {...register("accountType")}>
+            <select
+              className="w-full rounded-xl border px-3 py-2 text-sm"
+              {...register("accountType")}
+            >
               <option value="residential">Residential</option>
               <option value="business">Business</option>
             </select>
@@ -110,7 +150,12 @@ export default function SignupPage() {
           />
         </div>
 
-        <AuthTextField label="Password" type="password" error={errors.password?.message} {...register("password")} />
+        <AuthTextField
+          label="Password"
+          type="password"
+          error={errors.password?.message}
+          {...register("password")}
+        />
 
         <AuthTextField
           label="Confirm password"
