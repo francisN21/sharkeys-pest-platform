@@ -583,10 +583,7 @@ export default function AdminLeadsPage() {
             });
 
       const pid = created?.booking?.public_id ? ` (${created.booking.public_id})` : "";
-
       resetForm()
-      console.log("Reset form success")
-
       setSuccessMsg(`Booking created!${pid}`);
       // refresh availability so the slot greys out immediately
       try {
