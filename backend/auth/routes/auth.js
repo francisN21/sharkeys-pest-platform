@@ -53,6 +53,14 @@ const loginSchema = z.object({
 /**
  * POST /auth/signup
  * - Creates user
+ * - If a lead exists with the same email, promotes lead -> user:
+ *   - lock lead row
+ *   - rename lead email to placeholder (avoids cross-table uniqueness trigger conflict)
+ *   - create user
+ *   - migrate bookings lead_id -> customer_user_id
+ *   - record lead_conversions row
+ *   - migrate customer_tags lead -> registered
+ *   - delete lead + old lead tags
  * - Inserts default role: customer
  * - Creates session cookie
  */
@@ -80,9 +88,16 @@ router.post("/signup", async (req, res, next) => {
       return res.status(409).json({ ok: false, message: "Email already in use" });
     }
 
-    // 2) If lead exists, lock it for promotion
+    // 2) If lead exists, lock it for promotion (include public_id for lead_conversions audit)
     const leadRes = await client.query(
-      `SELECT id, email, crm_tag, crm_tag_note, crm_tag_updated_at, crm_tag_updated_by_user_id
+      `SELECT
+         id,
+         public_id,
+         email,
+         crm_tag,
+         crm_tag_note,
+         crm_tag_updated_at,
+         crm_tag_updated_by_user_id
        FROM leads
        WHERE email = $1
        FOR UPDATE`,
@@ -143,6 +158,16 @@ router.post("/signup", async (req, res, next) => {
              lead_id = NULL
          WHERE lead_id = $2`,
         [user.id, lead.id]
+      );
+
+      // Record lead -> user conversion (metrics/audit)
+      await client.query(
+        `
+        INSERT INTO lead_conversions (lead_id, lead_public_id, user_id, email)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT DO NOTHING
+        `,
+        [lead.id, lead.public_id, user.id, normalizedEmail]
       );
 
       // Optional but recommended: migrate customer_tags lead -> registered
