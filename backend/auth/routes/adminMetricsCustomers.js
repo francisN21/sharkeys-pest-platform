@@ -85,7 +85,7 @@ router.get("/admin/metrics/customers", requireAuth, async (req, res, next) => {
           COUNT(*) FILTER (WHERE account_type = 'business')::int AS business_all_time,
           COUNT(*) FILTER (WHERE account_type IS NULL OR account_type NOT IN ('residential','business'))::int AS unknown_all_time,
 
-          -- ✅ new: conversions (all time)
+          -- conversions (all time)
           (SELECT COUNT(*)::int FROM lead_converted_customers) AS lead_conversions_all_time
         FROM customer_users
       ),
@@ -114,7 +114,7 @@ router.get("/admin/metrics/customers", requireAuth, async (req, res, next) => {
               AND (account_type IS NULL OR account_type NOT IN ('residential','business'))
           )::int AS new_unknown_in_range,
 
-          -- ✅ new: conversions in range (based on converted_at)
+          -- conversions in range (based on converted_at)
           (SELECT COUNT(*)::int
            FROM lead_converted_customers lc
            WHERE lc.converted_at >= (SELECT start_date FROM params)
@@ -140,7 +140,7 @@ router.get("/admin/metrics/customers", requireAuth, async (req, res, next) => {
     const pctResAll = customersAll > 0 ? Math.round((resAll / customersAll) * 1000) / 10 : 0;
     const pctBizAll = customersAll > 0 ? Math.round((bizAll / customersAll) * 1000) / 10 : 0;
 
-    // ✅ new: conversion rate within the selected range
+    // conversion rate within the selected range
     const newCustomers = Number(inRange.new_customers_in_range || 0);
     const leadConversions = Number(inRange.lead_conversions_in_range || 0);
     const leadConversionRate = newCustomers > 0 ? Math.round((leadConversions / newCustomers) * 1000) / 10 : 0;

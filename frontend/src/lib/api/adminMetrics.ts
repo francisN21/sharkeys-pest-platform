@@ -10,6 +10,17 @@ function resolveUrl(path: string) {
   return path.startsWith("http") ? path : `${API_BASE}${path}`;
 }
 
+export class ApiError extends Error {
+  status: number;
+  payload?: unknown;
+  constructor(message: string, status: number, payload?: unknown) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.payload = payload;
+  }
+}
+
 async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const url = resolveUrl(path);
 
@@ -23,7 +34,7 @@ async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const msg = data?.message || data?.error || `Request failed (${res.status})`;
-    throw new Error(msg);
+    throw new ApiError(msg, res.status, data);
   }
 
   return data as T;
@@ -93,8 +104,28 @@ export type CustomersInRange = {
 export type CustomersMetricsResponse = {
   ok: boolean;
   range: { start: string; end_exclusive: string; days: number };
-  all_time: CustomersAllTime;
-  in_range: CustomersInRange;
+
+  all_time: {
+    customers_all_time: number;
+    residential_all_time: number;
+    business_all_time: number;
+    unknown_all_time: number;
+
+    residential_percent: number;
+    business_percent: number;
+
+    lead_conversions_all_time: number;
+  };
+
+  in_range: {
+    new_customers_in_range: number;
+    new_residential_in_range: number;
+    new_business_in_range: number;
+    new_unknown_in_range: number;
+
+    lead_conversions_in_range: number;
+    lead_conversion_rate_percent: number;
+  };
 };
 
 export type SurveyCountRow = {

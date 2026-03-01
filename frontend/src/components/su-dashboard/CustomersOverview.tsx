@@ -29,6 +29,7 @@ function daysAgoISO(days: number) {
 }
 
 export default function CustomersOverview() {
+  // Default: last 30 days rolling
   const [start, setStart] = useState<string>(() => daysAgoISO(30));
   const [end, setEnd] = useState<string>(() => todayISO()); // exclusive end in API
 
@@ -64,10 +65,10 @@ export default function CustomersOverview() {
   const all = data?.all_time;
   const inr = data?.in_range;
 
-  // ✅ NEW fields (safe defaults)
-  const leadConversionsRange = Number(inr?.lead_conversions_in_range || 0);
-  const leadConversionRate = Number(inr?.lead_conversion_rate_percent || 0);
-  const leadConversionsAll = Number(all?.lead_conversions_all_time || 0);
+  // New conversion fields (safe defaults)
+  const leadConversionsRange = Number(inr?.lead_conversions_in_range ?? 0);
+  const leadConversionRate = Number(inr?.lead_conversion_rate_percent ?? 0);
+  const leadConversionsAll = Number(all?.lead_conversions_all_time ?? 0);
 
   return (
     <section className="space-y-3">
@@ -147,7 +148,7 @@ export default function CustomersOverview() {
             <KpiCard title="New unknown (range)" value={fmt(inr.new_unknown_in_range)} />
           </div>
 
-          {/* ✅ NEW: conversions row */}
+          {/* ✅ Lead conversion KPIs */}
           <div className="grid gap-3 sm:grid-cols-3">
             <KpiCard title="Lead conversions (range)" value={fmt(leadConversionsRange)} />
             <KpiCard title="Lead conversion rate (range)" value={fmtPct(leadConversionRate)} />
@@ -167,21 +168,14 @@ export default function CustomersOverview() {
             <KpiCard title="Unknown (all-time)" value={fmt(all.unknown_all_time)} />
           </div>
 
-          <div
-            className="rounded-2xl border p-5"
-            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-          >
+          <div className="rounded-2xl border p-5" style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}>
             <div className="text-sm font-semibold">Customer mix (all-time)</div>
             <div className="mt-2 text-sm" style={{ color: "rgb(var(--muted))" }}>
               Residential: {all.residential_percent}% • Business: {all.business_percent}% • Unknown:{" "}
               {Math.max(0, 100 - all.residential_percent - all.business_percent)}%
             </div>
 
-            {/* lightweight “bar” visualization */}
-            <div
-              className="mt-3 h-3 w-full rounded-full border overflow-hidden"
-              style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.35)" }}
-            >
+            <div className="mt-3 h-3 w-full rounded-full border overflow-hidden" style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.35)" }}>
               <div
                 className="h-full"
                 style={{
@@ -204,10 +198,7 @@ export default function CustomersOverview() {
 
 function KpiCard({ title, value }: { title: string; value: string }) {
   return (
-    <div
-      className="rounded-2xl border p-4"
-      style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-    >
+    <div className="rounded-2xl border p-4" style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}>
       <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
         {title}
       </div>
