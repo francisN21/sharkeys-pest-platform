@@ -245,3 +245,14 @@ We will build this **incrementally**:
 7. Production hardening
 
 Each phase builds on a stable foundation before moving forward.
+
+
+## Meeting Minutes 3/1/2026
+
+Family and Friends
+
+certifications
+
+Pricing
+
+(707) 716-9469

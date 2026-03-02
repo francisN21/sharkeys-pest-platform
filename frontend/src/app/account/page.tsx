@@ -31,7 +31,7 @@ type TabKey =
   | "admin_jobhistory"
   | "admin_tech_bookings";
 
-type Tab = { key: TabKey; label: string; icon: string };
+type Tab = { key: TabKey; label: string; icon: string; badgeCount?: number };
 
 function normalizeRole(user: AuthedUser | null): AppRole {
   const primary = user?.user_role;
@@ -56,6 +56,18 @@ export default function AccountShellPage() {
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Notification counts (tabs badge)
+  const [tabBadges, setTabBadges] = useState<Record<TabKey, number>>({
+    account: 0,
+    bookings: 0,
+    tech: 0,
+    admin_customers: 0,
+    admin_leads: 0,
+    admin_jobs: 0,
+    admin_jobhistory: 0,
+    admin_tech_bookings: 0,
+  });
+
   const tabs: Tab[] = useMemo(() => {
     const base: Tab[] = [{ key: "account", label: "Account", icon: "fa-regular fa-id-badge" }];
 
@@ -72,15 +84,34 @@ export default function AccountShellPage() {
     base.push(
       { key: "admin_customers", label: "Customers", icon: "fa-regular fa-user" },
       { key: "admin_leads", label: "Admin Booking", icon: "fa-solid fa-user-plus" },
-      { key: "admin_jobs", label: "Jobs", icon: "fa-solid fa-briefcase" },
+      {
+        key: "admin_jobs",
+        label: "Jobs",
+        icon: "fa-solid fa-briefcase",
+        badgeCount: tabBadges.admin_jobs,
+      },
       { key: "admin_jobhistory", label: "Completed", icon: "fa-regular fa-circle-check" },
-      { key: "admin_tech_bookings", label: "Tech Bookings", icon: "fa-solid fa-clipboard-list" }
+      {
+        key: "admin_tech_bookings",
+        label: "Tech Bookings",
+        icon: "fa-solid fa-clipboard-list",
+        badgeCount: tabBadges.admin_tech_bookings,
+      }
     );
 
     return base;
-  }, [role]);
+  }, [role, tabBadges.admin_jobs, tabBadges.admin_tech_bookings]);
 
   const [activeTab, setActiveTab] = useState<TabKey>("account");
+
+  function handleTabClick(key: TabKey) {
+    setActiveTab(key);
+
+    // Mark as seen when user opens the tab
+    if (key === "admin_jobs" || key === "admin_tech_bookings") {
+      setTabBadges((prev) => ({ ...prev, [key]: 0 }));
+    }
+  }
 
   useEffect(() => {
     let alive = true;
@@ -95,8 +126,18 @@ export default function AccountShellPage() {
           router.replace("/login");
           return;
         }
+
         const r = normalizeRole(res.user as AuthedUser);
         setRole(r);
+
+        // Optional: quick demo badges for admin (remove when wiring real counts)
+        if (r === "admin") {
+          setTabBadges((prev) => ({
+            ...prev,
+            admin_jobs: prev.admin_jobs || 0,
+            admin_tech_bookings: prev.admin_tech_bookings || 0,
+          }));
+        }
       } catch (e: unknown) {
         if (!alive) return;
         const msg = e instanceof Error ? e.message : "Not logged in";
@@ -125,6 +166,7 @@ export default function AccountShellPage() {
             {err}
           </div>
         ) : null}
+
         {/* tabs bar */}
         <div className="w-full border-b" style={{ borderColor: "rgb(var(--border))" }}>
           <nav className="flex flex-wrap items-center gap-2 -mb-px" aria-label="Account navigation">
@@ -133,8 +175,9 @@ export default function AccountShellPage() {
                 key={t.key}
                 label={t.label}
                 icon={t.icon}
+                badgeCount={t.badgeCount}
                 active={activeTab === t.key}
-                onClick={() => setActiveTab(t.key)}
+                onClick={() => handleTabClick(t.key)}
               />
             ))}
           </nav>
@@ -173,11 +216,13 @@ export default function AccountShellPage() {
 function GithubTab({
   label,
   icon,
+  badgeCount,
   active,
   onClick,
 }: {
   label: string;
   icon: string;
+  badgeCount?: number;
   active: boolean;
   onClick: () => void;
 }) {
@@ -189,29 +234,36 @@ function GithubTab({
         "group inline-flex items-center gap-2 px-3 py-2 text-sm font-medium",
         "rounded-md transition-all duration-150",
         "border-b-2",
-        active
-          ? "border-blue-500"
-          : "border-transparent hover:border-[rgb(var(--border))]"
+        active ? "border-blue-500" : "border-transparent hover:border-[rgb(var(--border))]"
       )}
       style={{
         color: active ? "rgb(var(--fg))" : "rgb(var(--muted))",
-        background: active
-          ? "rgba(var(--bg), 0.35)"
-          : "transparent",
+        background: active ? "rgba(var(--bg), 0.35)" : "transparent",
       }}
       aria-current={active ? "page" : undefined}
     >
       <i
-        className={cn(
-          icon,
-          "text-[13px] transition-opacity",
-          active ? "" : "opacity-80 group-hover:opacity-100"
-        )}
+        className={cn(icon, "text-[13px] transition-opacity", active ? "" : "opacity-80 group-hover:opacity-100")}
         aria-hidden="true"
       />
-      <span className="transition-colors duration-150 group-hover:text-[rgb(var(--fg))]">
-        {label}
-      </span>
+
+      <span className="transition-colors duration-150 group-hover:text-[rgb(var(--fg))]">{label}</span>
+
+      {/* Right-side notification badge */}
+      {typeof badgeCount === "number" && badgeCount > 0 ? (
+        <span
+          className="ml-1 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[11px] font-semibold border"
+          style={{
+            background: "rgb(239 68 68)", // red
+            color: "white",
+            borderColor: "rgba(0,0,0,0.15)",
+          }}
+          aria-label={`${badgeCount} new items`}
+          title={`${badgeCount} new`}
+        >
+          {badgeCount > 99 ? "99+" : badgeCount}
+        </span>
+      ) : null}
     </button>
   );
 }
