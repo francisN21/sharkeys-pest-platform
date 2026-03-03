@@ -24,6 +24,10 @@ const workerBookingsRouter = require("../routes/workerBookings");
 const adminEditServiceRouter = require("../routes/adminServices");
 const adminTechBookingsRouter = require("../routes/adminTechBookings");
 
+// Prices Routes Pipeline
+
+const bookingPricesRouter("../routes/bookingPrices.js")
+
 // Metrics routes pipeline
 const trafficRouter = require("../routes/adminMetricsTraffic");
 const adminMetricsBookingsRouter = require("../routes/adminMetricsBookings");
@@ -109,6 +113,9 @@ app.use(adminMetricsLeadConversionsRouter);
 
 // Messaging system pipeline
 app.use(messages);
+
+// Prices Routes Pipeline
+app.use(bookingPricesRouter)
 
 // Service routes pipeline
 app.use("/services", servicesRouter);

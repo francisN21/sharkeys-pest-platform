@@ -1,3 +1,5 @@
+// frontend/src/lib/api/adminBookings.ts
+
 import { jsonFetch } from "../api/bookings";
 
 export type AdminBookingRow = {
