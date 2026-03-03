@@ -58,6 +58,7 @@ router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
         b.address,
         b.notes,
         s.title AS service_title,
+        s.base_price_cents AS service_base_price_cents,
 
         -- registered customer fields (nullable for lead bookings)
         cu.first_name AS customer_first_name,
@@ -147,8 +148,7 @@ router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
       const leadName = `${r.lead_first_name || ""} ${r.lead_last_name || ""}`.trim();
       const customerName = `${r.customer_first_name || ""} ${r.customer_last_name || ""}`.trim();
 
-      const displayName =
-        (customerName || leadName || r.customer_email || r.lead_email || "").trim() || null;
+      const displayName = (customerName || leadName || r.customer_email || r.lead_email || "").trim() || null;
 
       tech.bookings.push({
         public_id: r.public_id,
@@ -158,6 +158,9 @@ router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
         address: r.address,
         notes: r.notes ?? null,
         service_title: r.service_title,
+
+        //pull from services.base_price_cents (defaults to 0)
+        service_base_price_cents: typeof r.service_base_price_cents === "number" ? r.service_base_price_cents : 0,
 
         customer_name: displayName,
         customer_email: r.customer_email ?? r.lead_email ?? null,
@@ -205,6 +208,7 @@ router.get("/admin/tech-bookings/:publicId", requireAuth, async (req, res, next)
         b.address,
         b.notes,
         s.title AS service_title,
+        s.base_price_cents AS service_base_price_cents,
 
         -- assignment (current)
         ba.worker_user_id,
@@ -284,8 +288,7 @@ router.get("/admin/tech-bookings/:publicId", requireAuth, async (req, res, next)
 
     const leadName = `${(r.lead_first_name ?? "").trim()} ${(r.lead_last_name ?? "").trim()}`.trim();
     const customerName = `${(r.customer_first_name ?? "").trim()} ${(r.customer_last_name ?? "").trim()}`.trim();
-    const displayName =
-      (customerName || leadName || r.customer_email || r.lead_email || "").trim() || null;
+    const displayName = (customerName || leadName || r.customer_email || r.lead_email || "").trim() || null;
 
     const booking = {
       public_id: r.public_id,
@@ -295,6 +298,10 @@ router.get("/admin/tech-bookings/:publicId", requireAuth, async (req, res, next)
 
       // booking/service
       service_title: r.service_title ?? null,
+
+      //pull from services.base_price_cents (defaults to 0)
+      service_base_price_cents: typeof r.service_base_price_cents === "number" ? r.service_base_price_cents : 0,
+
       worker_user_id: r.worker_user_id ?? null,
 
       // assigned tech info
@@ -357,10 +364,9 @@ router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, 
 
     await client.query("BEGIN");
 
-    const bRes = await client.query(
-      `SELECT id, status FROM bookings WHERE public_id = $1 FOR UPDATE`,
-      [bookingPublicId]
-    );
+    const bRes = await client.query(`SELECT id, status FROM bookings WHERE public_id = $1 FOR UPDATE`, [
+      bookingPublicId,
+    ]);
     if (bRes.rowCount === 0) {
       await client.query("ROLLBACK");
       return res.status(404).json({ ok: false, message: "Booking not found" });
@@ -369,15 +375,12 @@ router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, 
     const booking = bRes.rows[0];
     if (booking.status === "completed" || booking.status === "cancelled") {
       await client.query("ROLLBACK");
-      return res
-        .status(409)
-        .json({ ok: false, message: "Cannot reassign a completed/cancelled booking" });
+      return res.status(409).json({ ok: false, message: "Cannot reassign a completed/cancelled booking" });
     }
 
-    const techRes = await client.query(
-      `SELECT 1 FROM user_roles WHERE user_id = $1 AND role = 'worker' LIMIT 1`,
-      [worker_user_id]
-    );
+    const techRes = await client.query(`SELECT 1 FROM user_roles WHERE user_id = $1 AND role = 'worker' LIMIT 1`, [
+      worker_user_id,
+    ]);
     if (techRes.rowCount === 0) {
       await client.query("ROLLBACK");
       return res.status(400).json({ ok: false, message: "Target user is not a technician" });
@@ -397,9 +400,7 @@ router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, 
     );
 
     if (booking.status !== "assigned") {
-      await client.query(`UPDATE bookings SET status = 'assigned', updated_at = now() WHERE id = $1`, [
-        booking.id,
-      ]);
+      await client.query(`UPDATE bookings SET status = 'assigned', updated_at = now() WHERE id = $1`, [booking.id]);
     }
 
     await client.query("COMMIT");

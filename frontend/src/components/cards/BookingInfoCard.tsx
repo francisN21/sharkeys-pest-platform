@@ -1,7 +1,7 @@
 // frontend/src/components/cards/BookingInfoCard.tsx
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type { TechBookingDetail } from "../../lib/api/adminTechBookings";
 import type { WorkerBookingRow } from "../../lib/api/workerBookings";
 import { me as apiMe } from "../../lib/api/auth";
@@ -12,7 +12,6 @@ function normalizeText(v: string | null | undefined) {
 }
 
 type PersonKind = "lead" | "registered";
-type QuoteStatus = "pending" | "approved" | "paid" | "balance_due";
 type ViewerRole = "customer" | "worker" | "admin" | "superuser" | string;
 
 /**
@@ -83,7 +82,7 @@ function normalizeViewerRole(role?: ViewerRole): "admin" | "superuser" | "worker
 
 /** ------------------ Me cache (prevents refetch spam) ------------------ */
 type MeLite = { user_role?: string; roles?: string[] } | null;
-let ME_CACHE: { status: "idle" | "loading" | "ready"; value: MeLite } = {
+const ME_CACHE: { status: "idle" | "loading" | "ready"; value: MeLite } = {
   status: "idle",
   value: null,
 };
@@ -121,6 +120,57 @@ async function getMeCached(): Promise<MeLite> {
   }
 
   return ME_CACHE.value;
+}
+
+/** ------------------ Price API helpers (reuses env + fetch style) ------------------ */
+
+type ApiErrorShape = { message?: string; error?: string; ok?: boolean };
+
+const API_BASE = process.env.NEXT_PUBLIC_AUTH_API_BASE;
+
+function resolveUrl(path: string) {
+  if (!API_BASE && !path.startsWith("http")) {
+    throw new Error("Missing NEXT_PUBLIC_AUTH_API_BASE. Set it in .env.local (e.g. http://localhost:4000).");
+  }
+  return path.startsWith("http") ? path : `${API_BASE}${path}`;
+}
+
+async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const url = resolveUrl(path);
+
+  const res = await fetch(url, {
+    ...init,
+    headers: { ...(init?.headers || {}), "Content-Type": "application/json" },
+    credentials: "include",
+  });
+
+  const data = (await res.json().catch(() => ({}))) as T & ApiErrorShape;
+
+  if (!res.ok) {
+    const msg = (data as ApiErrorShape)?.message || (data as ApiErrorShape)?.error || `Request failed (${res.status})`;
+    throw new Error(msg);
+  }
+
+  return data as T;
+}
+
+type BookingPrice = {
+  initial_price_cents: number;
+  final_price_cents: number | null;
+  currency: string;
+  set_by_user_id: number | null;
+  set_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+function digitsOnly(v: string) {
+  return v.replace(/[^\d]/g, "");
+}
+
+function centsToDollarsLabel(cents?: number | null) {
+  const n = typeof cents === "number" && Number.isFinite(cents) ? cents : 0;
+  return `$${(n / 100).toFixed(2)}`;
 }
 
 /** ------------------ UI helpers ------------------ */
@@ -268,83 +318,166 @@ function MoneyRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function QuoteStatusPill({ status }: { status: QuoteStatus }) {
-  const meta: Record<QuoteStatus, { label: string; bg: string; border: string; title: string }> = {
-    pending: { label: "Pending", bg: "rgba(245, 158, 11, 0.16)", border: "rgba(245, 158, 11, 0.55)", title: "Quote sent, awaiting approval" },
-    approved: { label: "Approved", bg: "rgba(34, 197, 94, 0.14)", border: "rgba(34, 197, 94, 0.55)", title: "Customer approved the quote" },
-    paid: { label: "Paid", bg: "rgba(59, 130, 246, 0.14)", border: "rgba(59, 130, 246, 0.55)", title: "Invoice is fully paid" },
-    balance_due: { label: "Balance Due", bg: "rgba(239, 68, 68, 0.14)", border: "rgba(239, 68, 68, 0.55)", title: "Balance remaining on invoice" },
-  };
+/** ------------------ Price card (replaces hardcoded QuoteCard) ------------------ */
 
-  const m = meta[status];
+function PriceCard({ publicId, viewer }: { publicId: string; viewer: "admin" | "superuser" | "worker" | "customer" | "unknown" }) {
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [price, setPrice] = useState<BookingPrice | null>(null);
 
-  return (
-    <span className="rounded-full border px-2 py-1 text-xs font-semibold" style={{ borderColor: m.border, background: m.bg }} title={m.title}>
-      {m.label}
-    </span>
-  );
-}
+  const [editCents, setEditCents] = useState<string>("");
+  const [saving, setSaving] = useState(false);
 
-function QuoteCard() {
-  const status: QuoteStatus = "approved";
-  const subtotal = 149;
-  const tax = 0;
-  const discount = 0;
+  const canEdit = viewer === "worker" || viewer === "admin" || viewer === "superuser";
 
-  const total = subtotal + tax - discount;
-  const paidAmount = status === "paid" ? total : 0;
-  const balanceDue = Math.max(0, total - paidAmount);
+  async function load() {
+    if (!publicId || publicId === "—") return;
+    setErr(null);
+    setLoading(true);
+    try {
+      const res = await jsonFetch<{ ok: boolean; price: BookingPrice }>(
+        `/bookings/${encodeURIComponent(publicId)}/price`,
+        { method: "GET" }
+      );
+      const p = res.price;
+      setPrice(p);
 
-  const showPaid = status === "paid" || paidAmount > 0;
-  const showBalance = status === "balance_due" || balanceDue > 0;
+      const seed = typeof p.final_price_cents === "number" ? p.final_price_cents : p.initial_price_cents ?? 0;
+      setEditCents(String(seed));
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Failed to load price");
+      setPrice(null);
+      setEditCents("");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [publicId]);
+
+  async function onSave() {
+    if (!canEdit) return;
+    if (!publicId || publicId === "—") return;
+
+    const cents = Number(editCents);
+    if (!Number.isFinite(cents) || !Number.isSafeInteger(cents) || cents < 0) {
+      setErr("Enter a valid whole number of cents (0 or more).");
+      return;
+    }
+
+    setSaving(true);
+    setErr(null);
+    try {
+      const res = await jsonFetch<{ ok: boolean; price: BookingPrice }>(
+        `/bookings/${encodeURIComponent(publicId)}/price`,
+        { method: "PATCH", body: JSON.stringify({ final_price_cents: cents }) }
+      );
+
+      setPrice(res.price);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Failed to save price");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const initialCents = price?.initial_price_cents ?? 0;
+  const finalCents = price?.final_price_cents ?? null;
+  const currency = price?.currency ?? "USD";
+
+  const totalDollars = centsToDollarsLabel(finalCents ?? initialCents);
 
   return (
     <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: "rgb(var(--border))" }}>
       <div className="flex items-center justify-between gap-3">
-        <div className="text-sm font-semibold">Quote</div>
-        <div className="flex items-center gap-2">
-          <QuoteStatusPill status={status} />
-          <span
-            className="rounded-full border px-2 py-1 text-xs font-semibold"
-            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.20)" }}
-            title="Temporary - hardcoded"
-          >
-            Temp
-          </span>
-        </div>
+        <div className="text-sm font-semibold">Pricing</div>
+        <span
+          className="rounded-full border px-2 py-1 text-xs font-semibold"
+          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.20)" }}
+          title="Currency"
+        >
+          {currency}
+        </span>
       </div>
 
-      <div className="space-y-2">
-        <MoneyRow label="Service" value={`$${subtotal.toFixed(2)}`} />
-        <MoneyRow label="Tax" value={`$${tax.toFixed(2)}`} />
-        <MoneyRow label="Discount" value={`-$${discount.toFixed(2)}`} />
-      </div>
-
-      <div className="pt-2 border-t space-y-2" style={{ borderColor: "rgb(var(--border))" }}>
-        <div className="flex items-center justify-between">
-          <div className="text-sm font-semibold">Total</div>
-          <div className="text-lg font-bold">${total.toFixed(2)}</div>
+      {err ? (
+        <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(239 68 68)", background: "rgba(239, 68, 68, 0.06)" }}>
+          {err}
         </div>
+      ) : null}
 
-        {showPaid ? <MoneyRow label="Paid" value={`$${paidAmount.toFixed(2)}`} /> : null}
-        {showBalance ? (
-          <div className="flex items-center justify-between">
-            <div className="text-sm font-semibold">Balance Due</div>
-            <div className="text-sm font-bold">${balanceDue.toFixed(2)}</div>
+      {loading ? (
+        <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
+          Loading price…
+        </div>
+      ) : (
+        <>
+          <div className="space-y-2">
+            <MoneyRow label="Initial (from service)" value={centsToDollarsLabel(initialCents)} />
+            <MoneyRow label="Final (set on-site)" value={finalCents === null ? "—" : centsToDollarsLabel(finalCents)} />
           </div>
-        ) : null}
 
-        <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-          Later this will come from booking totals / invoice.
-        </div>
-      </div>
+          <div className="pt-2 border-t space-y-2" style={{ borderColor: "rgb(var(--border))" }}>
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold">Current Total</div>
+              <div className="text-lg font-bold">{totalDollars}</div>
+            </div>
 
-      <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.20)" }}>
-        <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-          Notes
-        </div>
-        <div className="mt-1">“Customer approved quote on-site.”</div>
-      </div>
+            {canEdit ? (
+              <div className="mt-2 space-y-2">
+                <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+                  Set Final Price (cents)
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    value={editCents}
+                    onChange={(e) => setEditCents(digitsOnly(e.target.value))}
+                    className="w-40 rounded-xl border px-3 py-2 text-sm"
+                    style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                    inputMode="numeric"
+                    placeholder="e.g. 12999"
+                    disabled={saving}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={onSave}
+                    disabled={saving || editCents.trim() === ""}
+                    className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+                    style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                    title="Save final price"
+                  >
+                    {saving ? "Saving…" : "Save"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={load}
+                    disabled={saving}
+                    className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+                    style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                    title="Refresh price"
+                  >
+                    Refresh
+                  </button>
+                </div>
+
+                <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                  Display: {centsToDollarsLabel(editCents.trim() === "" ? 0 : Number(editCents))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                (Customer view — pricing updates appear here after technician sets the final price.)
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -616,7 +749,7 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
           </div>
 
           <div className="lg:pl-2">
-            <QuoteCard />
+            <PriceCard publicId={publicId} viewer={viewer} />
           </div>
         </div>
       </div>
@@ -653,9 +786,7 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
           <SectionCard title="Assigned Technician">
             <div className="space-y-2">
               <div className="text-sm font-semibold truncate">
-                {normalizeText(techName) === "—"
-                  ? "Pending assignment"
-                  : normalizeText(techName)}
+                {normalizeText(techName) === "—" ? "Pending assignment" : normalizeText(techName)}
               </div>
 
               <div className="grid gap-3 pt-1">

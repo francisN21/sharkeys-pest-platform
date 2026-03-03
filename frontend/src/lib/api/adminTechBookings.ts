@@ -5,9 +5,7 @@ const API_BASE = process.env.NEXT_PUBLIC_AUTH_API_BASE;
 
 function resolveUrl(path: string) {
   if (!API_BASE && !path.startsWith("http")) {
-    throw new Error(
-      "Missing NEXT_PUBLIC_AUTH_API_BASE. Set it in .env.local (e.g. http://localhost:4000)."
-    );
+    throw new Error("Missing NEXT_PUBLIC_AUTH_API_BASE. Set it in .env.local (e.g. http://localhost:4000).");
   }
   return path.startsWith("http") ? path : `${API_BASE}${path}`;
 }
@@ -43,6 +41,7 @@ export type TechBookingRow = {
   notes: string | null;
 
   service_title: string;
+  service_base_price_cents?: number;
 
   customer_name: string | null;
   customer_email: string | null;
@@ -95,28 +94,24 @@ export type TechBookingDetail = {
   starts_at: string | null;
   ends_at: string | null;
 
-  // booking/service
   service_title: string | null;
+  service_base_price_cents?: number;
 
-  // assignment
   worker_user_id: number | null;
   worker_first_name: string | null;
   worker_last_name: string | null;
   worker_email: string | null;
   worker_phone: string | null;
 
-  // address (your DB currently coalesces into address_line1)
   address_line1: string | null;
   address_line2: string | null;
   city: string | null;
   state: string | null;
   zip: string | null;
 
-  // notes
   booking_notes: string | null;
   initial_notes: string | null;
 
-  // unified customer fields (works for registered + lead)
   customer_name: string | null;
   customer_first_name: string | null;
   customer_last_name: string | null;
@@ -124,10 +119,8 @@ export type TechBookingDetail = {
   customer_phone: string | null;
   customer_account_type: string | null;
 
-  // crm
   crm_tag: string | null;
 
-  // lead fields (present when booking is a lead; null otherwise)
   lead_public_id: string | null;
   lead_first_name: string | null;
   lead_last_name: string | null;
