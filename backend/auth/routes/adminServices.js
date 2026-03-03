@@ -1,3 +1,4 @@
+// routes/adminServices.js
 const express = require("express");
 const { z } = require("zod");
 const { pool } = require("../src/db");
@@ -10,28 +11,30 @@ const router = express.Router();
 const createSchema = z.object({
   title: z.string().trim().min(1).max(120),
   description: z.string().trim().min(1).max(2000),
-  duration_minutes: z
-    .number()
-    .int()
-    .positive()
-    .max(24 * 60)
-    .nullable()
+  duration_minutes: z.number().int().positive().max(24 * 60).nullable().optional(),
+
+  // NEW: allow cents
+  base_price_cents: z
+    .union([z.number().int().nonnegative(), z.string().regex(/^\d+$/)])
+    .transform((v) => Number(v))
     .optional(),
 });
 
-const updateSchema = z.object({
-  title: z.string().trim().min(1).max(120).optional(),
-  description: z.string().trim().min(1).max(2000).optional(),
-  duration_minutes: z
-    .number()
-    .int()
-    .positive()
-    .max(24 * 60)
-    .nullable()
-    .optional(),
-}).refine((v) => Object.keys(v).length > 0, {
-  message: "No fields provided to update",
-});
+const updateSchema = z
+  .object({
+    title: z.string().trim().min(1).max(120).optional(),
+    description: z.string().trim().min(1).max(2000).optional(),
+    duration_minutes: z.number().int().positive().max(24 * 60).nullable().optional(),
+
+    // NEW: allow cents
+    base_price_cents: z
+      .union([z.number().int().nonnegative(), z.string().regex(/^\d+$/)])
+      .transform((v) => Number(v))
+      .optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, {
+    message: "No fields provided to update",
+  });
 
 // OWNER: list services (active only for now; you can change later)
 router.get("/", requireAuth, requireRole("superuser"), async (req, res, next) => {
@@ -53,18 +56,29 @@ router.post("/", requireAuth, requireRole("superuser"), async (req, res, next) =
   try {
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ ok: false, message: parsed.error.issues?.[0]?.message || "Invalid input" });
+      return res
+        .status(400)
+        .json({ ok: false, message: parsed.error.issues?.[0]?.message || "Invalid input" });
     }
 
-    const { title, description, duration_minutes = null } = parsed.data;
+    const { title, description, duration_minutes = null, base_price_cents } = parsed.data;
 
-    // NOTE: assumes DB generates public_id (uuid/shortid). If not, add one in DB or generate here.
-    // Also assumes defaults for is_active/sort_order/base_price_cents exist.
+    // If base_price_cents is undefined, rely on DB default (0)
+    if (typeof base_price_cents === "undefined") {
+      const r = await pool.query(
+        `INSERT INTO services (title, description, duration_minutes, is_active)
+         VALUES ($1, $2, $3, true)
+         RETURNING public_id, title, description, sort_order, base_price_cents, duration_minutes`,
+        [title, description, duration_minutes]
+      );
+      return res.status(201).json({ ok: true, service: r.rows[0] });
+    }
+
     const r = await pool.query(
-      `INSERT INTO services (title, description, duration_minutes, is_active)
-       VALUES ($1, $2, $3, true)
+      `INSERT INTO services (title, description, duration_minutes, base_price_cents, is_active)
+       VALUES ($1, $2, $3, $4, true)
        RETURNING public_id, title, description, sort_order, base_price_cents, duration_minutes`,
-      [title, description, duration_minutes]
+      [title, description, duration_minutes, base_price_cents]
     );
 
     res.status(201).json({ ok: true, service: r.rows[0] });
@@ -81,10 +95,12 @@ router.patch("/:publicId", requireAuth, requireRole("superuser"), async (req, re
 
     const parsed = updateSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ ok: false, message: parsed.error.issues?.[0]?.message || "Invalid input" });
+      return res
+        .status(400)
+        .json({ ok: false, message: parsed.error.issues?.[0]?.message || "Invalid input" });
     }
 
-    const { title, description, duration_minutes } = parsed.data;
+    const { title, description, duration_minutes, base_price_cents } = parsed.data;
 
     // Only update provided fields
     const fields = [];
@@ -102,6 +118,12 @@ router.patch("/:publicId", requireAuth, requireRole("superuser"), async (req, re
     if (typeof duration_minutes !== "undefined") {
       fields.push(`duration_minutes = $${idx++}`);
       values.push(duration_minutes);
+    }
+
+    // NEW
+    if (typeof base_price_cents !== "undefined") {
+      fields.push(`base_price_cents = $${idx++}`);
+      values.push(base_price_cents);
     }
 
     values.push(publicId);

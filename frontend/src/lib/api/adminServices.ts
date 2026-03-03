@@ -1,3 +1,4 @@
+// frontend/src/lib/api/adminServices.ts
 export type Service = {
   public_id: string;
   title: string;
@@ -13,8 +14,6 @@ export type AdminServiceResponse = { ok: boolean; service: Service };
 export type OkResponse = { ok: boolean };
 
 const API_BASE = process.env.NEXT_PUBLIC_AUTH_API_BASE;
-
-
 
 function resolveUrl(path: string) {
   if (!API_BASE && !path.startsWith("http")) {
@@ -55,6 +54,7 @@ export function createOwnerService(input: {
   title: string;
   description: string;
   duration_minutes?: number | null;
+  base_price_cents?: number; // NEW
 }) {
   return jsonFetch<AdminServiceResponse>("/admin/services", {
     method: "POST",
@@ -64,15 +64,13 @@ export function createOwnerService(input: {
 
 export function updateOwnerService(
   publicId: string,
-  patch: Partial<Pick<Service, "title" | "description" | "duration_minutes">>
+  patch: Partial<Pick<Service, "title" | "description" | "duration_minutes" | "base_price_cents">>
 ) {
   return jsonFetch<AdminServiceResponse>(`/admin/services/${encodeURIComponent(publicId)}`, {
     method: "PATCH",
     body: JSON.stringify(patch),
   });
 }
-
-
 
 export function deleteOwnerService(publicId: string) {
   return jsonFetch<OkResponse>(`/admin/services/${encodeURIComponent(publicId)}`, {

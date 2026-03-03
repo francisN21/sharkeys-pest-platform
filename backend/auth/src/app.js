@@ -26,7 +26,7 @@ const adminTechBookingsRouter = require("../routes/adminTechBookings");
 
 // Prices Routes Pipeline
 
-const bookingPricesRouter("../routes/bookingPrices.js")
+const bookingPricesRouter = require("../routes/bookingPrices.js")
 
 // Metrics routes pipeline
 const trafficRouter = require("../routes/adminMetricsTraffic");

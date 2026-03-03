@@ -1,3 +1,4 @@
+// frontend/src/components/su-dashboard/ServicesOverview.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -17,6 +18,16 @@ function minutesLabel(m?: number | null) {
   return r ? `${h}h ${r}m` : `${h}h`;
 }
 
+function digitsOnly(v: string) {
+  return v.replace(/[^\d]/g, "");
+}
+
+function centsLabel(cents?: number | null) {
+  const n = typeof cents === "number" && Number.isFinite(cents) ? cents : 0;
+  const dollars = (n / 100).toFixed(2);
+  return `$${dollars}`;
+}
+
 export default function ServicesOverview() {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,17 +39,17 @@ export default function ServicesOverview() {
   const [newTitle, setNewTitle] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [newDuration, setNewDuration] = useState<string>(""); // keep as string for input
+  const [newBasePrice, setNewBasePrice] = useState<string>(""); // cents (string)
 
   // Edit state
   const [editId, setEditId] = useState<string | null>(null);
-  const editing = useMemo(
-    () => services.find((s) => s.public_id === editId) || null,
-    [editId, services]
-  );
+  const editing = useMemo(() => services.find((s) => s.public_id === editId) || null, [editId, services]);
   const [editTitle, setEditTitle] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [editDuration, setEditDuration] = useState<string>("");
-  // Delete State  
+  const [editBasePrice, setEditBasePrice] = useState<string>(""); // cents (string)
+
+  // Delete State
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   async function refresh() {
@@ -63,9 +74,8 @@ export default function ServicesOverview() {
     if (!editing) return;
     setEditTitle(editing.title ?? "");
     setEditDesc(editing.description ?? "");
-    setEditDuration(
-      typeof editing.duration_minutes === "number" ? String(editing.duration_minutes) : ""
-    );
+    setEditDuration(typeof editing.duration_minutes === "number" ? String(editing.duration_minutes) : "");
+    setEditBasePrice(typeof editing.base_price_cents === "number" ? String(editing.base_price_cents) : "");
   }, [editing]);
 
   async function onCreate() {
@@ -81,10 +91,22 @@ export default function ServicesOverview() {
           ? Number(newDuration)
           : NaN;
 
+    // base price cents: blank => undefined (let DB default 0)
+    const priceStr = newBasePrice.trim();
+    const priceCents =
+      priceStr === ""
+        ? undefined
+        : Number.isFinite(Number(priceStr))
+          ? Number(priceStr)
+          : NaN;
+
     if (!title) return setErr("Title is required.");
     if (!description) return setErr("Description is required.");
     if (dur !== null && (!Number.isInteger(dur) || dur <= 0)) {
       return setErr("Duration must be a positive whole number of minutes (or blank).");
+    }
+    if (typeof priceCents !== "undefined" && (!Number.isInteger(priceCents) || priceCents < 0)) {
+      return setErr("Base price must be a whole number of cents (0 or more), or blank.");
     }
 
     setSavingId("__create__");
@@ -93,6 +115,7 @@ export default function ServicesOverview() {
         title,
         description,
         duration_minutes: dur,
+        ...(typeof priceCents === "number" ? { base_price_cents: priceCents } : {}),
       });
 
       const created = res.service;
@@ -100,6 +123,7 @@ export default function ServicesOverview() {
       setNewTitle("");
       setNewDesc("");
       setNewDuration("");
+      setNewBasePrice("");
       setAddOpen(false);
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to create service");
@@ -108,28 +132,27 @@ export default function ServicesOverview() {
     }
   }
 
-    async function onConfirmDelete() {
+  async function onConfirmDelete() {
     if (!editing) return;
 
     setErr(null);
     setSavingId(`__delete__:${editing.public_id}`);
 
     try {
-        await deleteOwnerService(editing.public_id);
+      await deleteOwnerService(editing.public_id);
 
-        // Remove locally
-        setServices((prev) => prev.filter((s) => s.public_id !== editing.public_id));
+      // Remove locally
+      setServices((prev) => prev.filter((s) => s.public_id !== editing.public_id));
 
-        // Close modals
-        setConfirmDeleteOpen(false);
-        setEditId(null);
+      // Close modals
+      setConfirmDeleteOpen(false);
+      setEditId(null);
     } catch (e: unknown) {
-        setErr(e instanceof Error ? e.message : "Failed to delete service");
+      setErr(e instanceof Error ? e.message : "Failed to delete service");
     } finally {
-        setSavingId(null);
+      setSavingId(null);
     }
-    }
-
+  }
 
   async function onSaveEdit() {
     if (!editing) return;
@@ -146,10 +169,22 @@ export default function ServicesOverview() {
           ? Number(editDuration)
           : NaN;
 
+    // blank => 0 (so owner can clear it)
+    const priceStr = editBasePrice.trim();
+    const priceCents =
+      priceStr === ""
+        ? 0
+        : Number.isFinite(Number(priceStr))
+          ? Number(priceStr)
+          : NaN;
+
     if (!title) return setErr("Title is required.");
     if (!description) return setErr("Description is required.");
     if (dur !== null && (!Number.isInteger(dur) || dur <= 0)) {
       return setErr("Duration must be a positive whole number of minutes (or blank).");
+    }
+    if (!Number.isInteger(priceCents) || priceCents < 0) {
+      return setErr("Base price must be a whole number of cents (0 or more), or blank (sets to 0).");
     }
 
     setSavingId(editing.public_id);
@@ -158,12 +193,11 @@ export default function ServicesOverview() {
         title,
         description,
         duration_minutes: dur,
+        base_price_cents: priceCents,
       });
 
       const updated = res.service;
-      setServices((prev) =>
-        prev.map((s) => (s.public_id === updated.public_id ? updated : s))
-      );
+      setServices((prev) => prev.map((s) => (s.public_id === updated.public_id ? updated : s)));
       setEditId(null);
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to update service");
@@ -178,7 +212,7 @@ export default function ServicesOverview() {
         <div>
           <div className="text-base font-semibold">Services</div>
           <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-            Add and edit service title, description, and duration.
+            Add and edit service title, description, duration, and base price.
           </div>
         </div>
 
@@ -218,7 +252,7 @@ export default function ServicesOverview() {
         >
           <div className="text-sm font-semibold">New service</div>
 
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="grid gap-3 lg:grid-cols-3">
             <div className="space-y-1">
               <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
                 Title
@@ -245,6 +279,23 @@ export default function ServicesOverview() {
                 inputMode="numeric"
               />
             </div>
+
+            <div className="space-y-1">
+              <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+                Base price (cents)
+              </div>
+              <input
+                value={newBasePrice}
+                onChange={(e) => setNewBasePrice(digitsOnly(e.target.value))}
+                className="w-full rounded-xl border px-3 py-2 text-sm"
+                style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                placeholder="Blank = 0 (e.g., 12999)"
+                inputMode="numeric"
+              />
+              <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                Display: {centsLabel(newBasePrice === "" ? 0 : Number(newBasePrice))}
+              </div>
+            </div>
           </div>
 
           <div className="space-y-1">
@@ -268,6 +319,7 @@ export default function ServicesOverview() {
                 setNewTitle("");
                 setNewDesc("");
                 setNewDuration("");
+                setNewBasePrice("");
                 setErr(null);
               }}
               className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
@@ -312,13 +364,24 @@ export default function ServicesOverview() {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="text-sm font-semibold truncate">{s.title}</div>
+
                       <span
                         className="text-xs rounded-full border px-2 py-1"
                         style={{ borderColor: "rgb(var(--border))", color: "rgb(var(--muted))" }}
+                        title="Duration"
                       >
                         {minutesLabel(s.duration_minutes)}
                       </span>
+
+                      <span
+                        className="text-xs rounded-full border px-2 py-1"
+                        style={{ borderColor: "rgb(var(--border))", color: "rgb(var(--muted))" }}
+                        title="Base price (starting point)"
+                      >
+                        {centsLabel(s.base_price_cents ?? 0)}
+                      </span>
                     </div>
+
                     <div className="mt-2 text-sm" style={{ color: "rgb(var(--muted))" }}>
                       {s.description}
                     </div>
@@ -356,7 +419,7 @@ export default function ServicesOverview() {
               <div>
                 <div className="text-base font-semibold">Edit service</div>
                 <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                  Update title, description, and duration.
+                  Update title, description, duration, and base price.
                 </div>
               </div>
 
@@ -370,7 +433,7 @@ export default function ServicesOverview() {
               </button>
             </div>
 
-            <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            <div className="mt-4 grid gap-3 lg:grid-cols-3">
               <div className="space-y-1">
                 <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
                   Title
@@ -395,6 +458,23 @@ export default function ServicesOverview() {
                   inputMode="numeric"
                   placeholder="Blank = none"
                 />
+              </div>
+
+              <div className="space-y-1">
+                <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+                  Base price (cents)
+                </div>
+                <input
+                  value={editBasePrice}
+                  onChange={(e) => setEditBasePrice(digitsOnly(e.target.value))}
+                  className="w-full rounded-xl border px-3 py-2 text-sm"
+                  style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                  inputMode="numeric"
+                  placeholder="Blank = 0"
+                />
+                <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                  Display: {centsLabel(editBasePrice === "" ? 0 : Number(editBasePrice))}
+                </div>
               </div>
             </div>
 
@@ -436,17 +516,15 @@ export default function ServicesOverview() {
                 onClick={() => setConfirmDeleteOpen(true)}
                 className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
                 style={{
-                borderColor: "rgb(239 68 68)",
-                background: "rgba(239, 68, 68, 0.12)", // complements both light/dark
-                color: "rgb(239 68 68)",
+                  borderColor: "rgb(239 68 68)",
+                  background: "rgba(239, 68, 68, 0.12)",
+                  color: "rgb(239 68 68)",
                 }}
                 disabled={savingId === editing.public_id || savingId === `__delete__:${editing.public_id}`}
                 title="Delete service"
-            >
+              >
                 Delete
               </button>
-              
-
             </div>
           </div>
         </div>
@@ -455,57 +533,57 @@ export default function ServicesOverview() {
       {/* Delete modal */}
       {editing && confirmDeleteOpen ? (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <div
+          <div
             className="absolute inset-0"
             style={{ background: "rgba(0,0,0,0.55)" }}
             onClick={() => setConfirmDeleteOpen(false)}
-            />
+          />
 
-            <div
+          <div
             className="relative w-full max-w-md rounded-2xl border p-5"
             style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-            >
+          >
             <div className="text-base font-semibold">Delete service?</div>
             <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
-                This will remove <span className="font-semibold">{editing.title}</span> from the active services list.
-                You can re-enable it later (since we’re soft-deleting).
+              This will remove <span className="font-semibold">{editing.title}</span> from the active services list. You
+              can re-enable it later (since we’re soft-deleting).
             </div>
 
             <div
-                className="mt-4 rounded-xl border p-3 text-sm"
-                style={{ borderColor: "rgba(239, 68, 68, 0.45)", background: "rgba(239, 68, 68, 0.08)" }}
+              className="mt-4 rounded-xl border p-3 text-sm"
+              style={{ borderColor: "rgba(239, 68, 68, 0.45)", background: "rgba(239, 68, 68, 0.08)" }}
             >
-                This action is intended to be permanent for customers (service becomes inactive).
+              This action is intended to be permanent for customers (service becomes inactive).
             </div>
 
             <div className="mt-4 flex items-center justify-end gap-2">
-                <button
+              <button
                 type="button"
                 onClick={() => setConfirmDeleteOpen(false)}
                 className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
                 style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
                 disabled={savingId === `__delete__:${editing.public_id}`}
-                >
+              >
                 Cancel
-                </button>
+              </button>
 
-                <button
+              <button
                 type="button"
                 onClick={onConfirmDelete}
                 className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
                 style={{
-                    borderColor: "rgb(239 68 68)",
-                    background: "rgb(239 68 68)",
-                    color: "white",
+                  borderColor: "rgb(239 68 68)",
+                  background: "rgb(239 68 68)",
+                  color: "white",
                 }}
                 disabled={savingId === `__delete__:${editing.public_id}`}
-                >
+              >
                 {savingId === `__delete__:${editing.public_id}` ? "Deleting…" : "Yes, delete"}
-                </button>
+              </button>
             </div>
-            </div>
+          </div>
         </div>
-        ) : null}
+      ) : null}
     </section>
   );
 }
