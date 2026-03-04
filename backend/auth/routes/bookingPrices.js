@@ -25,17 +25,22 @@ async function isAssignedWorker(userId, bookingId) {
   return r.rowCount > 0;
 }
 
+// customer ownership guard
+async function isBookingCustomer(userId, bookingId) {
+  const r = await pool.query(
+    `SELECT 1 FROM bookings WHERE id = $1 AND customer_user_id = $2 LIMIT 1`,
+    [bookingId, userId]
+  );
+  return r.rowCount > 0;
+}
+
 const setFinalPriceSchema = z.object({
   final_price_cents: z
     .union([z.number().int().nonnegative(), z.string().regex(/^\d+$/)])
     .transform((v) => Number(v)),
 });
 
-/**
- * GET /bookings/:publicId/price
- * - admin/superuser can read any
- * - assigned worker can read their own booking
- */
+
 router.get("/bookings/:publicId/price", requireAuth, async (req, res, next) => {
   try {
     const userId = req.user?.id ?? req.auth?.userId ?? null;
@@ -44,36 +49,48 @@ router.get("/bookings/:publicId/price", requireAuth, async (req, res, next) => {
     const bookingPublicId = String(req.params.publicId || "").trim();
     if (!bookingPublicId) return res.status(400).json({ ok: false, message: "Missing booking id" });
 
-    const bRes = await pool.query(`SELECT id FROM bookings WHERE public_id = $1 LIMIT 1`, [bookingPublicId]);
+    const bRes = await pool.query(
+      `SELECT id, customer_user_id, service_id FROM bookings WHERE public_id = $1 LIMIT 1`,
+      [bookingPublicId]
+    );
     if (bRes.rowCount === 0) return res.status(404).json({ ok: false, message: "Booking not found" });
 
     const bookingId = bRes.rows[0].id;
 
+    // AuthZ
     const adminish = await isAdminOrSuper(userId);
     if (!adminish) {
-      const assigned = await isAssignedWorker(userId, bookingId);
-      if (!assigned) return res.status(403).json({ ok: false, message: "Forbidden" });
+      const [assigned, owned] = await Promise.all([
+        isAssignedWorker(userId, bookingId),
+        isBookingCustomer(userId, bookingId),
+      ]);
+
+      // NOTE: lead bookings have customer_user_id NULL, so "owned" will be false (by design).
+      if (!assigned && !owned) return res.status(403).json({ ok: false, message: "Forbidden" });
     }
 
+    // Pull service base price + booking_prices
     const pRes = await pool.query(
       `
       SELECT
-        bp.initial_price_cents,
+        COALESCE(bp.initial_price_cents, s.base_price_cents, 0) AS initial_price_cents,
         bp.final_price_cents,
-        bp.currency,
+        COALESCE(bp.currency, 'USD') AS currency,
         bp.set_by_user_id,
         bp.set_at,
         bp.created_at,
         bp.updated_at
-      FROM booking_prices bp
-      WHERE bp.booking_id = $1
+      FROM bookings b
+      JOIN services s ON s.id = b.service_id
+      LEFT JOIN booking_prices bp ON bp.booking_id = b.id
+      WHERE b.id = $1
       LIMIT 1
       `,
       [bookingId]
     );
 
     if (pRes.rowCount === 0) {
-      // should not happen if you always insert on create, but safe fallback
+      // Extremely unlikely (bookingId is real), but safe fallback.
       return res.json({
         ok: true,
         price: {
@@ -88,7 +105,20 @@ router.get("/bookings/:publicId/price", requireAuth, async (req, res, next) => {
       });
     }
 
-    return res.json({ ok: true, price: pRes.rows[0] });
+    const row = pRes.rows[0];
+
+    return res.json({
+      ok: true,
+      price: {
+        initial_price_cents: Number(row.initial_price_cents) || 0,
+        final_price_cents: row.final_price_cents === null || row.final_price_cents === undefined ? null : Number(row.final_price_cents),
+        currency: row.currency || "USD",
+        set_by_user_id: row.set_by_user_id ?? null,
+        set_at: row.set_at ?? null,
+        created_at: row.created_at ?? null,
+        updated_at: row.updated_at ?? null,
+      },
+    });
   } catch (e) {
     next(e);
   }
@@ -98,6 +128,7 @@ router.get("/bookings/:publicId/price", requireAuth, async (req, res, next) => {
  * PATCH /bookings/:publicId/price
  * - admin/superuser can set any
  * - assigned worker can set final price for their own booking
+ * (customers can view but NOT edit)
  */
 router.patch("/bookings/:publicId/price", requireAuth, async (req, res, next) => {
   const client = await pool.connect();
@@ -143,7 +174,7 @@ router.patch("/bookings/:publicId/price", requireAuth, async (req, res, next) =>
       }
     }
 
-    // Ensure booking_prices exists (fallback)
+    // Ensure booking_prices exists (fallback) and seed initial from current service base
     await client.query(
       `
       INSERT INTO booking_prices (booking_id, initial_price_cents, final_price_cents, currency)
@@ -162,7 +193,8 @@ router.patch("/bookings/:publicId/price", requireAuth, async (req, res, next) =>
       SET
         final_price_cents = $2,
         set_by_user_id = $3,
-        set_at = now()
+        set_at = now(),
+        updated_at = now()
       WHERE booking_id = $1
       RETURNING initial_price_cents, final_price_cents, currency, set_by_user_id, set_at, created_at, updated_at
       `,
@@ -170,9 +202,36 @@ router.patch("/bookings/:publicId/price", requireAuth, async (req, res, next) =>
     );
 
     await client.query("COMMIT");
-    return res.json({ ok: true, price: pRes.rows[0] });
+
+    // Normalize return types
+    const row = pRes.rows[0] || null;
+
+    return res.json({
+      ok: true,
+      price: row
+        ? {
+            initial_price_cents: Number(row.initial_price_cents) || 0,
+            final_price_cents: row.final_price_cents === null || row.final_price_cents === undefined ? null : Number(row.final_price_cents),
+            currency: row.currency || "USD",
+            set_by_user_id: row.set_by_user_id ?? null,
+            set_at: row.set_at ?? null,
+            created_at: row.created_at ?? null,
+            updated_at: row.updated_at ?? null,
+          }
+        : {
+            initial_price_cents: 0,
+            final_price_cents: final_price_cents,
+            currency: "USD",
+            set_by_user_id: userId,
+            set_at: new Date().toISOString(),
+            created_at: null,
+            updated_at: null,
+          },
+    });
   } catch (e) {
-    try { await client.query("ROLLBACK"); } catch {}
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
     next(e);
   } finally {
     client.release();
