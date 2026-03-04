@@ -1,7 +1,7 @@
 // frontend/src/components/cards/BookingInfoCard.tsx
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import type { TechBookingDetail } from "../../lib/api/adminTechBookings";
 import type { WorkerBookingRow } from "../../lib/api/workerBookings";
 import { me as apiMe } from "../../lib/api/auth";
@@ -36,6 +36,12 @@ function getNullableString(obj: unknown, key: string): string | null | undefined
   if (!isRecord(obj)) return undefined;
   const v = obj[key];
   return typeof v === "string" ? v : v === null ? null : undefined;
+}
+
+function getNumber(obj: unknown, key: string): number | undefined {
+  if (!isRecord(obj)) return undefined;
+  const v = obj[key];
+  return typeof v === "number" && Number.isFinite(v) ? v : undefined;
 }
 
 function hasKey(obj: unknown, key: string): boolean {
@@ -318,9 +324,17 @@ function MoneyRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** ------------------ Price card (replaces hardcoded QuoteCard) ------------------ */
+/** ------------------ Price card (uses service_base_price_cents fallback) ------------------ */
 
-function PriceCard({ publicId, viewer }: { publicId: string; viewer: "admin" | "superuser" | "worker" | "customer" | "unknown" }) {
+function PriceCard({
+  publicId,
+  viewer,
+  serviceBasePriceCents,
+}: {
+  publicId: string;
+  viewer: "admin" | "superuser" | "worker" | "customer" | "unknown";
+  serviceBasePriceCents: number;
+}) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [price, setPrice] = useState<BookingPrice | null>(null);
@@ -332,22 +346,30 @@ function PriceCard({ publicId, viewer }: { publicId: string; viewer: "admin" | "
 
   async function load() {
     if (!publicId || publicId === "—") return;
+
     setErr(null);
     setLoading(true);
     try {
-      const res = await jsonFetch<{ ok: boolean; price: BookingPrice }>(
-        `/bookings/${encodeURIComponent(publicId)}/price`,
-        { method: "GET" }
-      );
+      const res = await jsonFetch<{ ok: boolean; price: BookingPrice }>(`/bookings/${encodeURIComponent(publicId)}/price`, {
+        method: "GET",
+      });
+
       const p = res.price;
       setPrice(p);
 
-      const seed = typeof p.final_price_cents === "number" ? p.final_price_cents : p.initial_price_cents ?? 0;
-      setEditCents(String(seed));
+      const bestForEdit =
+        typeof p.final_price_cents === "number"
+          ? p.final_price_cents
+          : typeof p.initial_price_cents === "number" && p.initial_price_cents > 0
+          ? p.initial_price_cents
+          : serviceBasePriceCents;
+
+      setEditCents(String(bestForEdit));
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Failed to load price");
+      // If GET price fails, we still show service-based initial price.
       setPrice(null);
-      setEditCents("");
+      setEditCents(String(serviceBasePriceCents));
+      setErr(null);
     } finally {
       setLoading(false);
     }
@@ -356,7 +378,7 @@ function PriceCard({ publicId, viewer }: { publicId: string; viewer: "admin" | "
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [publicId]);
+  }, [publicId, serviceBasePriceCents]);
 
   async function onSave() {
     if (!canEdit) return;
@@ -371,10 +393,10 @@ function PriceCard({ publicId, viewer }: { publicId: string; viewer: "admin" | "
     setSaving(true);
     setErr(null);
     try {
-      const res = await jsonFetch<{ ok: boolean; price: BookingPrice }>(
-        `/bookings/${encodeURIComponent(publicId)}/price`,
-        { method: "PATCH", body: JSON.stringify({ final_price_cents: cents }) }
-      );
+      const res = await jsonFetch<{ ok: boolean; price: BookingPrice }>(`/bookings/${encodeURIComponent(publicId)}/price`, {
+        method: "PATCH",
+        body: JSON.stringify({ final_price_cents: cents }),
+      });
 
       setPrice(res.price);
     } catch (e: unknown) {
@@ -384,9 +406,15 @@ function PriceCard({ publicId, viewer }: { publicId: string; viewer: "admin" | "
     }
   }
 
-  const initialCents = price?.initial_price_cents ?? 0;
-  const finalCents = price?.final_price_cents ?? null;
   const currency = price?.currency ?? "USD";
+
+  // ✅ IMPORTANT: initial comes from booking price IF it's > 0, otherwise fallback to serviceBasePriceCents
+  const initialCents =
+    typeof price?.initial_price_cents === "number" && price.initial_price_cents > 0
+      ? price.initial_price_cents
+      : serviceBasePriceCents;
+
+  const finalCents = price?.final_price_cents ?? null;
 
   const totalDollars = centsToDollarsLabel(finalCents ?? initialCents);
 
@@ -404,7 +432,10 @@ function PriceCard({ publicId, viewer }: { publicId: string; viewer: "admin" | "
       </div>
 
       {err ? (
-        <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(239 68 68)", background: "rgba(239, 68, 68, 0.06)" }}>
+        <div
+          className="rounded-xl border p-3 text-sm"
+          style={{ borderColor: "rgb(239 68 68)", background: "rgba(239, 68, 68, 0.06)" }}
+        >
           {err}
         </div>
       ) : null}
@@ -494,14 +525,12 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
       const me = await getMeCached();
       if (!alive) return;
 
-      // prefer user_role
       const ur = String(me?.user_role ?? "").trim().toLowerCase();
       if (ur) {
         setViewerRole(ur);
         return;
       }
 
-      // fallback: roles array
       const roles = me?.roles ?? [];
       const lower = roles.map((r) => String(r ?? "").trim().toLowerCase()).filter(Boolean);
 
@@ -519,16 +548,22 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
 
   const viewer = normalizeViewerRole(viewerRole);
 
-  // ✅ Visibility rules (matches your old behavior)
   const showCustomerSection = viewer === "admin" || viewer === "superuser" || viewer === "worker" || viewer === "unknown";
   const showTechSection = viewer === "admin" || viewer === "superuser" || viewer === "customer" || viewer === "unknown";
 
-  // Shared basics
   const publicId = getString(booking, "public_id") ?? "—";
   const serviceTitle = getString(booking, "service_title") ?? "—";
   const startsAt = getNullableString(booking, "starts_at") ?? null;
   const endsAt = getNullableString(booking, "ends_at") ?? null;
   const status = getString(booking, "status") ?? "—";
+
+  // ✅ HERE: pull base price from booking (adminTechBookings now provides it)
+  const serviceBasePriceCents =
+    (() => {
+      // exact key name from backend/adminTechBookings.js + frontend types
+      const n = getNumber(booking, "service_base_price_cents");
+      return typeof n === "number" ? n : 0;
+    })() ?? 0;
 
   const kind: PersonKind = (() => {
     if (isAdminDetail(booking)) return booking.lead_public_id ? "lead" : "registered";
@@ -537,7 +572,6 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
     return lp ? "lead" : "registered";
   })();
 
-  // Address
   const addressText = (() => {
     if (isAdminDetail(booking)) {
       const parts = [
@@ -571,7 +605,6 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
     return String(fallback ?? "").trim() || "—";
   })();
 
-  // Notes
   const notesText = (() => {
     if (isAdminDetail(booking)) return normalizeText(booking.initial_notes);
     if (isWorkerRow(booking)) return normalizeText(booking.notes ?? null);
@@ -583,7 +616,6 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
 
   const crmTag = getNullableString(booking, "crm_tag") ?? null;
 
-  // Customer display
   const displayName = (() => {
     if (isAdminDetail(booking)) {
       const leadName = `${(booking.lead_first_name ?? "").trim()} ${(booking.lead_last_name ?? "").trim()}`.trim();
@@ -647,7 +679,6 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
     );
   })();
 
-  // Tech display (supports admin + customer)
   const techName = (() => {
     if (isAdminDetail(booking)) {
       const fn = String(booking.worker_first_name ?? "").trim();
@@ -658,7 +689,6 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
       return "—";
     }
 
-    // only show "You" in worker view
     if (viewer === "worker" && isWorkerRow(booking)) return "You";
 
     const af = getString(booking, "assigned_worker_first_name");
@@ -686,11 +716,7 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
     if (isAdminDetail(booking)) return booking.worker_email ?? null;
     if (viewer === "worker" && isWorkerRow(booking)) return null;
 
-    const a =
-      getNullableString(booking, "assigned_worker_email") ??
-      getNullableString(booking, "assigned_to_email") ??
-      null;
-
+    const a = getNullableString(booking, "assigned_worker_email") ?? getNullableString(booking, "assigned_to_email") ?? null;
     if (a && String(a).trim()) return a;
 
     return getNullableString(booking, "worker_email") ?? null;
@@ -700,11 +726,7 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
     if (isAdminDetail(booking)) return booking.worker_phone ?? null;
     if (viewer === "worker" && isWorkerRow(booking)) return null;
 
-    const a =
-      getNullableString(booking, "assigned_worker_phone") ??
-      getNullableString(booking, "assigned_to_phone") ??
-      null;
-
+    const a = getNullableString(booking, "assigned_worker_phone") ?? getNullableString(booking, "assigned_to_phone") ?? null;
     if (a && String(a).trim()) return a;
 
     return getNullableString(booking, "worker_phone") ?? null;
@@ -712,10 +734,7 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
 
   return (
     <div className="space-y-4">
-      <div
-        className="rounded-2xl border p-4"
-        style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
-      >
+      <div className="rounded-2xl border p-4" style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}>
         <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="min-w-0 space-y-3">
             <div className="flex items-start justify-between gap-3">
@@ -733,10 +752,7 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
 
             <CopyField label="Service Address" value={addressText || null} />
 
-            <div
-              className="rounded-xl border p-3 text-sm"
-              style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.20)" }}
-            >
+            <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.20)" }}>
               <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
                 Notes
               </div>
@@ -749,7 +765,7 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
           </div>
 
           <div className="lg:pl-2">
-            <PriceCard publicId={publicId} viewer={viewer} />
+            <PriceCard publicId={publicId} viewer={viewer} serviceBasePriceCents={serviceBasePriceCents} />
           </div>
         </div>
       </div>
