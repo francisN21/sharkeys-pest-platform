@@ -9,6 +9,8 @@ import BookingsOverview from "../../components/su-dashboard/BookingsOverview";
 import CustomersOverview from "../../components/su-dashboard/CustomersOverview";
 import SurveyOverview from "../../components/su-dashboard/SurveyOverview";
 import ServicesOverview from "../../components/su-dashboard/ServicesOverview";
+import RevenueOverview from "../../components/su-dashboard/RevenueOverview";
+
 
 type MeUserWithRoles = NonNullable<MeResponse["user"]> & {
   roles?: string[] | null;
@@ -132,6 +134,13 @@ export default function OwnerDashboardPage() {
         >
             <ServicesOverview />
         </div>
+        <div
+        className="rounded-2xl border p-6"
+        style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+        >
+            <RevenueOverview />
+        </div>
+
         </div>
       </main>  
   );
