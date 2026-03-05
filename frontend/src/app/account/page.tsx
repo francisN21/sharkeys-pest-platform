@@ -13,6 +13,8 @@ import AdminLeadsPage from "../account/admin/leads/page";
 import { me, type MeResponse } from "../../lib/api/auth";
 import TechBookingsPage from "./techbookings/page";
 
+import { SlideTabs, type SlideTabItem } from "../../components/ui/slide-tabs";
+
 type AppRole = "customer" | "technician" | "admin";
 type ApiUserRole = "customer" | "worker" | "admin";
 
@@ -44,10 +46,6 @@ function normalizeRole(user: AuthedUser | null): AppRole {
   if (roles.includes("admin")) return "admin";
   if (roles.includes("worker")) return "technician";
   return "customer";
-}
-
-function cn(...xs: Array<string | false | null | undefined>) {
-  return xs.filter(Boolean).join(" ");
 }
 
 export default function AccountShellPage() {
@@ -157,6 +155,18 @@ export default function AccountShellPage() {
     if (!tabs.find((t) => t.key === activeTab)) setActiveTab("account");
   }, [tabs, activeTab]);
 
+  // Adapt your tabs into SlideTabs items (same keys/labels/icons/badges)
+  const slideTabs: Array<SlideTabItem<TabKey>> = useMemo(
+    () =>
+      tabs.map((t) => ({
+        key: t.key,
+        label: t.label,
+        icon: t.icon,
+        badgeCount: t.badgeCount,
+      })),
+    [tabs]
+  );
+
   return (
     <main className="h-screen overflow-y-auto scroll-smooth md:snap-y md:snap-mandatory">
       <Navbar />
@@ -167,20 +177,9 @@ export default function AccountShellPage() {
           </div>
         ) : null}
 
-        {/* tabs bar */}
-        <div className="w-full border-b" style={{ borderColor: "rgb(var(--border))" }}>
-          <nav className="flex flex-wrap items-center gap-2 -mb-px" aria-label="Account navigation">
-            {tabs.map((t) => (
-              <GithubTab
-                key={t.key}
-                label={t.label}
-                icon={t.icon}
-                badgeCount={t.badgeCount}
-                active={activeTab === t.key}
-                onClick={() => handleTabClick(t.key)}
-              />
-            ))}
-          </nav>
+        {/* Slide tabs bar */}
+        <div className="w-full border-b pb-4" style={{ borderColor: "rgb(var(--border))" }}>
+          <SlideTabs tabs={slideTabs} value={activeTab} onChange={handleTabClick} />
         </div>
 
         {/* Content card */}
@@ -210,60 +209,5 @@ export default function AccountShellPage() {
         </div>
       </div>
     </main>
-  );
-}
-
-function GithubTab({
-  label,
-  icon,
-  badgeCount,
-  active,
-  onClick,
-}: {
-  label: string;
-  icon: string;
-  badgeCount?: number;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "group inline-flex items-center gap-2 px-3 py-2 text-sm font-medium",
-        "rounded-md transition-all duration-150",
-        "border-b-2",
-        active ? "border-blue-500" : "border-transparent hover:border-[rgb(var(--border))]"
-      )}
-      style={{
-        color: active ? "rgb(var(--fg))" : "rgb(var(--muted))",
-        background: active ? "rgba(var(--bg), 0.35)" : "transparent",
-      }}
-      aria-current={active ? "page" : undefined}
-    >
-      <i
-        className={cn(icon, "text-[13px] transition-opacity", active ? "" : "opacity-80 group-hover:opacity-100")}
-        aria-hidden="true"
-      />
-
-      <span className="transition-colors duration-150 group-hover:text-[rgb(var(--fg))]">{label}</span>
-
-      {/* Right-side notification badge */}
-      {typeof badgeCount === "number" && badgeCount > 0 ? (
-        <span
-          className="ml-1 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[11px] font-semibold border"
-          style={{
-            background: "rgb(239 68 68)", // red
-            color: "white",
-            borderColor: "rgba(0,0,0,0.15)",
-          }}
-          aria-label={`${badgeCount} new items`}
-          title={`${badgeCount} new`}
-        >
-          {badgeCount > 99 ? "99+" : badgeCount}
-        </span>
-      ) : null}
-    </button>
   );
 }
