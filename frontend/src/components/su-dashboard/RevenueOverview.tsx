@@ -4,7 +4,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { CreditCard, CalendarDays, ArrowUpRight, RefreshCcw } from "lucide-react";
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  RevenueGraphCard,
+  type RevenueGraphMode,
+  type RevenueDailyRow,
+  type RevenueWeeklyRow,
+  type RevenueMonthlyRow,
+} from "../../components/ui/revenue-graph-card";
 
 /** ---------------------------
  * Fetch helpers
@@ -96,56 +102,6 @@ function fmtNum(n: number) {
   return Number.isFinite(n) ? n.toLocaleString() : "0";
 }
 
-function monthLabel(monthStartIso: string) {
-  const d = new Date(monthStartIso);
-  if (Number.isNaN(d.getTime())) return monthStartIso;
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "short" });
-}
-
-function dayLabel(dayIso: string) {
-  const d = new Date(dayIso);
-  if (Number.isNaN(d.getTime())) return dayIso;
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
-function weekLabel(weekStartIso: string) {
-  const d = new Date(weekStartIso);
-  if (Number.isNaN(d.getTime())) return weekStartIso;
-  const end = new Date(d.getTime() + 6 * 24 * 60 * 60 * 1000);
-  const a = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  const b = end.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  return `${a}–${b}`;
-}
-
-/** ---------------------------
- * API shapes
- ---------------------------- */
-
-type RevenueRange = {
-  start: string;
-  end_exclusive: string;
-  tzOffsetMinutes: number;
-  days?: number;
-};
-
-type RevenueTotals = {
-  completed_count: number;
-  revenue_cents: number;
-};
-
-type DailyRow = { day: string; completed_count: number; revenue_cents: number };
-type WeeklyRow = { week_start: string; completed_count: number; revenue_cents: number };
-type MonthlyRow = { month_start: string; completed_count: number; revenue_cents: number };
-
-type RevenueMetricsResponse = {
-  ok: boolean;
-  range: RevenueRange;
-  totals: RevenueTotals;
-  daily: DailyRow[];
-  weekly: WeeklyRow[];
-  monthly: MonthlyRow[];
-};
-
 function num(v: unknown): number {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (typeof v === "string" && v.trim() !== "" && !Number.isNaN(Number(v))) return Number(v);
@@ -168,39 +124,43 @@ function monthStartLocalYmd(d: Date) {
   return dateOnly(start);
 }
 
+/** ---------------------------
+ * API shapes
+ ---------------------------- */
+
+type RevenueRange = {
+  start: string;
+  end_exclusive: string;
+  tzOffsetMinutes: number;
+  days?: number;
+};
+
+type RevenueTotals = {
+  completed_count: number;
+  revenue_cents: number;
+};
+
+type RevenueMetricsResponse = {
+  ok: boolean;
+  range: RevenueRange;
+  totals: RevenueTotals;
+  daily: RevenueDailyRow[];
+  weekly: RevenueWeeklyRow[];
+  monthly: RevenueMonthlyRow[];
+};
+
 async function getRevenueMetrics(range: { start?: string; end?: string }) {
   const params = new URLSearchParams();
   if (range.start) params.set("start", range.start);
   if (range.end) params.set("end", range.end);
 
-  // JS getTimezoneOffset() is minutes *behind* UTC (PST=480)
+  // PST=480 etc. Backend expects this format.
   params.set("tzOffsetMinutes", String(new Date().getTimezoneOffset()));
 
   return jsonFetch<RevenueMetricsResponse>(`/admin/revenue-metrics?${params.toString()}`, { method: "GET" });
 }
 
-/** ---------------------------
- * UI
- ---------------------------- */
-
-type ViewMode = "daily" | "weekly" | "monthly";
-
-type SeriesPoint = {
-  bucket_start: string;
-  label: string;
-  revenue_cents: number;
-  completed_count: number;
-};
-
-function compactMoneyFromCents(cents: number) {
-  const dollars = cents / 100;
-  if (!Number.isFinite(dollars)) return "$0";
-  // compact like $1.2K / $3.4M where appropriate
-  const abs = Math.abs(dollars);
-  if (abs >= 1_000_000) return `$${(dollars / 1_000_000).toFixed(1)}M`;
-  if (abs >= 1_000) return `$${(dollars / 1_000).toFixed(1)}K`;
-  return `$${dollars.toFixed(0)}`;
-}
+type ViewMode = RevenueGraphMode;
 
 export default function RevenueOverview() {
   // ✅ Default: rolling last 90 days to TODAY (exclusive end)
@@ -235,12 +195,8 @@ export default function RevenueOverview() {
     setAdvEnd(dateOnlyToday());
   }
 
-  // Build query range
   const range = useMemo(() => {
-    if (showAdvanced) {
-      return { start: advStart || undefined, end: advEnd || undefined };
-    }
-
+    if (showAdvanced) return { start: advStart || undefined, end: advEnd || undefined };
     const start = dateOnlyFromMonthStart(fromMonth) ?? undefined;
     const end = useRollingEnd ? dateOnlyToday() : (dateOnlyEndExclusiveFromMonthEnd(toMonth) ?? undefined);
     return { start, end };
@@ -263,19 +219,19 @@ export default function RevenueOverview() {
         revenue_cents: num(res?.totals?.revenue_cents),
       },
       daily: (res?.daily ?? []).map((r) => ({
-        day: String((r as DailyRow)?.day ?? ""),
-        completed_count: num((r as DailyRow)?.completed_count),
-        revenue_cents: num((r as DailyRow)?.revenue_cents),
+        day: String((r as RevenueDailyRow)?.day ?? ""),
+        completed_count: num((r as RevenueDailyRow)?.completed_count),
+        revenue_cents: num((r as RevenueDailyRow)?.revenue_cents),
       })),
       weekly: (res?.weekly ?? []).map((r) => ({
-        week_start: String((r as WeeklyRow)?.week_start ?? ""),
-        completed_count: num((r as WeeklyRow)?.completed_count),
-        revenue_cents: num((r as WeeklyRow)?.revenue_cents),
+        week_start: String((r as RevenueWeeklyRow)?.week_start ?? ""),
+        completed_count: num((r as RevenueWeeklyRow)?.completed_count),
+        revenue_cents: num((r as RevenueWeeklyRow)?.revenue_cents),
       })),
       monthly: (res?.monthly ?? []).map((r) => ({
-        month_start: String((r as MonthlyRow)?.month_start ?? ""),
-        completed_count: num((r as MonthlyRow)?.completed_count),
-        revenue_cents: num((r as MonthlyRow)?.revenue_cents),
+        month_start: String((r as RevenueMonthlyRow)?.month_start ?? ""),
+        completed_count: num((r as RevenueMonthlyRow)?.completed_count),
+        revenue_cents: num((r as RevenueMonthlyRow)?.revenue_cents),
       })),
     };
   }
@@ -340,52 +296,6 @@ export default function RevenueOverview() {
     return c > 0 ? Math.round(rev / c) : 0;
   }, [totals]);
 
-  const series: SeriesPoint[] = useMemo(() => {
-    if (!data) return [];
-
-    if (mode === "daily") {
-      return (data.daily ?? []).map((r) => ({
-        bucket_start: r.day,
-        label: dayLabel(r.day),
-        revenue_cents: num(r.revenue_cents),
-        completed_count: num(r.completed_count),
-      }));
-    }
-
-    if (mode === "weekly") {
-      return (data.weekly ?? []).map((r) => ({
-        bucket_start: r.week_start,
-        label: weekLabel(r.week_start),
-        revenue_cents: num(r.revenue_cents),
-        completed_count: num(r.completed_count),
-      }));
-    }
-
-    return (data.monthly ?? []).map((r) => ({
-      bucket_start: r.month_start,
-      label: monthLabel(r.month_start),
-      revenue_cents: num(r.revenue_cents),
-      completed_count: num(r.completed_count),
-    }));
-  }, [data, mode]);
-
-  const chartData = useMemo(
-    () =>
-      series.map((p) => ({
-        name: p.label,
-        revenueCents: p.revenue_cents,
-        completed: p.completed_count,
-      })),
-    [series]
-  );
-
-  const maxRevenueCents = useMemo(() => {
-    const m = chartData.reduce((acc, r) => Math.max(acc, Number(r.revenueCents || 0)), 0);
-    return Math.max(1, m);
-  }, [chartData]);
-
-  const color = "hsl(var(--foreground))";
-
   return (
     <section className="space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -433,7 +343,6 @@ export default function RevenueOverview() {
         </div>
       </div>
 
-      {/* Month range controls */}
       {!showAdvanced ? (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
@@ -479,7 +388,6 @@ export default function RevenueOverview() {
           </div>
         </div>
       ) : (
-        // Advanced day-level controls
         <div
           className="rounded-2xl border p-5 space-y-3"
           style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
@@ -535,7 +443,6 @@ export default function RevenueOverview() {
         </div>
       ) : null}
 
-      {/* Headline cards */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard
           title="Today"
@@ -569,94 +476,20 @@ export default function RevenueOverview() {
             <KpiCard title="Avg $ / completed" value={fmtMoneyFromCents(avgPerCompleted)} />
           </div>
 
-          {/* Keep your daily/weekly/monthly buttons */}
+          {/* Keep daily/weekly/monthly buttons */}
           <div className="flex flex-wrap items-center gap-2">
             <ModeButton active={mode === "daily"} onClick={() => setMode("daily")} label="Daily" />
             <ModeButton active={mode === "weekly"} onClick={() => setMode("weekly")} label="Weekly" />
             <ModeButton active={mode === "monthly"} onClick={() => setMode("monthly")} label="Monthly" />
           </div>
 
-          {/* ✅ Modern graph replacement */}
-          <div
-            className="rounded-2xl border p-5 space-y-3"
-            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold">
-                  {mode === "daily" ? "Daily revenue" : mode === "weekly" ? "Weekly revenue" : "Monthly revenue"} (within
-                  range)
-                </div>
-                <div className="mt-1 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                  Hover bars for details • Completed shown in tooltip
-                </div>
-              </div>
-
-              <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                Max: {fmtMoneyFromCents(maxRevenueCents)}
-              </div>
-            </div>
-
-            {chartData.length === 0 ? (
-              <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                No revenue data yet.
-              </div>
-            ) : (
-              <div className="h-44 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
-                    <XAxis
-                      dataKey="name"
-                      axisLine={false}
-                      tickLine={false}
-                      interval="preserveStartEnd"
-                      tick={{ fontSize: 12, fill: "rgb(var(--muted))" }}
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fontSize: 12, fill: "rgb(var(--muted))" }}
-                      width={40}
-                      domain={[0, maxRevenueCents]}
-                      tickFormatter={(v) => compactMoneyFromCents(Number(v))}
-                    />
-                    <Tooltip
-                      cursor={{ opacity: 0.08 }}
-                      contentStyle={{
-                        borderRadius: 12,
-                        border: "1px solid rgb(var(--border))",
-                        background: "rgb(var(--card))",
-                        color: "rgb(var(--fg))",
-                      }}
-                      labelStyle={{ color: "rgb(var(--muted))" }}
-                      formatter={(v: unknown, name: string, item: any) => {
-                        if (name === "revenueCents") {
-                          const dollars = fmtMoneyFromCents(num(v));
-                          const completed = item?.payload?.completed ?? 0;
-                          return [dollars, `Revenue • Completed: ${fmtNum(num(completed))}`];
-                        }
-                        return [String(v), name];
-                      }}
-                    />
-                    <Bar dataKey="revenueCents" fill={color} radius={[8, 8, 0, 0]} isAnimationActive />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {/* Small summary row to match your KPI style */}
-            <div className="grid gap-2 sm:grid-cols-3">
-              <MiniStat label="Buckets" value={chartData.length} />
-              <MiniStat
-                label="Revenue (sum)"
-                value={fmtMoneyFromCents(chartData.reduce((a, r) => a + num(r.revenueCents), 0))}
-              />
-              <MiniStat
-                label="Completed (sum)"
-                value={fmtNum(chartData.reduce((a, r) => a + num(r.completed), 0))}
-              />
-            </div>
-          </div>
+          {/* ✅ Graph extracted to ui component */}
+          <RevenueGraphCard
+            mode={mode}
+            daily={data?.daily ?? []}
+            weekly={data?.weekly ?? []}
+            monthly={data?.monthly ?? []}
+          />
         </>
       ) : (
         <div className="rounded-2xl border p-4 text-sm" style={{ borderColor: "rgb(var(--border))" }}>
@@ -673,10 +506,7 @@ export default function RevenueOverview() {
 
 function KpiCard({ title, value }: { title: string; value: string }) {
   return (
-    <div
-      className="rounded-2xl border p-4"
-      style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-    >
+    <div className="rounded-2xl border p-4" style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}>
       <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
         {title}
       </div>
@@ -727,16 +557,5 @@ function ModeButton({ active, onClick, label }: { active: boolean; onClick: () =
     >
       {label}
     </button>
-  );
-}
-
-function MiniStat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-xl border px-3 py-2" style={{ borderColor: "rgb(var(--border))" }}>
-      <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-        {label}
-      </div>
-      <div className="text-sm font-semibold">{typeof value === "number" ? value.toLocaleString() : value}</div>
-    </div>
   );
 }
