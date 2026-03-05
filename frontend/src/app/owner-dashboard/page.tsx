@@ -103,18 +103,27 @@ export default function OwnerDashboardPage() {
             </button>
         </div>
 
-        <div
-            className="rounded-2xl border p-6"
-            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                <div
+        className="rounded-2xl border p-6"
+        style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
         >
-            <TrafficOverview days={30} />
+            <RevenueOverview />
         </div>
+
         <div
             className="rounded-2xl border p-6"
             style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
         >
             <BookingsOverview />
         </div>
+
+        <div
+            className="rounded-2xl border p-6"
+            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+        >
+            <TrafficOverview days={30} />
+        </div>
+
 
         <div
             className="rounded-2xl border p-6"
@@ -133,12 +142,6 @@ export default function OwnerDashboardPage() {
         style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
         >
             <ServicesOverview />
-        </div>
-        <div
-        className="rounded-2xl border p-6"
-        style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-        >
-            <RevenueOverview />
         </div>
 
         </div>
