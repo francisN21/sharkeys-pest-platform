@@ -1,9 +1,13 @@
 // frontend/src/components/su-dashboard/RevenueOverview.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { CreditCard, CalendarDays, ArrowUpRight, RefreshCcw } from "lucide-react";
+
+/** ---------------------------
+ * Fetch helpers
+ ---------------------------- */
 
 type ApiErrorShape = { message?: string; error?: string; ok?: boolean };
 
@@ -75,6 +79,13 @@ function dateOnlyEndExclusiveFromMonthEnd(monthValue: string) {
   return dateOnly(firstOfNext);
 }
 
+function daysBetween(startYmd: string, endExclusiveYmd: string) {
+  const s = new Date(`${startYmd}T00:00:00`);
+  const e = new Date(`${endExclusiveYmd}T00:00:00`);
+  const ms = e.getTime() - s.getTime();
+  return ms > 0 ? Math.round(ms / (24 * 60 * 60 * 1000)) : 0;
+}
+
 function fmtMoneyFromCents(cents: number) {
   const n = Number.isFinite(cents) ? cents : 0;
   return `$${(n / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -106,43 +117,72 @@ function weekLabel(weekStartIso: string) {
 }
 
 /** ---------------------------
- * API types (expected shape)
- * You can adjust to match your backend response.
+ * API shapes (ACTUAL backend response)
+ * Based on the payload you pasted:
+ * totals: { completed_count, revenue_cents }
+ * daily:  [{ day, completed_count, revenue_cents }]
+ * weekly: [{ week_start, completed_count, revenue_cents }]
+ * monthly:[{ month_start, completed_count, revenue_cents }]
  ---------------------------- */
 
+type RevenueRange = {
+  start: string;
+  end_exclusive: string;
+  tzOffsetMinutes: number;
+  days?: number; // we compute if missing
+};
+
 type RevenueTotals = {
-  revenue_cents_in_range: number;
-  completed_jobs_in_range: number;
-
-  // optional: for headline quick glance
-  revenue_cents_today?: number;
-  revenue_cents_this_week?: number;
-  revenue_cents_this_month?: number;
-
-  // optional: comparison deltas
-  pct_change_vs_prev_period?: number | null;
-};
-
-type RevenuePoint = {
-  bucket_start: string; // ISO date (day/week/month start)
+  completed_count: number;
   revenue_cents: number;
-  completed_jobs: number;
 };
+
+type DailyRow = { day: string; completed_count: number; revenue_cents: number };
+type WeeklyRow = { week_start: string; completed_count: number; revenue_cents: number };
+type MonthlyRow = { month_start: string; completed_count: number; revenue_cents: number };
 
 type RevenueMetricsResponse = {
   ok: boolean;
-  range: { start: string; end_exclusive: string; days: number };
+  range: RevenueRange;
   totals: RevenueTotals;
-  daily: RevenuePoint[];
-  weekly: RevenuePoint[];
-  monthly: RevenuePoint[];
+  daily: DailyRow[];
+  weekly: WeeklyRow[];
+  monthly: MonthlyRow[];
 };
+
+function num(v: unknown): number {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() !== "" && !Number.isNaN(Number(v))) return Number(v);
+  return 0;
+}
+
+function localTodayYmd() {
+  // local YYYY-MM-DD
+  return dateOnly(new Date());
+}
+
+function weekStartLocalMondayYmd(d: Date) {
+  // Monday as week start (matches your backend date_trunc('week') if it uses Monday; Postgres does)
+  const day = d.getDay(); // Sun=0..Sat=6
+  const diff = (day + 6) % 7; // Mon->0, Tue->1, ..., Sun->6
+  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate() - diff);
+  return dateOnly(start);
+}
+
+function monthStartLocalYmd(d: Date) {
+  const start = new Date(d.getFullYear(), d.getMonth(), 1);
+  return dateOnly(start);
+}
 
 async function getRevenueMetrics(range: { start?: string; end?: string }) {
   const params = new URLSearchParams();
   if (range.start) params.set("start", range.start);
   if (range.end) params.set("end", range.end);
+
+  // IMPORTANT: JS getTimezoneOffset() is minutes *behind* UTC (PST=480)
+  // Your backend response shows tzOffsetMinutes: 480, so keep this as-is.
   params.set("tzOffsetMinutes", String(new Date().getTimezoneOffset()));
+
   return jsonFetch<RevenueMetricsResponse>(`/admin/revenue-metrics?${params.toString()}`, { method: "GET" });
 }
 
@@ -196,12 +236,46 @@ export default function RevenueOverview() {
     return { start, end };
   }, [showAdvanced, advStart, advEnd, fromMonth, toMonth, useRollingEnd]);
 
+  function normalize(res: RevenueMetricsResponse): RevenueMetricsResponse {
+    const start = String(res?.range?.start ?? "");
+    const endEx = String(res?.range?.end_exclusive ?? "");
+
+    return {
+      ok: !!res.ok,
+      range: {
+        start,
+        end_exclusive: endEx,
+        tzOffsetMinutes: num(res?.range?.tzOffsetMinutes),
+        days: daysBetween(start, endEx),
+      },
+      totals: {
+        completed_count: num(res?.totals?.completed_count),
+        revenue_cents: num(res?.totals?.revenue_cents),
+      },
+      daily: (res?.daily ?? []).map((r) => ({
+        day: String((r as DailyRow)?.day ?? ""),
+        completed_count: num((r as DailyRow)?.completed_count),
+        revenue_cents: num((r as DailyRow)?.revenue_cents),
+      })),
+      weekly: (res?.weekly ?? []).map((r) => ({
+        week_start: String((r as WeeklyRow)?.week_start ?? ""),
+        completed_count: num((r as WeeklyRow)?.completed_count),
+        revenue_cents: num((r as WeeklyRow)?.revenue_cents),
+      })),
+      monthly: (res?.monthly ?? []).map((r) => ({
+        month_start: String((r as MonthlyRow)?.month_start ?? ""),
+        completed_count: num((r as MonthlyRow)?.completed_count),
+        revenue_cents: num((r as MonthlyRow)?.revenue_cents),
+      })),
+    };
+  }
+
   async function reload() {
     try {
       setLoading(true);
       setErr(null);
       const res = await getRevenueMetrics(range);
-      setData(res);
+      setData(normalize(res));
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to load revenue metrics");
       setData(null);
@@ -219,7 +293,7 @@ export default function RevenueOverview() {
         setErr(null);
         const res = await getRevenueMetrics(range);
         if (!alive) return;
-        setData(res);
+        setData(normalize(res));
       } catch (e: unknown) {
         if (!alive) return;
         setErr(e instanceof Error ? e.message : "Failed to load revenue metrics");
@@ -232,51 +306,61 @@ export default function RevenueOverview() {
     return () => {
       alive = false;
     };
-  }, [range]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range.start, range.end, showAdvanced, useRollingEnd, fromMonth, toMonth, advStart, advEnd]);
 
   const totals = data?.totals ?? null;
 
-  const series = useMemo(() => {
+  // Series for chart area (normalize to a common shape with bucket_start)
+  type SeriesPoint = { bucket_start: string; completed_count: number; revenue_cents: number };
+
+  const series: SeriesPoint[] = useMemo(() => {
     if (!data) return [];
-    if (mode === "daily") return data.daily ?? [];
-    if (mode === "weekly") return data.weekly ?? [];
-    return data.monthly ?? [];
+    if (mode === "daily") {
+      return (data.daily ?? []).map((r) => ({
+        bucket_start: r.day,
+        completed_count: r.completed_count,
+        revenue_cents: r.revenue_cents,
+      }));
+    }
+    if (mode === "weekly") {
+      return (data.weekly ?? []).map((r) => ({
+        bucket_start: r.week_start,
+        completed_count: r.completed_count,
+        revenue_cents: r.revenue_cents,
+      }));
+    }
+    return (data.monthly ?? []).map((r) => ({
+      bucket_start: r.month_start,
+      completed_count: r.completed_count,
+      revenue_cents: r.revenue_cents,
+    }));
   }, [data, mode]);
 
   const maxRevenue = useMemo(() => {
     return series.reduce((m, r) => Math.max(m, Number(r.revenue_cents || 0)), 0);
   }, [series]);
 
-  // Headline cards: prefer backend-provided today/week/month; otherwise derive rough values from buckets (best effort)
+  // Headline cards should be truly "today / this week / this month" in local time
   const headline = useMemo(() => {
-    if (!data?.totals) {
-      return { today: 0, week: 0, month: 0, pct: null as number | null };
-    }
+    if (!data) return { today: 0, week: 0, month: 0 };
 
-    const t = data.totals;
-    const pct = typeof t.pct_change_vs_prev_period === "number" ? t.pct_change_vs_prev_period : null;
+    const todayKey = localTodayYmd();
+    const weekKey = weekStartLocalMondayYmd(new Date());
+    const monthKey = monthStartLocalYmd(new Date());
 
-    // If backend gives explicit totals, use them.
-    if (
-      typeof t.revenue_cents_today === "number" ||
-      typeof t.revenue_cents_this_week === "number" ||
-      typeof t.revenue_cents_this_month === "number"
-    ) {
-      return {
-        today: Number(t.revenue_cents_today ?? 0),
-        week: Number(t.revenue_cents_this_week ?? 0),
-        month: Number(t.revenue_cents_this_month ?? 0),
-        pct,
-      };
-    }
+    const today = (data.daily ?? []).find((r) => r.day === todayKey)?.revenue_cents ?? 0;
+    const week = (data.weekly ?? []).find((r) => r.week_start === weekKey)?.revenue_cents ?? 0;
+    const month = (data.monthly ?? []).find((r) => r.month_start === monthKey)?.revenue_cents ?? 0;
 
-    // Fallback: use the latest bucket of each series
-    const today = (data.daily?.[data.daily.length - 1]?.revenue_cents ?? 0) || 0;
-    const week = (data.weekly?.[data.weekly.length - 1]?.revenue_cents ?? 0) || 0;
-    const month = (data.monthly?.[data.monthly.length - 1]?.revenue_cents ?? 0) || 0;
-
-    return { today, week, month, pct };
+    return { today, week, month };
   }, [data]);
+
+  const avgPerCompleted = useMemo(() => {
+    const rev = num(totals?.revenue_cents);
+    const c = num(totals?.completed_count);
+    return c > 0 ? Math.round(rev / c) : 0;
+  }, [totals]);
 
   return (
     <section className="space-y-3">
@@ -418,7 +502,7 @@ export default function RevenueOverview() {
       {/* Range caption */}
       {data?.range ? (
         <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-          Showing: {data.range.start} → {data.range.end_exclusive} (exclusive) • {data.range.days} days
+          Showing: {data.range.start} → {data.range.end_exclusive} (exclusive) • {data.range.days ?? 0} days
         </div>
       ) : null}
 
@@ -428,18 +512,18 @@ export default function RevenueOverview() {
         </div>
       ) : null}
 
-      {/* Headline stats cards (shadcn look) */}
+      {/* Headline stats cards */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard
           title="Today"
           value={fmtMoneyFromCents(headline.today)}
-          subtitle={headline.pct === null ? "—" : `${headline.pct > 0 ? "+" : ""}${headline.pct.toFixed(1)}% vs prev period`}
+          subtitle="Based on your timezone"
           icon={<CalendarDays className="h-4 w-4 text-muted-foreground" />}
         />
         <StatCard
           title="This Week"
           value={fmtMoneyFromCents(headline.week)}
-          subtitle="Rolling based on your timezone"
+          subtitle="Week starts Monday"
           icon={<CreditCard className="h-4 w-4 text-muted-foreground" />}
         />
         <StatCard
@@ -458,16 +542,9 @@ export default function RevenueOverview() {
       ) : totals ? (
         <>
           <div className="grid gap-3 sm:grid-cols-3">
-            <KpiCard title="Revenue (range)" value={fmtMoneyFromCents(totals.revenue_cents_in_range)} />
-            <KpiCard title="Completed jobs (range)" value={fmtNum(totals.completed_jobs_in_range)} />
-            <KpiCard
-              title="Avg $ / completed"
-              value={
-                totals.completed_jobs_in_range > 0
-                  ? fmtMoneyFromCents(Math.round(totals.revenue_cents_in_range / totals.completed_jobs_in_range))
-                  : "$0.00"
-              }
-            />
+            <KpiCard title="Revenue (range)" value={fmtMoneyFromCents(num(totals.revenue_cents))} />
+            <KpiCard title="Completed jobs (range)" value={fmtNum(num(totals.completed_count))} />
+            <KpiCard title="Avg $ / completed" value={fmtMoneyFromCents(avgPerCompleted)} />
           </div>
 
           {/* Mode toggle */}
@@ -484,8 +561,7 @@ export default function RevenueOverview() {
           >
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm font-semibold">
-                {mode === "daily" ? "Daily revenue" : mode === "weekly" ? "Weekly revenue" : "Monthly revenue"} (within
-                range)
+                {mode === "daily" ? "Daily revenue" : mode === "weekly" ? "Weekly revenue" : "Monthly revenue"} (within range)
               </div>
 
               <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
@@ -500,7 +576,7 @@ export default function RevenueOverview() {
             ) : (
               <div className="space-y-2">
                 {series.map((r) => {
-                  const cents = Number(r.revenue_cents || 0);
+                  const cents = num(r.revenue_cents);
                   const pct = maxRevenue > 0 ? Math.round((cents / maxRevenue) * 100) : 0;
 
                   const leftLabel =
@@ -531,7 +607,7 @@ export default function RevenueOverview() {
                       <div className="col-span-2 text-right text-sm font-semibold">{fmtMoneyFromCents(cents)}</div>
 
                       <div className="col-span-12 -mt-1 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                        Completed: {fmtNum(Number(r.completed_jobs || 0))}
+                        Completed: {fmtNum(num(r.completed_count))}
                       </div>
                     </div>
                   );
@@ -564,7 +640,17 @@ function KpiCard({ title, value }: { title: string; value: string }) {
   );
 }
 
-function StatCard({ title, value, subtitle, icon }: { title: string; value: string; subtitle: string; icon: React.ReactNode }) {
+function StatCard({
+  title,
+  value,
+  subtitle,
+  icon,
+}: {
+  title: string;
+  value: string;
+  subtitle: string;
+  icon: React.ReactNode;
+}) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

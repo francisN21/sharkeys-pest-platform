@@ -36,7 +36,7 @@ const adminMetricsSurveyRouter = require("../routes/adminMetricsSurvey");
 const bookingSurveyRouter = require("../routes/bookingSurvey");
 const adminMetricsBookingsExportRouter = require("../routes/adminMetricsBookingsExport");
 const adminMetricsLeadConversionsRouter = require("../routes/adminMetricsLeadConversions");
-const adminRevenueMetrics = require("./routes/adminRevenueMetrics");
+const adminRevenueMetrics = require("../routes/adminRevenueMetrics");
 
 // Messaging system pipeline
 const messages = require("../routes/messages");
