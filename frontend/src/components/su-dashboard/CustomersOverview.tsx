@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getCustomersMetrics, type CustomersMetricsResponse } from "../../lib/api/adminMetrics";
+import { CustomerMixCard } from "../../components/ui/customer-mix-card";
 
 function fmt(n: number) {
   return Number.isFinite(n) ? n.toLocaleString() : "0";
@@ -174,17 +175,12 @@ export default function CustomersOverview() {
               Residential: {all.residential_percent}% • Business: {all.business_percent}% • Unknown:{" "}
               {Math.max(0, 100 - all.residential_percent - all.business_percent)}%
             </div>
-
-            <div className="mt-3 h-3 w-full rounded-full border overflow-hidden" style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.35)" }}>
-              <div
-                className="h-full"
-                style={{
-                  width: `${Math.min(100, Math.max(0, all.residential_percent))}%`,
-                  background: "rgb(var(--text))",
-                  opacity: 0.18,
-                }}
-              />
-            </div>
+{/* the part neeeds to be replaced */}
+<CustomerMixCard
+  residentialPercent={Number(all.residential_percent ?? 0)}
+  businessPercent={Number(all.business_percent ?? 0)}
+  unknownPercent={Math.max(0, 100 - Number(all.residential_percent ?? 0) - Number(all.business_percent ?? 0))}
+/>
           </div>
         </>
       ) : (
@@ -192,6 +188,7 @@ export default function CustomersOverview() {
           No customer data yet.
         </div>
       )}
+      {/* end */}
     </section>
   );
 }
