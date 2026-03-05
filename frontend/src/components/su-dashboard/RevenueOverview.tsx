@@ -4,6 +4,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { CreditCard, CalendarDays, ArrowUpRight, RefreshCcw } from "lucide-react";
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 /** ---------------------------
  * Fetch helpers
@@ -38,7 +39,7 @@ async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 /** ---------------------------
- * Date helpers (same semantics as BookingsOverview)
+ * Date helpers
  ---------------------------- */
 
 function pad2(n: number) {
@@ -117,19 +118,14 @@ function weekLabel(weekStartIso: string) {
 }
 
 /** ---------------------------
- * API shapes (ACTUAL backend response)
- * Based on the payload you pasted:
- * totals: { completed_count, revenue_cents }
- * daily:  [{ day, completed_count, revenue_cents }]
- * weekly: [{ week_start, completed_count, revenue_cents }]
- * monthly:[{ month_start, completed_count, revenue_cents }]
+ * API shapes
  ---------------------------- */
 
 type RevenueRange = {
   start: string;
   end_exclusive: string;
   tzOffsetMinutes: number;
-  days?: number; // we compute if missing
+  days?: number;
 };
 
 type RevenueTotals = {
@@ -157,14 +153,12 @@ function num(v: unknown): number {
 }
 
 function localTodayYmd() {
-  // local YYYY-MM-DD
   return dateOnly(new Date());
 }
 
 function weekStartLocalMondayYmd(d: Date) {
-  // Monday as week start (matches your backend date_trunc('week') if it uses Monday; Postgres does)
   const day = d.getDay(); // Sun=0..Sat=6
-  const diff = (day + 6) % 7; // Mon->0, Tue->1, ..., Sun->6
+  const diff = (day + 6) % 7; // Mon->0 .. Sun->6
   const start = new Date(d.getFullYear(), d.getMonth(), d.getDate() - diff);
   return dateOnly(start);
 }
@@ -179,8 +173,7 @@ async function getRevenueMetrics(range: { start?: string; end?: string }) {
   if (range.start) params.set("start", range.start);
   if (range.end) params.set("end", range.end);
 
-  // IMPORTANT: JS getTimezoneOffset() is minutes *behind* UTC (PST=480)
-  // Your backend response shows tzOffsetMinutes: 480, so keep this as-is.
+  // JS getTimezoneOffset() is minutes *behind* UTC (PST=480)
   params.set("tzOffsetMinutes", String(new Date().getTimezoneOffset()));
 
   return jsonFetch<RevenueMetricsResponse>(`/admin/revenue-metrics?${params.toString()}`, { method: "GET" });
@@ -191,6 +184,23 @@ async function getRevenueMetrics(range: { start?: string; end?: string }) {
  ---------------------------- */
 
 type ViewMode = "daily" | "weekly" | "monthly";
+
+type SeriesPoint = {
+  bucket_start: string;
+  label: string;
+  revenue_cents: number;
+  completed_count: number;
+};
+
+function compactMoneyFromCents(cents: number) {
+  const dollars = cents / 100;
+  if (!Number.isFinite(dollars)) return "$0";
+  // compact like $1.2K / $3.4M where appropriate
+  const abs = Math.abs(dollars);
+  if (abs >= 1_000_000) return `$${(dollars / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `$${(dollars / 1_000).toFixed(1)}K`;
+  return `$${dollars.toFixed(0)}`;
+}
 
 export default function RevenueOverview() {
   // ✅ Default: rolling last 90 days to TODAY (exclusive end)
@@ -225,7 +235,7 @@ export default function RevenueOverview() {
     setAdvEnd(dateOnlyToday());
   }
 
-  // Build query range (same pattern as BookingsOverview)
+  // Build query range
   const range = useMemo(() => {
     if (showAdvanced) {
       return { start: advStart || undefined, end: advEnd || undefined };
@@ -306,42 +316,10 @@ export default function RevenueOverview() {
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range.start, range.end, showAdvanced, useRollingEnd, fromMonth, toMonth, advStart, advEnd]);
+  }, [range]);
 
   const totals = data?.totals ?? null;
 
-  // Series for chart area (normalize to a common shape with bucket_start)
-  type SeriesPoint = { bucket_start: string; completed_count: number; revenue_cents: number };
-
-  const series: SeriesPoint[] = useMemo(() => {
-    if (!data) return [];
-    if (mode === "daily") {
-      return (data.daily ?? []).map((r) => ({
-        bucket_start: r.day,
-        completed_count: r.completed_count,
-        revenue_cents: r.revenue_cents,
-      }));
-    }
-    if (mode === "weekly") {
-      return (data.weekly ?? []).map((r) => ({
-        bucket_start: r.week_start,
-        completed_count: r.completed_count,
-        revenue_cents: r.revenue_cents,
-      }));
-    }
-    return (data.monthly ?? []).map((r) => ({
-      bucket_start: r.month_start,
-      completed_count: r.completed_count,
-      revenue_cents: r.revenue_cents,
-    }));
-  }, [data, mode]);
-
-  const maxRevenue = useMemo(() => {
-    return series.reduce((m, r) => Math.max(m, Number(r.revenue_cents || 0)), 0);
-  }, [series]);
-
-  // Headline cards should be truly "today / this week / this month" in local time
   const headline = useMemo(() => {
     if (!data) return { today: 0, week: 0, month: 0 };
 
@@ -361,6 +339,52 @@ export default function RevenueOverview() {
     const c = num(totals?.completed_count);
     return c > 0 ? Math.round(rev / c) : 0;
   }, [totals]);
+
+  const series: SeriesPoint[] = useMemo(() => {
+    if (!data) return [];
+
+    if (mode === "daily") {
+      return (data.daily ?? []).map((r) => ({
+        bucket_start: r.day,
+        label: dayLabel(r.day),
+        revenue_cents: num(r.revenue_cents),
+        completed_count: num(r.completed_count),
+      }));
+    }
+
+    if (mode === "weekly") {
+      return (data.weekly ?? []).map((r) => ({
+        bucket_start: r.week_start,
+        label: weekLabel(r.week_start),
+        revenue_cents: num(r.revenue_cents),
+        completed_count: num(r.completed_count),
+      }));
+    }
+
+    return (data.monthly ?? []).map((r) => ({
+      bucket_start: r.month_start,
+      label: monthLabel(r.month_start),
+      revenue_cents: num(r.revenue_cents),
+      completed_count: num(r.completed_count),
+    }));
+  }, [data, mode]);
+
+  const chartData = useMemo(
+    () =>
+      series.map((p) => ({
+        name: p.label,
+        revenueCents: p.revenue_cents,
+        completed: p.completed_count,
+      })),
+    [series]
+  );
+
+  const maxRevenueCents = useMemo(() => {
+    const m = chartData.reduce((acc, r) => Math.max(acc, Number(r.revenueCents || 0)), 0);
+    return Math.max(1, m);
+  }, [chartData]);
+
+  const color = "hsl(var(--foreground))";
 
   return (
     <section className="space-y-3">
@@ -403,7 +427,7 @@ export default function RevenueOverview() {
           >
             <span className="inline-flex items-center gap-2">
               <RefreshCcw className="h-4 w-4" />
-              Refresh
+              {loading ? "Refreshing…" : "Refresh"}
             </span>
           </button>
         </div>
@@ -499,7 +523,6 @@ export default function RevenueOverview() {
         </div>
       )}
 
-      {/* Range caption */}
       {data?.range ? (
         <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
           Showing: {data.range.start} → {data.range.end_exclusive} (exclusive) • {data.range.days ?? 0} days
@@ -512,7 +535,7 @@ export default function RevenueOverview() {
         </div>
       ) : null}
 
-      {/* Headline stats cards */}
+      {/* Headline cards */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard
           title="Today"
@@ -534,7 +557,6 @@ export default function RevenueOverview() {
         />
       </div>
 
-      {/* KPIs within selected range */}
       {loading ? (
         <div className="rounded-2xl border p-4 text-sm" style={{ borderColor: "rgb(var(--border))" }}>
           Loading revenue metrics…
@@ -547,73 +569,93 @@ export default function RevenueOverview() {
             <KpiCard title="Avg $ / completed" value={fmtMoneyFromCents(avgPerCompleted)} />
           </div>
 
-          {/* Mode toggle */}
+          {/* Keep your daily/weekly/monthly buttons */}
           <div className="flex flex-wrap items-center gap-2">
             <ModeButton active={mode === "daily"} onClick={() => setMode("daily")} label="Daily" />
             <ModeButton active={mode === "weekly"} onClick={() => setMode("weekly")} label="Weekly" />
             <ModeButton active={mode === "monthly"} onClick={() => setMode("monthly")} label="Monthly" />
           </div>
 
-          {/* Series card */}
+          {/* ✅ Modern graph replacement */}
           <div
             className="rounded-2xl border p-5 space-y-3"
             style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
           >
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-sm font-semibold">
-                {mode === "daily" ? "Daily revenue" : mode === "weekly" ? "Weekly revenue" : "Monthly revenue"} (within range)
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold">
+                  {mode === "daily" ? "Daily revenue" : mode === "weekly" ? "Weekly revenue" : "Monthly revenue"} (within
+                  range)
+                </div>
+                <div className="mt-1 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                  Hover bars for details • Completed shown in tooltip
+                </div>
               </div>
 
               <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                Bars scaled to max in view
+                Max: {fmtMoneyFromCents(maxRevenueCents)}
               </div>
             </div>
 
-            {series.length === 0 ? (
+            {chartData.length === 0 ? (
               <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
                 No revenue data yet.
               </div>
             ) : (
-              <div className="space-y-2">
-                {series.map((r) => {
-                  const cents = num(r.revenue_cents);
-                  const pct = maxRevenue > 0 ? Math.round((cents / maxRevenue) * 100) : 0;
-
-                  const leftLabel =
-                    mode === "monthly" ? monthLabel(r.bucket_start) : mode === "weekly" ? weekLabel(r.bucket_start) : dayLabel(r.bucket_start);
-
-                  return (
-                    <div key={`${mode}-${r.bucket_start}`} className="grid grid-cols-12 gap-3 items-center">
-                      <div className="col-span-4 text-sm" style={{ color: "rgb(var(--muted))" }}>
-                        {leftLabel}
-                      </div>
-
-                      <div className="col-span-6">
-                        <div
-                          className="h-3 rounded-full border overflow-hidden"
-                          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.35)" }}
-                        >
-                          <div
-                            className="h-full"
-                            style={{
-                              width: `${pct}%`,
-                              background: "rgb(var(--text))",
-                              opacity: 0.15,
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="col-span-2 text-right text-sm font-semibold">{fmtMoneyFromCents(cents)}</div>
-
-                      <div className="col-span-12 -mt-1 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                        Completed: {fmtNum(num(r.completed_count))}
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="h-44 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+                    <XAxis
+                      dataKey="name"
+                      axisLine={false}
+                      tickLine={false}
+                      interval="preserveStartEnd"
+                      tick={{ fontSize: 12, fill: "rgb(var(--muted))" }}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 12, fill: "rgb(var(--muted))" }}
+                      width={40}
+                      domain={[0, maxRevenueCents]}
+                      tickFormatter={(v) => compactMoneyFromCents(Number(v))}
+                    />
+                    <Tooltip
+                      cursor={{ opacity: 0.08 }}
+                      contentStyle={{
+                        borderRadius: 12,
+                        border: "1px solid rgb(var(--border))",
+                        background: "rgb(var(--card))",
+                        color: "rgb(var(--fg))",
+                      }}
+                      labelStyle={{ color: "rgb(var(--muted))" }}
+                      formatter={(v: unknown, name: string, item: any) => {
+                        if (name === "revenueCents") {
+                          const dollars = fmtMoneyFromCents(num(v));
+                          const completed = item?.payload?.completed ?? 0;
+                          return [dollars, `Revenue • Completed: ${fmtNum(num(completed))}`];
+                        }
+                        return [String(v), name];
+                      }}
+                    />
+                    <Bar dataKey="revenueCents" fill={color} radius={[8, 8, 0, 0]} isAnimationActive />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             )}
+
+            {/* Small summary row to match your KPI style */}
+            <div className="grid gap-2 sm:grid-cols-3">
+              <MiniStat label="Buckets" value={chartData.length} />
+              <MiniStat
+                label="Revenue (sum)"
+                value={fmtMoneyFromCents(chartData.reduce((a, r) => a + num(r.revenueCents), 0))}
+              />
+              <MiniStat
+                label="Completed (sum)"
+                value={fmtNum(chartData.reduce((a, r) => a + num(r.completed), 0))}
+              />
+            </div>
           </div>
         </>
       ) : (
@@ -631,7 +673,10 @@ export default function RevenueOverview() {
 
 function KpiCard({ title, value }: { title: string; value: string }) {
   return (
-    <div className="rounded-2xl border p-4" style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}>
+    <div
+      className="rounded-2xl border p-4"
+      style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+    >
       <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
         {title}
       </div>
@@ -682,5 +727,16 @@ function ModeButton({ active, onClick, label }: { active: boolean; onClick: () =
     >
       {label}
     </button>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-xl border px-3 py-2" style={{ borderColor: "rgb(var(--border))" }}>
+      <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+        {label}
+      </div>
+      <div className="text-sm font-semibold">{typeof value === "number" ? value.toLocaleString() : value}</div>
+    </div>
   );
 }
