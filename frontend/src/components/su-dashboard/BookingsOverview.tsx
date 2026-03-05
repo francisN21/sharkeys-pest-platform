@@ -1,16 +1,17 @@
+// frontend/src/app/account/admin/BookingsOverview.tsx
+// (Use your existing path — this is a full drop-in for the component file content.)
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getBookingsMetrics, type BookingsMetricsResponse, downloadCompletedBookingsCsv } from "../../lib/api/adminMetrics";
+import {
+  getBookingsMetrics,
+  type BookingsMetricsResponse,
+  downloadCompletedBookingsCsv,
+} from "../../lib/api/adminMetrics";
+import { MonthlyBookingsCard } from "../../components/ui/monthly-bookings-card";
 
 function fmt(n: number) {
   return Number.isFinite(n) ? n.toLocaleString() : "0";
-}
-
-function monthLabel(monthStartIso: string) {
-  const d = new Date(monthStartIso);
-  if (Number.isNaN(d.getTime())) return monthStartIso;
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "short" });
 }
 
 function toMonthValue(d: Date) {
@@ -79,6 +80,12 @@ export default function BookingsOverview() {
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // ✅ Refresh without changing the selected range
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  function refreshNow() {
+    setRefreshNonce((n) => n + 1);
+  }
+
   function reset90d() {
     // resets BOTH month controls + advanced controls back to default 90d rolling to today
     setFromMonth(defaultStartMonth);
@@ -104,7 +111,7 @@ export default function BookingsOverview() {
     return { start, end };
   }, [showAdvanced, advStart, advEnd, fromMonth, toMonth, useRolling90End]);
 
-  // Fetch on range change
+  // Fetch on range change OR refresh click
   useEffect(() => {
     let alive = true;
 
@@ -126,17 +133,11 @@ export default function BookingsOverview() {
     return () => {
       alive = false;
     };
-  }, [range]);
+  }, [range, refreshNonce]);
 
   const totals = data?.totals;
 
-  const series = useMemo(() => {
-    return data?.monthly ?? [];
-  }, [data?.monthly]);
-
-  const maxCreated = useMemo(() => {
-    return series.reduce((m, r) => Math.max(m, Number(r.created_count || 0)), 0);
-  }, [series]);
+  const series = useMemo(() => data?.monthly ?? [], [data?.monthly]);
 
   async function onExportCompletedCsv() {
     try {
@@ -178,6 +179,17 @@ export default function BookingsOverview() {
 
         {/* Controls + actions */}
         <div className="flex flex-wrap items-end gap-2">
+          <button
+            type="button"
+            onClick={refreshNow}
+            className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+            disabled={loading}
+            title="Refresh metrics for the current range"
+          >
+            {loading ? "Refreshing…" : "Refresh"}
+          </button>
+
           <button
             type="button"
             onClick={reset90d}
@@ -304,7 +316,8 @@ export default function BookingsOverview() {
           </div>
 
           <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-            Export includes: service, time range, customer name/type, phone/email, address, booking id, created, notes, completed by, completed at.
+            Export includes: service, time range, customer name/type, phone/email, address, booking id, created, notes,
+            completed by, completed at.
           </div>
         </div>
       )}
@@ -331,7 +344,7 @@ export default function BookingsOverview() {
             <KpiCard title="Bookings (range)" value={fmt(totals.bookings_in_range)} />
             <KpiCard title="Completed (range)" value={fmt(totals.completed_in_range)} />
             <KpiCard title="Cancelled (range)" value={fmt(totals.cancelled_in_range)} />
-            <KpiCard title="Completion rate (range)" value={`${totals.completion_rate_percent}%`} />
+            <KpiCard title="Completion rate (range)" value={`${Number(totals.completion_rate_percent || 0)}%`} />
 
             <KpiCard title="Pending (range)" value={fmt(totals.pending_in_range)} />
             <KpiCard title="Accepted (range)" value={fmt(totals.accepted_in_range)} />
@@ -339,56 +352,8 @@ export default function BookingsOverview() {
             <div />
           </div>
 
-          <div
-            className="rounded-2xl border p-5 space-y-3"
-            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-          >
-            <div className="text-sm font-semibold">Monthly bookings (within range)</div>
-
-            {series.length === 0 ? (
-              <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                No data yet.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {series.map((r) => {
-                  const created = Number(r.created_count || 0);
-                  const pct = maxCreated > 0 ? Math.round((created / maxCreated) * 100) : 0;
-
-                  return (
-                    <div key={r.month_start} className="grid grid-cols-12 gap-3 items-center">
-                      <div className="col-span-3 text-sm" style={{ color: "rgb(var(--muted))" }}>
-                        {monthLabel(r.month_start)}
-                      </div>
-
-                      <div className="col-span-7">
-                        <div
-                          className="h-3 rounded-full border overflow-hidden"
-                          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.35)" }}
-                        >
-                          <div
-                            className="h-full"
-                            style={{
-                              width: `${pct}%`,
-                              background: "rgb(var(--text))",
-                              opacity: 0.15,
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="col-span-2 text-right text-sm font-semibold">{fmt(created)}</div>
-
-                      <div className="col-span-12 -mt-1 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                        Completed: {fmt(Number(r.completed_count || 0))} • Cancelled:{" "}
-                        {fmt(Number(r.cancelled_count || 0))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          {/* ✅ Replaces the non-working bars with the modern Recharts card */}
+          <MonthlyBookingsCard series={series} />
 
           {/* optional all-time quick glance */}
           <div className="grid gap-3 sm:grid-cols-3">
@@ -408,10 +373,7 @@ export default function BookingsOverview() {
 
 function KpiCard({ title, value }: { title: string; value: string }) {
   return (
-    <div
-      className="rounded-2xl border p-4"
-      style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-    >
+    <div className="rounded-2xl border p-4" style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}>
       <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
         {title}
       </div>
