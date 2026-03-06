@@ -54,7 +54,6 @@ export default function AccountShellPage() {
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Notification counts (tabs badge)
   const [tabBadges, setTabBadges] = useState<Record<TabKey, number>>({
     account: 0,
     bookings: 0,
@@ -105,7 +104,6 @@ export default function AccountShellPage() {
   function handleTabClick(key: TabKey) {
     setActiveTab(key);
 
-    // Mark as seen when user opens the tab
     if (key === "admin_jobs" || key === "admin_tech_bookings") {
       setTabBadges((prev) => ({ ...prev, [key]: 0 }));
     }
@@ -128,7 +126,6 @@ export default function AccountShellPage() {
         const r = normalizeRole(res.user as AuthedUser);
         setRole(r);
 
-        // Optional: quick demo badges for admin (remove when wiring real counts)
         if (r === "admin") {
           setTabBadges((prev) => ({
             ...prev,
@@ -155,7 +152,6 @@ export default function AccountShellPage() {
     if (!tabs.find((t) => t.key === activeTab)) setActiveTab("account");
   }, [tabs, activeTab]);
 
-  // Adapt your tabs into SlideTabs items (same keys/labels/icons/badges)
   const slideTabs: Array<SlideTabItem<TabKey>> = useMemo(
     () =>
       tabs.map((t) => ({
@@ -168,9 +164,10 @@ export default function AccountShellPage() {
   );
 
   return (
-    <main className="h-screen overflow-y-auto scroll-smooth md:snap-y md:snap-mandatory">
+    <main className="min-h-screen overflow-y-auto scroll-smooth md:snap-y md:snap-mandatory">
       <Navbar />
-      <div className="mx-auto max-w-6xl px-4 py-10 space-y-6">
+
+      <div className="mx-auto max-w-6xl px-3 py-6 space-y-4 sm:px-4 sm:py-8 md:py-10 md:space-y-6">
         {err ? (
           <div className="rounded-2xl border p-4 text-sm" style={{ borderColor: "rgb(239 68 68)" }}>
             {err}
@@ -178,13 +175,17 @@ export default function AccountShellPage() {
         ) : null}
 
         {/* Slide tabs bar */}
-        <div className="w-full border-b pb-4" style={{ borderColor: "rgb(var(--border))" }}>
-          <SlideTabs tabs={slideTabs} value={activeTab} onChange={handleTabClick} />
+        <div className="w-full border-b pb-3 sm:pb-4" style={{ borderColor: "rgb(var(--border))" }}>
+          <div className="-mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0">
+            <div className="min-w-max">
+              <SlideTabs tabs={slideTabs} value={activeTab} onChange={handleTabClick} />
+            </div>
+          </div>
         </div>
 
         {/* Content card */}
         <div
-          className="rounded-2xl border p-6"
+          className="rounded-2xl border p-4 sm:p-5 md:p-6"
           style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
         >
           {loading ? (
