@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { AuthProvider } from "../components/AuthProvider";
 import ThemeProvider from "../components/ThemeProvider";
 import { Toaster } from "../components/ui/sonner";
+import { RealtimeProvider } from "../lib/realtime/RealtimeProvider";
 
 export const metadata: Metadata = {
   title: "Sharkys Pest Control | Bay Area",
@@ -27,9 +28,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       />
       <body>
         <AuthProvider>
-          <ThemeProvider>{children}</ThemeProvider>
+          <RealtimeProvider>
+            <ThemeProvider>{children}</ThemeProvider>
+            <Toaster />
+            </RealtimeProvider>
         </AuthProvider>
-        <Toaster />
       </body>
     </html>
   );
