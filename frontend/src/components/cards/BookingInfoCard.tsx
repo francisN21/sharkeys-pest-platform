@@ -170,13 +170,25 @@ type BookingPrice = {
   updated_at: string | null;
 };
 
-function digitsOnly(v: string) {
-  return v.replace(/[^\d]/g, "");
-}
-
 function centsToDollarsLabel(cents?: number | null) {
   const n = typeof cents === "number" && Number.isFinite(cents) ? cents : 0;
   return `$${(n / 100).toFixed(2)}`;
+}
+
+function centsToDollarInput(cents?: number | null) {
+  const n = typeof cents === "number" && Number.isFinite(cents) ? cents : 0;
+  return (n / 100).toFixed(2);
+}
+
+function parseDollarInputToCents(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (!/^\d+(\.\d{0,2})?$/.test(trimmed)) return null;
+
+  const amount = Number(trimmed);
+  if (!Number.isFinite(amount) || amount < 0) return null;
+
+  return Math.round(amount * 100);
 }
 
 /** ------------------ UI helpers ------------------ */
@@ -339,7 +351,7 @@ function PriceCard({
   const [err, setErr] = useState<string | null>(null);
   const [price, setPrice] = useState<BookingPrice | null>(null);
 
-  const [editCents, setEditCents] = useState<string>("");
+  const [editAmount, setEditAmount] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
   const canEdit = viewer === "worker" || viewer === "admin" || viewer === "superuser";
@@ -364,11 +376,10 @@ function PriceCard({
           ? p.initial_price_cents
           : serviceBasePriceCents;
 
-      setEditCents(String(bestForEdit));
-    } catch (e: unknown) {
-      // If GET price fails, we still show service-based initial price.
+      setEditAmount(centsToDollarInput(bestForEdit));
+    } catch {
       setPrice(null);
-      setEditCents(String(serviceBasePriceCents));
+      setEditAmount(centsToDollarInput(serviceBasePriceCents));
       setErr(null);
     } finally {
       setLoading(false);
@@ -384,9 +395,9 @@ function PriceCard({
     if (!canEdit) return;
     if (!publicId || publicId === "—") return;
 
-    const cents = Number(editCents);
-    if (!Number.isFinite(cents) || !Number.isSafeInteger(cents) || cents < 0) {
-      setErr("Enter a valid whole number of cents (0 or more).");
+    const cents = parseDollarInputToCents(editAmount);
+    if (cents === null) {
+      setErr("Enter a valid dollar amount like 129.99.");
       return;
     }
 
@@ -399,6 +410,7 @@ function PriceCard({
       });
 
       setPrice(res.price);
+      setEditAmount(centsToDollarInput(res.price.final_price_cents ?? res.price.initial_price_cents ?? serviceBasePriceCents));
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to save price");
     } finally {
@@ -408,15 +420,15 @@ function PriceCard({
 
   const currency = price?.currency ?? "USD";
 
-  // ✅ IMPORTANT: initial comes from booking price IF it's > 0, otherwise fallback to serviceBasePriceCents
   const initialCents =
     typeof price?.initial_price_cents === "number" && price.initial_price_cents > 0
       ? price.initial_price_cents
       : serviceBasePriceCents;
 
   const finalCents = price?.final_price_cents ?? null;
-
   const totalDollars = centsToDollarsLabel(finalCents ?? initialCents);
+
+  const previewCents = parseDollarInputToCents(editAmount);
 
   return (
     <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: "rgb(var(--border))" }}>
@@ -460,24 +472,33 @@ function PriceCard({
             {canEdit ? (
               <div className="mt-2 space-y-2">
                 <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-                  Set Final Price (cents)
+                  Set Final Price
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <input
-                    value={editCents}
-                    onChange={(e) => setEditCents(digitsOnly(e.target.value))}
-                    className="w-40 rounded-xl border px-3 py-2 text-sm"
-                    style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-                    inputMode="numeric"
-                    placeholder="e.g. 12999"
-                    disabled={saving}
-                  />
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="relative">
+                    <span
+                      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold"
+                      style={{ color: "rgb(var(--muted))" }}
+                    >
+                      $
+                    </span>
+
+                    <input
+                      value={editAmount}
+                      onChange={(e) => setEditAmount(e.target.value)}
+                      className="w-40 rounded-xl border py-2 pl-7 pr-3 text-sm"
+                      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                      inputMode="decimal"
+                      placeholder="e.g. 129.99"
+                      disabled={saving}
+                    />
+                  </div>
 
                   <button
                     type="button"
                     onClick={onSave}
-                    disabled={saving || editCents.trim() === ""}
+                    disabled={saving || editAmount.trim() === ""}
                     className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
                     style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
                     title="Save final price"
@@ -498,7 +519,7 @@ function PriceCard({
                 </div>
 
                 <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                  Display: {centsToDollarsLabel(editCents.trim() === "" ? 0 : Number(editCents))}
+                  Display: {previewCents === null ? "—" : centsToDollarsLabel(previewCents)}
                 </div>
               </div>
             ) : (
@@ -557,10 +578,8 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
   const endsAt = getNullableString(booking, "ends_at") ?? null;
   const status = getString(booking, "status") ?? "—";
 
-  // ✅ HERE: pull base price from booking (adminTechBookings now provides it)
   const serviceBasePriceCents =
     (() => {
-      // exact key name from backend/adminTechBookings.js + frontend types
       const n = getNumber(booking, "service_base_price_cents");
       return typeof n === "number" ? n : 0;
     })() ?? 0;
