@@ -3,7 +3,7 @@ const express = require("express");
 const { pool } = require("../src/db");
 const { z } = require("zod");
 const { requireAuth } = require("../middleware/requireAuth");
-const { broadcast } = require("../src/realtime");
+const { broadcastToBookingParticipants } = require("../src/realtime");
 
 const router = express.Router();
 
@@ -136,12 +136,22 @@ router.post("/admin/bookings/:publicId/messages", requireAuth, async (req, res, 
       [bookingId, userId, senderRole, parsed.data.body]
     );
 
-    broadcast({
-      type: "message.new",
-      bookingId: publicId,
-      body: parsed.data.body,
-      senderId: userId,
-    });
+    await broadcastToBookingParticipants(
+      pool,
+      bookingId,
+      {
+        type: "message.new",
+        threadId: publicId,
+        at: ins.rows[0].created_at,
+        snippet: ins.rows[0].body,
+        fromName: null,
+      },
+      {
+        includeAdminRoles: true,
+        excludeUserIds: [userId],
+      }
+    );
+    
     return res.json({ ok: true, message: ins.rows[0] });
   } catch (e) {
     next(e);
