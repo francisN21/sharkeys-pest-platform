@@ -1,8 +1,8 @@
+// backend/auth/routes/adminBookings.js
 const express = require("express");
 const { z } = require("zod");
 const { pool } = require("../src/db");
 const { requireAuth } = require("../middleware/requireAuth");
-const { broadcast } = require("../src/realtime");
 const {
   broadcastToRoles,
   broadcastToUser,
@@ -17,13 +17,17 @@ const router = express.Router();
 function requireAnyRole(roles) {
   return async (req, res, next) => {
     try {
-      if (!req.user?.id) return res.status(401).json({ ok: false, message: "Not authenticated" });
+      if (!req.user?.id) {
+        return res.status(401).json({ ok: false, message: "Not authenticated" });
+      }
 
       const r = await pool.query(`SELECT role FROM user_roles WHERE user_id = $1`, [req.user.id]);
       const userRoles = r.rows.map((x) => String(x.role).trim().toLowerCase());
 
       const ok = roles.some((role) => userRoles.includes(String(role).trim().toLowerCase()));
-      if (!ok) return res.status(403).json({ ok: false, message: "Forbidden" });
+      if (!ok) {
+        return res.status(403).json({ ok: false, message: "Forbidden" });
+      }
 
       next();
     } catch (e) {
@@ -40,14 +44,6 @@ async function addEvent(client, bookingId, actorUserId, eventType, metadata = {}
   );
 }
 
-/**
- * ---------------------------------------------------------------------------
- * NEW: POST /admin/bookings
- * Creates a booking on behalf of:
- *  - existing registered customer (customerPublicId)
- *  - OR unregistered lead (lead object)
- * ---------------------------------------------------------------------------
- */
 const adminCreateBookingSchema = z
   .object({
     servicePublicId: z.string().uuid(),
@@ -55,10 +51,8 @@ const adminCreateBookingSchema = z
     endsAt: z.string().datetime(),
     notes: z.string().max(2000).optional(),
 
-    // existing customer path
     customerPublicId: z.string().uuid().optional(),
 
-    // new lead path
     lead: z
       .object({
         email: z.string().email(),
@@ -70,7 +64,6 @@ const adminCreateBookingSchema = z
       })
       .optional(),
 
-    // optional address override (mostly useful for existing customer)
     address: z.string().min(5).optional(),
   })
   .refine((x) => (x.customerPublicId ? !x.lead : !!x.lead), {
@@ -85,7 +78,6 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
 
     await client.query("BEGIN");
 
-    // Validate service
     const s = await client.query(
       `SELECT id FROM services WHERE public_id = $1 AND is_active = true`,
       [payload.servicePublicId]
@@ -101,7 +93,6 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
     let finalAddress = null;
 
     if (payload.customerPublicId) {
-      // Existing registered customer
       const u = await client.query(
         `SELECT id, address FROM users WHERE public_id = $1`,
         [payload.customerPublicId]
@@ -112,15 +103,14 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
       }
 
       customerUserId = u.rows[0].id;
-      const customerAddress = (u.rows[0].address || "").trim();
-      finalAddress = (payload.address || "").trim() || customerAddress;
+      const customerAddress = String(u.rows[0].address || "").trim();
+      finalAddress = String(payload.address || "").trim() || customerAddress;
 
       if (!finalAddress || finalAddress.length < 5) {
         await client.query("ROLLBACK");
         return res.status(400).json({ ok: false, message: "Address is required (customer has none saved)" });
       }
     } else {
-      // Lead (unregistered)
       const lead = payload.lead;
 
       const up = await client.query(
@@ -147,7 +137,7 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
       );
 
       leadId = up.rows[0].id;
-      finalAddress = (payload.address || "").trim() || (up.rows[0].address || "").trim();
+      finalAddress = String(payload.address || "").trim() || String(up.rows[0].address || "").trim();
 
       if (!finalAddress || finalAddress.length < 5) {
         await client.query("ROLLBACK");
@@ -172,7 +162,7 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
     });
 
     await client.query("COMMIT");
-    // send notifs
+
     broadcastToRoles(["admin", "superuser"], {
       type: "booking.created",
       bookingId: booking.public_id,
@@ -204,7 +194,6 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
       await client.query("ROLLBACK");
     } catch {}
 
-    // DB-level double-booking protection
     if (e && e.code === "23P01") {
       return res.status(409).json({ ok: false, message: "Time slot unavailable" });
     }
@@ -216,14 +205,7 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
 });
 
 /**
- * ---------------------------------------------------------------------------
- * Existing routes (updated auth + updated joins to support lead-backed bookings)
- * ---------------------------------------------------------------------------
- */
-
-/**
  * GET /admin/bookings?status=pending
- * NOTE: now supports lead bookings by LEFT JOIN users/leads and COALESCE fields.
  */
 router.get("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req, res, next) => {
   const status = String(req.query.status || "pending");
@@ -245,7 +227,6 @@ router.get("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req,
         s.title AS service_title,
         b.assigned_worker_user_id,
 
-        -- If booking is for a registered customer, cu.* will exist
         cu.public_id AS customer_public_id,
         cu.first_name AS customer_first_name,
         cu.last_name AS customer_last_name,
@@ -254,7 +235,6 @@ router.get("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req,
         cu.address AS customer_address,
         cu.account_type AS customer_account_type,
 
-        -- If booking is for a lead, l.* will exist
         l.public_id AS lead_public_id,
         l.first_name AS lead_first_name,
         l.last_name AS lead_last_name,
@@ -263,7 +243,6 @@ router.get("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req,
         l.address AS lead_address,
         l.account_type AS lead_account_type,
 
-        -- Unified fields for UI convenience
         COALESCE(cu.first_name, l.first_name) AS bookee_first_name,
         COALESCE(cu.last_name,  l.last_name)  AS bookee_last_name,
         COALESCE(cu.email,      l.email)      AS bookee_email,
@@ -381,7 +360,7 @@ router.patch("/:publicId/accept", requireAuth, requireAnyRole(["admin", "superus
     await client.query("BEGIN");
 
     const b = await client.query(
-      `SELECT id, status FROM bookings WHERE public_id = $1 FOR UPDATE`,
+      `SELECT id, status, customer_user_id FROM bookings WHERE public_id = $1 FOR UPDATE`,
       [bookingPublicId]
     );
     if (b.rowCount === 0) {
@@ -410,15 +389,10 @@ router.patch("/:publicId/accept", requireAuth, requireAnyRole(["admin", "superus
 
     await addEvent(client, booking.id, adminId, "accepted", {});
 
-    const ownerRes = await client.query(
-      `SELECT customer_user_id FROM bookings WHERE id = $1`,
-      [booking.id]
-    );
-    const customerUserId = ownerRes.rows[0]?.customer_user_id ?? null;
-
     await client.query("COMMIT");
-    if (customerUserId) {
-      broadcastToUser(customerUserId, {
+
+    if (booking.customer_user_id) {
+      broadcastToUser(booking.customer_user_id, {
         type: "booking.accepted",
         bookingId: bookingPublicId,
         acceptedAt: updated.rows[0].accepted_at,
@@ -450,7 +424,7 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
     await client.query("BEGIN");
 
     const b = await client.query(
-      `SELECT id, status FROM bookings WHERE public_id = $1 FOR UPDATE`,
+      `SELECT id, status, customer_user_id FROM bookings WHERE public_id = $1 FOR UPDATE`,
       [bookingPublicId]
     );
 
@@ -466,7 +440,12 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
       return res.status(409).json({ ok: false, message: "Booking must be accepted first" });
     }
 
-    // Confirm worker has worker role
+    const prevAssignRes = await client.query(
+      `SELECT worker_user_id FROM booking_assignments WHERE booking_id = $1 LIMIT 1`,
+      [booking.id]
+    );
+    const previousWorkerUserId = prevAssignRes.rows[0]?.worker_user_id ?? null;
+
     const w = await client.query(
       `SELECT 1 FROM user_roles WHERE role = 'worker' AND user_id = $1`,
       [workerUserId]
@@ -501,11 +480,6 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
     );
 
     await addEvent(client, booking.id, adminId, "assigned", { workerUserId });
-    const ownerRes = await client.query(
-      `SELECT customer_user_id FROM bookings WHERE id = $1`,
-      [booking.id]
-    );
-    const customerUserId = ownerRes.rows[0]?.customer_user_id ?? null;
 
     await client.query("COMMIT");
 
@@ -515,21 +489,29 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
       assignedAt: new Date().toISOString(),
     });
 
-    if (customerUserId) {
-      broadcastToUser(customerUserId, {
+    if (booking.customer_user_id) {
+      broadcastToUser(booking.customer_user_id, {
         type: "booking.assigned",
         bookingId: bookingPublicId,
         assignedAt: new Date().toISOString(),
       });
     }
 
-    res.json({ ok: true, booking: updated.rows[0] });
-    broadcast({
+    if (previousWorkerUserId && previousWorkerUserId !== workerUserId) {
+      broadcastToUser(previousWorkerUserId, {
+        type: "booking.reassigned",
+        bookingId: bookingPublicId,
+        assignedAt: new Date().toISOString(),
+      });
+    }
+
+    broadcastToRoles(["admin", "superuser"], {
       type: "booking.assigned",
       bookingId: bookingPublicId,
-      technicianId: workerUserId,
+      assignedAt: new Date().toISOString(),
     });
 
+    res.json({ ok: true, booking: updated.rows[0] });
   } catch (e) {
     try {
       await client.query("ROLLBACK");
@@ -596,10 +578,6 @@ function buildCompletedRange({ year, month, day }) {
   return { start, end };
 }
 
-/**
- * GET /admin/bookings/completed
- * Updated joins to support lead bookings + unified fields.
- */
 router.get("/completed", requireAuth, requireAnyRole(["admin", "superuser"]), async (req, res, next) => {
   try {
     const { page, pageSize, year, month, day, q } = completedQuerySchema.parse(req.query);
@@ -760,10 +738,6 @@ router.get("/completed", requireAuth, requireAnyRole(["admin", "superuser"]), as
   }
 });
 
-/**
- * GET /admin/bookings/completed/filters
- * Works as-is (completed_at exists regardless of lead/user).
- */
 router.get("/completed/filters", requireAuth, requireAnyRole(["admin", "superuser"]), async (req, res, next) => {
   try {
     const year = req.query.year ? Number(req.query.year) : null;
