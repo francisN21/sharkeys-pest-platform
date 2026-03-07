@@ -1,18 +1,25 @@
-// src/server.js
 require("dotenv").config();
 
+const http = require("http");
 const { app } = require("./app");
+const { initRealtime } = require("./realtime");
 
 const PORT = process.env.PORT || 4000;
-const HOST = "0.0.0.0"; // 👈 IMPORTANT
+const HOST = "0.0.0.0";
 
-app.listen(PORT, HOST, () => {
+const server = http.createServer(app);
+
+/**
+ * Initialize WebSocket server
+ */
+initRealtime(server);
+
+server.listen(PORT, HOST, () => {
   console.log(`Server running on:`);
   console.log(`  Local:   http://localhost:${PORT}`);
   console.log(`  Network: http://${getLocalIP()}:${PORT}`);
 });
 
-// helper to print your LAN IP
 function getLocalIP() {
   const os = require("os");
   const interfaces = os.networkInterfaces();
