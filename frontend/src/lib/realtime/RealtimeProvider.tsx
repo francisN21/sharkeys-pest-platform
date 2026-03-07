@@ -20,11 +20,16 @@ export function RealtimeProvider({
     if (!baseUrl) return "";
     if (!userId) return "";
 
-    const parsedRoles = Array.isArray(roles) ? roles.filter(Boolean) : [];
+    const normalizedRoles = Array.isArray(roles)
+      ? roles.map((r) => String(r ?? "").trim().toLowerCase()).filter(Boolean)
+      : [];
+
     const sep = baseUrl.includes("?") ? "&" : "?";
 
-    return `${baseUrl}${sep}userId=${encodeURIComponent(String(userId))}&roles=${encodeURIComponent(parsedRoles.join(","))}`;
-  }, [baseUrl, userId, roles]);
+    return `${baseUrl}${sep}userId=${encodeURIComponent(
+      String(userId)
+    )}&roles=${encodeURIComponent(normalizedRoles.join(","))}`;
+  }, [baseUrl, roles, userId]);
 
   useRealtime(wsUrl);
 
