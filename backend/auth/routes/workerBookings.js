@@ -232,6 +232,13 @@ router.patch("/:id/complete", requireAuth, requireRole("worker"), async (req, re
 
     await client.query("COMMIT");
 
+    broadcast({
+      type: "booking.completed",
+      bookingId: bookingPublicId,
+      technicianId: workerId,
+      completedAt: updated.rows[0].completed_at,
+    });
+
     res.json({ ok: true, booking: updated.rows[0] });
   } catch (e) {
     try {
