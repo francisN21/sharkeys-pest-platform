@@ -101,6 +101,12 @@ router.post("/", requireAuth, async (req, res, next) => {
     await addEvent(client, booking.id, userId, "created", {});
 
     await client.query("COMMIT");
+    broadcast({
+      type: "booking.created",
+      bookingId: booking.public_id,
+      startsAt: booking.starts_at,
+    });
+
 
     // ✅ keep your newer response shape (explicit fields),
     // while also not breaking any old callers expecting `booking` object.
@@ -231,6 +237,12 @@ router.patch("/:publicId", requireAuth, requireRole("customer"), async (req, res
     // await addEvent(client, booking.id, userId, "updated", payload);
 
     await client.query("COMMIT");
+
+    broadcast({
+      type: "booking.edited",
+      bookingId: booking.public_id,
+      startsAt: booking.starts_at,
+    });
     return res.json({ ok: true, booking: upd.rows[0] });
   } catch (e) {
     try { await client.query("ROLLBACK"); } catch {}
@@ -292,6 +304,12 @@ router.patch("/:publicId/cancel", requireAuth, async (req, res, next) => {
     await addEvent(client, booking.id, userId, "cancelled", {});
 
     await client.query("COMMIT");
+
+        broadcast({
+      type: "booking.deleted",
+      bookingId: booking.public_id,
+      startsAt: booking.starts_at,
+    });
 
     return res.json({ ok: true, booking: updated.rows[0] });
   } catch (e) {
