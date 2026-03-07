@@ -203,6 +203,11 @@ router.patch("/bookings/:publicId/price", requireAuth, async (req, res, next) =>
 
     await client.query("COMMIT");
 
+    broadcast({
+      type: "booking.price_set",
+      bookingId: bookingPublicId,
+      finalPriceCents: final_price_cents,
+    });
     // Normalize return types
     const row = pRes.rows[0] || null;
 
