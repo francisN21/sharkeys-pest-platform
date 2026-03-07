@@ -3,6 +3,7 @@ const express = require("express");
 const { pool } = require("../src/db");
 const { z } = require("zod");
 const { requireAuth } = require("../middleware/requireAuth");
+const { broadcast } = require("../src/realtime");
 
 const router = express.Router();
 
@@ -134,7 +135,7 @@ router.post("/admin/bookings/:publicId/messages", requireAuth, async (req, res, 
       `,
       [bookingId, userId, senderRole, parsed.data.body]
     );
-    
+
     broadcast({
       type: "message.new",
       bookingId: publicId,

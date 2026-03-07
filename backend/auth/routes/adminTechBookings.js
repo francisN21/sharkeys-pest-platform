@@ -3,6 +3,7 @@ const express = require("express");
 const { pool } = require("../src/db");
 const { z } = require("zod");
 const { requireAuth } = require("../middleware/requireAuth");
+const { broadcast } = require("../src/realtime");
 
 const router = express.Router();
 
@@ -404,6 +405,12 @@ router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, 
     }
 
     await client.query("COMMIT");
+    broadcast({
+      type: "booking.assigned",
+      bookingId: bookingPublicId,
+      technicianId: workerUserId,
+    });
+
     return res.json({ ok: true });
   } catch (e) {
     try {

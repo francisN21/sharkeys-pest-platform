@@ -3,6 +3,7 @@ const express = require("express");
 const { z } = require("zod");
 const { pool } = require("../src/db");
 const { requireAuth } = require("../middleware/requireAuth");
+const { broadcast } = require("../src/realtime");
 
 const router = express.Router();
 
