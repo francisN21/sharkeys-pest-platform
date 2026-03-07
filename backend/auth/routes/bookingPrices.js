@@ -1,4 +1,3 @@
-// backend/auth/routes/bookingPrices.js
 const express = require("express");
 const { z } = require("zod");
 const { pool } = require("../src/db");
@@ -20,7 +19,6 @@ async function isAdminOrSuper(userId) {
   return roles.includes("admin") || roles.includes("superuser");
 }
 
-// assigned tech guard (for worker)
 async function isAssignedWorker(userId, bookingId) {
   const r = await pool.query(
     `SELECT 1 FROM booking_assignments WHERE booking_id = $1 AND worker_user_id = $2 LIMIT 1`,
@@ -29,7 +27,6 @@ async function isAssignedWorker(userId, bookingId) {
   return r.rowCount > 0;
 }
 
-// customer ownership guard
 async function isBookingCustomer(userId, bookingId) {
   const r = await pool.query(
     `SELECT 1 FROM bookings WHERE id = $1 AND customer_user_id = $2 LIMIT 1`,
@@ -60,7 +57,6 @@ router.get("/bookings/:publicId/price", requireAuth, async (req, res, next) => {
 
     const bookingId = bRes.rows[0].id;
 
-    // AuthZ
     const adminish = await isAdminOrSuper(userId);
     if (!adminish) {
       const [assigned, owned] = await Promise.all([
@@ -174,7 +170,6 @@ router.patch("/bookings/:publicId/price", requireAuth, async (req, res, next) =>
         return res.status(403).json({ ok: false, message: "Forbidden" });
       }
 
-      // Workers can ONLY set price while job is assigned
       if (booking.status !== "assigned") {
         await client.query("ROLLBACK");
         return res.status(409).json({
@@ -212,11 +207,21 @@ router.patch("/bookings/:publicId/price", requireAuth, async (req, res, next) =>
 
     const row = pRes.rows[0] || null;
 
-    const ownerRes = await client.query(
-      `SELECT customer_user_id FROM bookings WHERE id = $1`,
+    const participantsRes = await client.query(
+      `
+      SELECT
+        b.customer_user_id,
+        ba.worker_user_id
+      FROM bookings b
+      LEFT JOIN booking_assignments ba ON ba.booking_id = b.id
+      WHERE b.id = $1
+      LIMIT 1
+      `,
       [booking.id]
     );
-    const customerUserId = ownerRes.rows[0]?.customer_user_id ?? null;
+
+    const customerUserId = participantsRes.rows[0]?.customer_user_id ?? null;
+    const assignedWorkerUserId = participantsRes.rows[0]?.worker_user_id ?? null;
 
     await client.query("COMMIT");
 
@@ -229,6 +234,15 @@ router.patch("/bookings/:publicId/price", requireAuth, async (req, res, next) =>
 
     if (customerUserId) {
       broadcastToUser(customerUserId, {
+        type: "booking.price_set",
+        bookingId: bookingPublicId,
+        finalPriceCents: final_price_cents,
+        setAt: row?.set_at ?? new Date().toISOString(),
+      });
+    }
+
+    if (assignedWorkerUserId && assignedWorkerUserId !== userId) {
+      broadcastToUser(assignedWorkerUserId, {
         type: "booking.price_set",
         bookingId: bookingPublicId,
         finalPriceCents: final_price_cents,
