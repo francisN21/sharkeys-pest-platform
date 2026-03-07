@@ -2,8 +2,7 @@ const WebSocket = require("ws");
 const url = require("url");
 
 /**
- * Client registry
- * ws -> { userId, roles, connectedAt }
+ * Map<WebSocket, { userId, roles, connectedAt }>
  */
 const clients = new Map();
 
@@ -50,13 +49,6 @@ function getAllConnectedClients() {
   return Array.from(clients.entries()).map(([ws, meta]) => ({ ws, meta }));
 }
 
-/**
- * Querystring auth version:
- * ws://host/ws?userId=123&roles=admin,superuser
- *
- * This is the cleanest drop-in for your current stack.
- * Later, you can replace this with signed token validation.
- */
 function parseConnectionIdentity(req) {
   const parsed = url.parse(req.url || "", true);
   const query = parsed.query || {};
@@ -103,13 +95,11 @@ function initRealtime(server) {
       const msg = safeJsonParse(String(raw || ""));
       if (!msg || typeof msg !== "object") return;
 
-      /**
-       * Optional client re-identify support after reconnect/login refresh:
-       * ws.send(JSON.stringify({ type: "auth.identify", userId, roles }))
-       */
       if (msg.type === "auth.identify") {
         const nextUserId =
-          typeof msg.userId === "number" && Number.isInteger(msg.userId) && msg.userId > 0
+          typeof msg.userId === "number" &&
+          Number.isInteger(msg.userId) &&
+          msg.userId > 0
             ? msg.userId
             : null;
 
@@ -118,7 +108,8 @@ function initRealtime(server) {
         clients.set(ws, {
           userId: nextUserId,
           roles: nextRoles,
-          connectedAt: getClientMeta(ws)?.connectedAt || new Date().toISOString(),
+          connectedAt:
+            getClientMeta(ws)?.connectedAt || new Date().toISOString(),
         });
 
         sendToSocket(ws, {
@@ -129,9 +120,6 @@ function initRealtime(server) {
         });
       }
 
-      /**
-       * Optional ping/pong keepalive
-       */
       if (msg.type === "ping") {
         sendToSocket(ws, { type: "pong", at: new Date().toISOString() });
       }
@@ -222,15 +210,11 @@ function broadcastToRoles(roles, event) {
   return count;
 }
 
-/**
- * booking participants:
- * - registered customer (bookings.customer_user_id)
- * - assigned worker (booking_assignments.worker_user_id)
- * - optionally admins/superusers
- */
 async function broadcastToBookingParticipants(pool, bookingId, event, options = {}) {
   const includeAdminRoles = options.includeAdminRoles ?? false;
-  const excludeUserIds = Array.isArray(options.excludeUserIds) ? options.excludeUserIds : [];
+  const excludeUserIds = Array.isArray(options.excludeUserIds)
+    ? options.excludeUserIds.map((x) => Number(x))
+    : [];
 
   const q = await pool.query(
     `
@@ -253,7 +237,12 @@ async function broadcastToBookingParticipants(pool, bookingId, event, options = 
 
   const ids = q.rows
     .map((r) => Number(r.user_id))
-    .filter((x) => Number.isInteger(x) && x > 0 && !excludeUserIds.includes(x));
+    .filter(
+      (x) =>
+        Number.isInteger(x) &&
+        x > 0 &&
+        !excludeUserIds.includes(x)
+    );
 
   let count = broadcastToUsers(ids, event);
 
