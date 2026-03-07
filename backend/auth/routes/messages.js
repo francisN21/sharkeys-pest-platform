@@ -134,7 +134,13 @@ router.post("/admin/bookings/:publicId/messages", requireAuth, async (req, res, 
       `,
       [bookingId, userId, senderRole, parsed.data.body]
     );
-
+    
+    broadcast({
+      type: "message.new",
+      bookingId: publicId,
+      body: parsed.data.body,
+      senderId: userId,
+    });
     return res.json({ ok: true, message: ins.rows[0] });
   } catch (e) {
     next(e);
