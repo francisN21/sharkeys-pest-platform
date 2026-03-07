@@ -4,7 +4,8 @@ const { pool } = require("../src/db");
 const { requireAuth } = require("../middleware/requireAuth");
 const { requireRole } = require("../middleware/requireRole");
 const {
-  broadcastToRoles
+  broadcastToRoles,
+  broadcastToUser,
 } = require("../src/realtime");
 
 const router = express.Router();
@@ -37,7 +38,6 @@ const createBookingSchema = z
     addressOverride: z.string().min(5).optional(),
   })
   .superRefine((x, ctx) => {
-    // Can't send both
     if (x.customerPublicId && x.lead) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -47,10 +47,9 @@ const createBookingSchema = z
     }
   });
 
-// New Update booking schema
 const updateBookingSchema = z.object({
-  starts_at: z.string().datetime().optional(), // ISO string
-  ends_at: z.string().datetime().optional(),   // ISO string
+  starts_at: z.string().datetime().optional(),
+  ends_at: z.string().datetime().optional(),
   notes: z.string().max(2000).nullable().optional(),
 });
 
@@ -65,7 +64,6 @@ async function addEvent(client, bookingId, actorUserId, eventType, metadata = {}
 /**
  * POST /bookings
  * Creates booking (pending) + logs event + commits.
- * IMPORTANT: Do not return before COMMIT, or the row may not persist.
  */
 router.post("/", requireAuth, async (req, res, next) => {
   const client = await pool.connect();
@@ -99,20 +97,16 @@ router.post("/", requireAuth, async (req, res, next) => {
 
     const booking = created.rows[0];
 
-    // ✅ keep event log (your old working behavior)
     await addEvent(client, booking.id, userId, "created", {});
 
     await client.query("COMMIT");
-    
+
     broadcastToRoles(["admin", "superuser"], {
       type: "booking.created",
       bookingId: booking.public_id,
       startsAt: booking.starts_at,
     });
 
-
-    // ✅ keep your newer response shape (explicit fields),
-    // while also not breaking any old callers expecting `booking` object.
     return res.status(201).json({
       ok: true,
       booking: {
@@ -127,9 +121,10 @@ router.post("/", requireAuth, async (req, res, next) => {
       },
     });
   } catch (e) {
-    try { await client.query("ROLLBACK"); } catch {}
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
 
-    // DB-level double-booking protection
     if (e && e.code === "23P01") {
       return res.status(409).json({ ok: false, message: "Time slot unavailable" });
     }
@@ -166,20 +161,17 @@ router.patch("/:publicId", requireAuth, requireRole("customer"), async (req, res
 
     const booking = bRes.rows[0];
 
-    // Only allow edits in these states
     if (!["pending", "accepted"].includes(booking.status)) {
       await client.query("ROLLBACK");
       return res.status(409).json({ ok: false, message: "This booking can no longer be edited" });
     }
 
-    // If accepted → only notes can change
     const wantsScheduleChange = payload.starts_at || payload.ends_at;
     if (booking.status === "accepted" && wantsScheduleChange) {
       await client.query("ROLLBACK");
       return res.status(409).json({ ok: false, message: "Schedule cannot be changed after acceptance" });
     }
 
-    // If pending and schedule fields provided, validate them
     if (booking.status === "pending" && wantsScheduleChange) {
       if (!payload.starts_at || !payload.ends_at) {
         await client.query("ROLLBACK");
@@ -200,7 +192,6 @@ router.patch("/:publicId", requireAuth, requireRole("customer"), async (req, res
       }
     }
 
-    // Build UPDATE dynamically
     const sets = [];
     const params = [];
     let p = 1;
@@ -236,19 +227,28 @@ router.patch("/:publicId", requireAuth, requireRole("customer"), async (req, res
       params
     );
 
-    // Optional: event log for edits (safe)
-    // await addEvent(client, booking.id, userId, "updated", payload);
+    const updatedBooking = upd.rows[0];
+
+    await addEvent(client, booking.id, userId, "edited", {
+      starts_at: updatedBooking.starts_at,
+      ends_at: updatedBooking.ends_at,
+      notes: updatedBooking.notes,
+    });
 
     await client.query("COMMIT");
 
-  broadcastToRoles(["admin", "superuser"], {
+    broadcastToRoles(["admin", "superuser"], {
       type: "booking.edited",
-      bookingId: booking.public_id,
-      startsAt: booking.starts_at,
+      bookingId: updatedBooking.public_id,
+      startsAt: updatedBooking.starts_at,
+      endsAt: updatedBooking.ends_at,
     });
-    return res.json({ ok: true, booking: upd.rows[0] });
+
+    return res.json({ ok: true, booking: updatedBooking });
   } catch (e) {
-    try { await client.query("ROLLBACK"); } catch {}
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
     next(e);
   } finally {
     client.release();
@@ -264,7 +264,6 @@ router.patch("/:publicId/cancel", requireAuth, async (req, res, next) => {
 
     await client.query("BEGIN");
 
-    // Lock the booking row to prevent race conditions
     const b = await client.query(
       `
       SELECT id, status
@@ -282,7 +281,6 @@ router.patch("/:publicId/cancel", requireAuth, async (req, res, next) => {
 
     const booking = b.rows[0];
 
-    // Only allow cancel if not already completed/cancelled
     if (booking.status === "completed") {
       await client.query("ROLLBACK");
       return res.status(409).json({ ok: false, message: "Completed bookings cannot be cancelled" });
@@ -306,17 +304,39 @@ router.patch("/:publicId/cancel", requireAuth, async (req, res, next) => {
 
     await addEvent(client, booking.id, userId, "cancelled", {});
 
+    const participantsRes = await client.query(
+      `
+      SELECT ba.worker_user_id
+      FROM booking_assignments ba
+      WHERE ba.booking_id = $1
+      LIMIT 1
+      `,
+      [booking.id]
+    );
+
+    const workerUserId = participantsRes.rows[0]?.worker_user_id ?? null;
+
     await client.query("COMMIT");
 
     broadcastToRoles(["admin", "superuser"], {
-      type: "booking.deleted",
-      bookingId: booking.public_id,
-      startsAt: booking.starts_at,
+      type: "booking.cancelled",
+      bookingId: updated.rows[0].public_id,
+      cancelledAt: updated.rows[0].cancelled_at,
     });
+
+    if (workerUserId) {
+      broadcastToUser(workerUserId, {
+        type: "booking.cancelled",
+        bookingId: updated.rows[0].public_id,
+        cancelledAt: updated.rows[0].cancelled_at,
+      });
+    }
 
     return res.json({ ok: true, booking: updated.rows[0] });
   } catch (e) {
-    try { await client.query("ROLLBACK"); } catch {}
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
     next(e);
   } finally {
     client.release();
@@ -324,11 +344,10 @@ router.patch("/:publicId/cancel", requireAuth, async (req, res, next) => {
 });
 
 // GET /bookings/availability?date=YYYY-MM-DD&tzOffsetMinutes=480
-// Returns bookings that overlap the local-date window (based on client tz offset).
 router.get("/availability", requireAuth, async (req, res, next) => {
   try {
-    const date = String(req.query.date || "").trim(); // YYYY-MM-DD
-    const tzOffsetMinutes = Number(req.query.tzOffsetMinutes ?? NaN); // from new Date().getTimezoneOffset()
+    const date = String(req.query.date || "").trim();
+    const tzOffsetMinutes = Number(req.query.tzOffsetMinutes ?? NaN);
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return res.status(400).json({ ok: false, message: "Invalid date (expected YYYY-MM-DD)" });
@@ -342,16 +361,12 @@ router.get("/availability", requireAuth, async (req, res, next) => {
     const m = Number(mStr);
     const d = Number(dStr);
 
-    // local midnight → UTC = Date.UTC(...) + offsetMinutes
-    // getTimezoneOffset() is "minutes to add to local to get UTC"
     const startUtcMs = Date.UTC(y, m - 1, d, 0, 0, 0, 0) + tzOffsetMinutes * 60_000;
     const endUtcMs = startUtcMs + 24 * 60 * 60_000;
 
     const startUtcIso = new Date(startUtcMs).toISOString();
     const endUtcIso = new Date(endUtcMs).toISOString();
 
-    // Overlap test: starts_at < end AND ends_at > start
-    // Exclude cancelled (you can include completed, since it's still a reserved block)
     const r = await pool.query(
       `
       SELECT public_id, starts_at, ends_at, status
