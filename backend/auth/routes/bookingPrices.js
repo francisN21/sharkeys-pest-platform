@@ -44,7 +44,6 @@ const setFinalPriceSchema = z.object({
     .transform((v) => Number(v)),
 });
 
-
 router.get("/bookings/:publicId/price", requireAuth, async (req, res, next) => {
   try {
     const userId = req.user?.id ?? req.auth?.userId ?? null;
@@ -69,11 +68,11 @@ router.get("/bookings/:publicId/price", requireAuth, async (req, res, next) => {
         isBookingCustomer(userId, bookingId),
       ]);
 
-      // NOTE: lead bookings have customer_user_id NULL, so "owned" will be false (by design).
-      if (!assigned && !owned) return res.status(403).json({ ok: false, message: "Forbidden" });
+      if (!assigned && !owned) {
+        return res.status(403).json({ ok: false, message: "Forbidden" });
+      }
     }
 
-    // Pull service base price + booking_prices
     const pRes = await pool.query(
       `
       SELECT
@@ -94,7 +93,6 @@ router.get("/bookings/:publicId/price", requireAuth, async (req, res, next) => {
     );
 
     if (pRes.rowCount === 0) {
-      // Extremely unlikely (bookingId is real), but safe fallback.
       return res.json({
         ok: true,
         price: {
@@ -115,7 +113,10 @@ router.get("/bookings/:publicId/price", requireAuth, async (req, res, next) => {
       ok: true,
       price: {
         initial_price_cents: Number(row.initial_price_cents) || 0,
-        final_price_cents: row.final_price_cents === null || row.final_price_cents === undefined ? null : Number(row.final_price_cents),
+        final_price_cents:
+          row.final_price_cents === null || row.final_price_cents === undefined
+            ? null
+            : Number(row.final_price_cents),
         currency: row.currency || "USD",
         set_by_user_id: row.set_by_user_id ?? null,
         set_at: row.set_at ?? null,
@@ -158,7 +159,6 @@ router.patch("/bookings/:publicId/price", requireAuth, async (req, res, next) =>
 
     const booking = bRes.rows[0];
 
-    // forbid pricing cancelled bookings
     if (booking.status === "cancelled") {
       await client.query("ROLLBACK");
       return res.status(409).json({ ok: false, message: "Cannot set price for a cancelled booking" });
@@ -171,14 +171,13 @@ router.patch("/bookings/:publicId/price", requireAuth, async (req, res, next) =>
         await client.query("ROLLBACK");
         return res.status(403).json({ ok: false, message: "Forbidden" });
       }
-      // optional: only allow when assigned or completed
+
       if (booking.status !== "assigned" && booking.status !== "completed") {
         await client.query("ROLLBACK");
         return res.status(409).json({ ok: false, message: "Price can only be set when assigned/completed" });
       }
     }
 
-    // Ensure booking_prices exists (fallback) and seed initial from current service base
     await client.query(
       `
       INSERT INTO booking_prices (booking_id, initial_price_cents, final_price_cents, currency)
@@ -204,6 +203,9 @@ router.patch("/bookings/:publicId/price", requireAuth, async (req, res, next) =>
       `,
       [booking.id, final_price_cents, userId]
     );
+
+    const row = pRes.rows[0] || null;
+
     const ownerRes = await client.query(
       `SELECT customer_user_id FROM bookings WHERE id = $1`,
       [booking.id]
@@ -227,15 +229,16 @@ router.patch("/bookings/:publicId/price", requireAuth, async (req, res, next) =>
         setAt: row?.set_at ?? new Date().toISOString(),
       });
     }
-    // Normalize return types
-    const row = pRes.rows[0] || null;
 
     return res.json({
       ok: true,
       price: row
         ? {
             initial_price_cents: Number(row.initial_price_cents) || 0,
-            final_price_cents: row.final_price_cents === null || row.final_price_cents === undefined ? null : Number(row.final_price_cents),
+            final_price_cents:
+              row.final_price_cents === null || row.final_price_cents === undefined
+                ? null
+                : Number(row.final_price_cents),
             currency: row.currency || "USD",
             set_by_user_id: row.set_by_user_id ?? null,
             set_at: row.set_at ?? null,

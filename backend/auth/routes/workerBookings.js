@@ -246,6 +246,7 @@ router.patch("/:id/complete", requireAuth, requireRole("worker"), async (req, re
         excludeUserIds: [workerId],
       }
     );
+    
     res.json({ ok: true, booking: updated.rows[0] });
   } catch (e) {
     try {

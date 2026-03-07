@@ -103,6 +103,7 @@ router.post("/", requireAuth, async (req, res, next) => {
     await addEvent(client, booking.id, userId, "created", {});
 
     await client.query("COMMIT");
+    
     broadcastToRoles(["admin", "superuser"], {
       type: "booking.created",
       bookingId: booking.public_id,

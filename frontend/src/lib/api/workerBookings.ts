@@ -1,13 +1,12 @@
 // frontend/src/lib/api/workerBookings.ts
 import { jsonFetch } from "../api/bookings";
 
-// ✅ Worker row supports both registered customer and lead bookings
 export type WorkerBookingRow = {
   public_id: string;
   status: "assigned" | "completed" | "cancelled" | "pending" | "accepted";
   starts_at: string;
   ends_at: string;
-  address: string;
+  address: string | null;
   notes: string | null;
 
   created_at: string;
@@ -17,7 +16,6 @@ export type WorkerBookingRow = {
 
   service_title: string;
 
-  // --- registered customer (nullable for lead bookings)
   customer_public_id?: string | null;
   customer_first_name?: string | null;
   customer_last_name?: string | null;
@@ -26,7 +24,6 @@ export type WorkerBookingRow = {
   customer_address?: string | null;
   customer_account_type?: string | null;
 
-  // --- lead (nullable for registered bookings)
   lead_public_id?: string | null;
   lead_first_name?: string | null;
   lead_last_name?: string | null;
@@ -60,16 +57,20 @@ export type WorkerCompleteBookingResponse = {
 };
 
 export function workerListAssignedBookings() {
-  return jsonFetch<WorkerListBookingsResponse>(`/worker/bookings/assigned`);
+  return jsonFetch<WorkerListBookingsResponse>("/worker/bookings/assigned");
 }
 
 export function workerListJobHistory(page = 1, pageSize = 30) {
-  const qs = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  const qs = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+
   return jsonFetch<WorkerHistoryResponse>(`/worker/bookings/history?${qs.toString()}`);
 }
 
 export function workerCompleteBooking(publicId: string) {
-  return jsonFetch<WorkerCompleteBookingResponse>(`/worker/bookings/${publicId}/complete`, {
+  return jsonFetch<WorkerCompleteBookingResponse>(`/worker/bookings/${encodeURIComponent(publicId)}/complete`, {
     method: "PATCH",
   });
 }
