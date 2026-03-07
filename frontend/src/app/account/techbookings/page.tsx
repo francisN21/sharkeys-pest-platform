@@ -1,4 +1,3 @@
-// frontend/src/app/account/techbookings/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -15,9 +14,44 @@ import AssignTechCards from "../../../components/cards/AssignTechCards";
 import BookingInfoCard from "../../../components/cards/BookingInfoCard";
 import Messenger, { type MessengerMessage } from "../../../components/messenger/Messenger";
 
-import { listBookingMessages, sendBookingMessage, editBookingMessage } from "../../../lib/api/messages";
+import {
+  listBookingMessages,
+  sendBookingMessage,
+  editBookingMessage,
+  ApiError as MsgApiError,
+} from "../../../lib/api/messages";
 
 type MeShape = { id: number; first_name?: string | null; last_name?: string | null };
+
+type MeApiUser = {
+  id?: unknown;
+  first_name?: string | null;
+  last_name?: string | null;
+};
+
+type MeApiResponse = {
+  user?: MeApiUser | null;
+};
+
+type RawBookingMessage = {
+  id: number | string;
+  sender_user_id: number | string;
+  sender_role: string;
+  body: string;
+  created_at: string;
+  updated_at?: string | null;
+  delivered_at?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+};
+
+type ListBookingMessagesResponse = {
+  messages?: RawBookingMessage[];
+};
+
+type BookingMessageMutationResponse = {
+  message: RawBookingMessage;
+};
 
 function safeToNumber(v: unknown): number | null {
   const n = typeof v === "string" ? Number(v) : typeof v === "number" ? v : NaN;
@@ -26,22 +60,44 @@ function safeToNumber(v: unknown): number | null {
   return n;
 }
 
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+}
+
+function toMessengerMessage(m: RawBookingMessage): MessengerMessage | null {
+  const senderId = typeof m.sender_user_id === "string" ? Number(m.sender_user_id) : m.sender_user_id;
+  const messageId = typeof m.id === "string" ? Number(m.id) : m.id;
+
+  if (!Number.isFinite(senderId) || senderId <= 0) return null;
+  if (!Number.isFinite(messageId) || messageId <= 0) return null;
+
+  return {
+    id: Number(messageId),
+    sender_user_id: Number(senderId),
+    sender_role: m.sender_role,
+    body: m.body,
+    created_at: m.created_at,
+    updated_at: m.updated_at ?? null,
+    delivered_at: m.delivered_at ?? null,
+    first_name: m.first_name ?? null,
+    last_name: m.last_name ?? null,
+  };
+}
+
 export default function TechBookingsPage() {
   const [technicians, setTechnicians] = useState<TechRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageErr, setPageErr] = useState<string | null>(null);
 
-  // view state
   const [view, setView] = useState<"list" | "detail">("list");
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [detail, setDetail] = useState<TechBookingDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailErr, setDetailErr] = useState<string | null>(null);
 
-  // me
   const [me, setMe] = useState<MeShape | null>(null);
 
-  // messages (for detail view)
   const [messages, setMessages] = useState<MessengerMessage[]>([]);
   const [msgLoading, setMsgLoading] = useState(false);
   const [msgErr, setMsgErr] = useState<string | null>(null);
@@ -53,8 +109,8 @@ export default function TechBookingsPage() {
     try {
       const data = await getAdminTechBookings();
       setTechnicians(data.technicians ?? []);
-    } catch (e: unknown) {
-      setPageErr(e instanceof Error ? e.message : "Failed to load technician bookings");
+    } catch (error: unknown) {
+      setPageErr(getErrorMessage(error, "Failed to load technician bookings"));
     } finally {
       setLoading(false);
     }
@@ -64,29 +120,19 @@ export default function TechBookingsPage() {
     setMsgErr(null);
     setMsgLoading(true);
     try {
-      const res = await listBookingMessages(publicId);
+      const res = (await listBookingMessages(publicId)) as ListBookingMessagesResponse;
 
-      const mapped: MessengerMessage[] = (res.messages ?? [])
-        .map((m) => {
-          const senderId = Number(m.sender_user_id);
-          if (!Number.isFinite(senderId) || senderId <= 0) return null; // guard
-          return {
-            id: Number(m.id),
-            sender_user_id: senderId, // ✅ always number
-            sender_role: m.sender_role,
-            body: m.body,
-            created_at: m.created_at,
-            updated_at: m.updated_at ?? null,
-            delivered_at: m.delivered_at ?? null,
-            first_name: m.first_name ?? null,
-            last_name: m.last_name ?? null,
-          } as MessengerMessage;
-        })
-        .filter(Boolean) as MessengerMessage[];
+      const mapped = (res.messages ?? [])
+        .map(toMessengerMessage)
+        .filter((m): m is MessengerMessage => m !== null);
 
       setMessages(mapped);
-    } catch (e: any) {
-      setMsgErr(e?.message || "Failed to load messages");
+    } catch (error: unknown) {
+      if (error instanceof MsgApiError && error.status === 403) {
+        setMsgErr("You no longer have access to this booking chat.");
+      } else {
+        setMsgErr(getErrorMessage(error, "Failed to load messages"));
+      }
       setMessages([]);
     } finally {
       setMsgLoading(false);
@@ -101,14 +147,13 @@ export default function TechBookingsPage() {
     setDetail(null);
     setDetailLoading(true);
 
-    // also load messages in parallel
-    loadMessages(publicId);
+    void loadMessages(publicId);
 
     try {
       const res = await getAdminTechBookingDetail(publicId);
       setDetail(res.booking);
-    } catch (e: unknown) {
-      setDetailErr(e instanceof Error ? e.message : "Failed to load booking detail");
+    } catch (error: unknown) {
+      setDetailErr(getErrorMessage(error, "Failed to load booking detail"));
     } finally {
       setDetailLoading(false);
     }
@@ -121,7 +166,6 @@ export default function TechBookingsPage() {
     setDetailErr(null);
     setDetailLoading(false);
 
-    // reset messages
     setMessages([]);
     setMsgErr(null);
     setMsgLoading(false);
@@ -129,66 +173,53 @@ export default function TechBookingsPage() {
   }
 
   async function onSendMessage(body: string) {
-  const publicId = selectedBookingId;
-  if (!publicId) return;
+    const publicId = selectedBookingId;
+    if (!publicId) return;
 
-  const senderId = me?.id; // <- number | undefined
-  if (!senderId) {
-    setMsgErr("You must be signed in to send messages.");
-    return;
+    const senderId = me?.id;
+    if (!senderId) {
+      setMsgErr("You must be signed in to send messages.");
+      return;
+    }
+
+    const trimmed = body.trim();
+    if (!trimmed) return;
+
+    setMsgErr(null);
+    setMsgSending(true);
+
+    const tempId = -Math.floor(Math.random() * 1_000_000);
+
+    const optimistic: MessengerMessage = {
+      id: tempId,
+      sender_user_id: senderId,
+      sender_role: "admin",
+      body: trimmed,
+      created_at: new Date().toISOString(),
+      updated_at: null,
+      delivered_at: new Date().toISOString(),
+      first_name: me?.first_name ?? null,
+      last_name: me?.last_name ?? null,
+    };
+
+    setMessages((prev) => [...prev, optimistic]);
+
+    try {
+      const res = (await sendBookingMessage(publicId, trimmed)) as BookingMessageMutationResponse;
+      const saved = toMessengerMessage(res.message);
+
+      if (!saved) {
+        throw new Error("Invalid message response");
+      }
+
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? saved : m)));
+    } catch (error: unknown) {
+      setMsgErr(getErrorMessage(error, "Failed to send message"));
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+    } finally {
+      setMsgSending(false);
+    }
   }
-
-  const trimmed = body.trim();
-  if (!trimmed) return;
-
-  setMsgErr(null);
-  setMsgSending(true);
-
-  // optimistic insert (TEMP NEGATIVE ID)
-  const tempId = -Math.floor(Math.random() * 1_000_000);
-
-  const optimistic: MessengerMessage = {
-    id: tempId,
-    sender_user_id: senderId, // ✅ number (not nullable)
-    sender_role: "worker",
-    body: trimmed,
-    created_at: new Date().toISOString(),
-    updated_at: null,
-    delivered_at: new Date().toISOString(),
-    first_name: me?.first_name ?? null,
-    last_name: me?.last_name ?? null,
-  };
-
-  setMessages((prev): MessengerMessage[] => [...prev, optimistic]);
-
-  try {
-    const res = await sendBookingMessage(publicId, trimmed);
-    const saved = res.message;
-
-    setMessages((prev): MessengerMessage[] =>
-      prev.map((m) =>
-        m.id === tempId
-          ? {
-              id: saved.id,
-              sender_user_id: Number(saved.sender_user_id), // ✅ force number
-              sender_role: saved.sender_role,
-              body: saved.body,
-              created_at: saved.created_at,
-              updated_at: saved.updated_at ?? null,
-              delivered_at: saved.delivered_at ?? null,
-              first_name: saved.first_name ?? me?.first_name ?? null,
-              last_name: saved.last_name ?? me?.last_name ?? null,
-            }
-          : m
-      )
-    );
-  } catch (e: any) {
-    setMsgErr(e?.message || "Failed to send message");
-    setMessages((prev): MessengerMessage[] => prev.filter((m) => m.id !== tempId));
-  } finally {
-    setMsgSending(false);
-  }
-}
 
   async function onEditMessage(messageId: number, body: string) {
     const publicId = selectedBookingId;
@@ -199,12 +230,15 @@ export default function TechBookingsPage() {
 
     setMsgErr(null);
 
-    // optimistic update
     const before = messages;
-    setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, body: trimmed, updated_at: new Date().toISOString() } : m)));
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId ? { ...m, body: trimmed, updated_at: new Date().toISOString() } : m
+      )
+    );
 
     try {
-      const res = await editBookingMessage(publicId, messageId, trimmed);
+      const res = (await editBookingMessage(publicId, messageId, trimmed)) as BookingMessageMutationResponse;
       const saved = res.message;
 
       setMessages((prev) =>
@@ -218,9 +252,9 @@ export default function TechBookingsPage() {
             : m
         )
       );
-    } catch (e: any) {
-      setMsgErr(e?.message || "Failed to edit message");
-      setMessages(before); // rollback
+    } catch (error: unknown) {
+      setMsgErr(getErrorMessage(error, "Failed to edit message"));
+      setMessages(before);
     }
   }
 
@@ -231,7 +265,7 @@ export default function TechBookingsPage() {
       try {
         await refresh();
 
-        const res = await apiMe();
+        const res = (await apiMe()) as MeApiResponse;
         if (!alive) return;
 
         const user = res.user ?? null;
@@ -260,7 +294,6 @@ export default function TechBookingsPage() {
 
   const techOptions = useMemo(() => technicians, [technicians]);
 
-  // LIST loading/error
   if (loading && view === "list") {
     return (
       <div className="p-4 text-sm" style={{ color: "rgb(var(--muted))" }}>
@@ -287,7 +320,6 @@ export default function TechBookingsPage() {
     );
   }
 
-  // DETAIL VIEW
   if (view === "detail") {
     const b = detail;
 
@@ -361,13 +393,14 @@ export default function TechBookingsPage() {
     );
   }
 
-  // LIST VIEW
   return (
     <AssignTechCards
       technicians={technicians}
       techOptions={techOptions}
       onRefresh={refresh}
-      onExpand={(publicId) => openDetail(publicId)}
+      onExpand={(publicId) => {
+        void openDetail(publicId);
+      }}
     />
   );
 }
