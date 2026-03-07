@@ -1,4 +1,3 @@
-// frontend/src/app/account/technician/page.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -13,6 +12,10 @@ import { me as apiMe } from "../../../lib/api/auth";
 
 import BookingInfoCard from "../../../components/cards/BookingInfoCard";
 import Messenger, { type MessengerMessage } from "../../../components/messenger/Messenger";
+import CompleteWithPriceModal, {
+  dollarsStringFromCents,
+  parseDollarInputToCents,
+} from "../../../app/account/technician/CompleteWithPriceModal";
 
 import {
   listBookingMessages,
@@ -28,6 +31,48 @@ import {
 type MeShape = { id: number; first_name?: string | null; last_name?: string | null };
 
 type ApiErrorShape = { message?: string; error?: string; ok?: boolean };
+
+type MeApiUser = {
+  id?: unknown;
+  first_name?: string | null;
+  last_name?: string | null;
+};
+
+type MeApiResponse = {
+  user?: MeApiUser | null;
+};
+
+type RawBookingMessage = {
+  id: number | string;
+  sender_user_id: number | string;
+  sender_role: string;
+  body: string;
+  created_at: string;
+  updated_at?: string | null;
+  delivered_at?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+};
+
+type ListBookingMessagesResponse = {
+  messages?: RawBookingMessage[];
+};
+
+type BookingMessageMutationResponse = {
+  message: RawBookingMessage;
+};
+
+type BookingPrice = {
+  initial_price_cents: number;
+  final_price_cents: number | null;
+  currency: string;
+  set_by_user_id: number | null;
+  set_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+type BookingPriceResponse = { ok: boolean; price: BookingPrice };
 
 const API_BASE = process.env.NEXT_PUBLIC_AUTH_API_BASE;
 
@@ -55,6 +100,11 @@ async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+}
+
 function safeToNumber(v: unknown): number | null {
   const n = typeof v === "string" ? Number(v) : typeof v === "number" ? v : NaN;
   if (!Number.isFinite(n) || n <= 0) return null;
@@ -73,21 +123,37 @@ function fmtMoneyFromCents(cents: number) {
   return `$${(n / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-/** ---------------------------
- * Booking price API (worker uses same endpoint)
- * PATCH /bookings/:publicId/price  { final_price_cents }
- ---------------------------- */
-type BookingPrice = {
-  initial_price_cents: number;
-  final_price_cents: number | null;
-  currency: string;
-  set_by_user_id: number | null;
-  set_at: string | null;
-  created_at: string | null;
-  updated_at: string | null;
-};
+function fmtNum(n: number) {
+  return Number.isFinite(n) ? n.toLocaleString() : "0";
+}
 
-type BookingPriceResponse = { ok: boolean; price: BookingPrice };
+function toMessengerMessage(m: RawBookingMessage): MessengerMessage | null {
+  const senderId = typeof m.sender_user_id === "string" ? Number(m.sender_user_id) : m.sender_user_id;
+  const messageId = typeof m.id === "string" ? Number(m.id) : m.id;
+
+  if (!Number.isFinite(senderId) || senderId <= 0) return null;
+  if (!Number.isFinite(messageId) || messageId <= 0) return null;
+
+  return {
+    id: Number(messageId),
+    sender_user_id: Number(senderId),
+    sender_role: m.sender_role,
+    body: m.body,
+    created_at: m.created_at,
+    updated_at: m.updated_at ?? null,
+    delivered_at: m.delivered_at ?? null,
+    first_name: m.first_name ?? null,
+    last_name: m.last_name ?? null,
+  };
+}
+
+/** ---------------------------
+ * Booking price API
+ ---------------------------- */
+
+async function getBookingPrice(publicId: string) {
+  return jsonFetch<BookingPriceResponse>(`/bookings/${encodeURIComponent(publicId)}/price`);
+}
 
 async function setFinalPrice(publicId: string, finalPriceCents: number) {
   const cents = clampNonNegInt(finalPriceCents);
@@ -175,11 +241,12 @@ function pickDisplayName(b: WorkerBookingRow) {
   const name = (kind === "lead" ? leadName : customerName) || customerName || leadName || "";
 
   const email = (kind === "lead" ? b.lead_email : b.customer_email) ?? b.customer_email ?? b.lead_email ?? null;
-
   const phone = (kind === "lead" ? b.lead_phone : b.customer_phone) ?? b.customer_phone ?? b.lead_phone ?? null;
-
   const accountType =
-    (kind === "lead" ? b.lead_account_type : b.customer_account_type) ?? b.customer_account_type ?? b.lead_account_type ?? null;
+    (kind === "lead" ? b.lead_account_type : b.customer_account_type) ??
+    b.customer_account_type ??
+    b.lead_account_type ??
+    null;
 
   const displayName = (name || email || "—").trim() || "—";
 
@@ -191,173 +258,6 @@ function pickDisplayName(b: WorkerBookingRow) {
     accountType: accountType ?? "—",
     customerAddress: b.customer_address ?? null,
   };
-}
-
-/** ---------------------------
- * REQUIRED completion modal (price required)
- ---------------------------- */
-
-function CompleteWithPriceModal({
-  open,
-  busy,
-  bookingId,
-  bookingTitle,
-  onClose,
-  onConfirm,
-}: {
-  open: boolean;
-  busy: boolean;
-  bookingId: string | null;
-  bookingTitle: string | null;
-  onClose: () => void;
-  onConfirm: (finalPriceCents: number) => void;
-}) {
-  const [priceInput, setPriceInput] = useState<string>("");
-  const [touched, setTouched] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    // reset every open
-    setPriceInput("");
-    setTouched(false);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
-  const trimmed = priceInput.trim();
-  const isDigits = /^\d+$/.test(trimmed);
-  const cents = isDigits ? Number(trimmed) : NaN;
-
-  // ✅ Required input: must be digits and >= 0
-  const valid = isDigits && Number.isFinite(cents) && cents >= 0;
-  const error =
-    touched && !valid
-      ? "Final price (cents) is required. Example: 30000 for $300.00"
-      : null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button
-        type="button"
-        aria-label="Close"
-        className="absolute inset-0"
-        style={{ background: "rgba(0,0,0,0.55)" }}
-        onClick={onClose}
-        disabled={busy}
-      />
-
-      <div
-        className="relative w-full max-w-lg rounded-2xl border p-4 shadow-lg"
-        style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Complete job"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-base font-semibold">Complete this job</div>
-            <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
-              Final price is required before completion. We’ll also post a completion message in the booking chat.
-            </div>
-          </div>
-
-          <button
-            type="button"
-            className="rounded-lg border px-2 py-1 text-xs font-semibold hover:opacity-90 disabled:opacity-60"
-            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-            onClick={onClose}
-            disabled={busy}
-            title="Close"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div
-          className="mt-3 rounded-xl border p-3 text-sm space-y-2"
-          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-        >
-          <div className="space-y-1">
-            <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-              Booking
-            </div>
-            <div className="font-semibold truncate">{bookingTitle ?? "—"}</div>
-            <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-              Booking ID: <span className="font-mono">{bookingId ?? "—"}</span>
-            </div>
-          </div>
-
-          <div className="pt-2">
-            <div className="text-xs font-semibold mb-1" style={{ color: "rgb(var(--muted))" }}>
-              Final price (cents) — required
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                value={priceInput}
-                onChange={(e) => setPriceInput(e.target.value)}
-                onBlur={() => setTouched(true)}
-                placeholder="e.g. 30000"
-                inputMode="numeric"
-                className="w-full rounded-xl border px-3 py-2 text-sm"
-                style={{ borderColor: error ? "rgb(239 68 68)" : "rgb(var(--border))", background: "rgb(var(--card))" }}
-                disabled={busy}
-              />
-              <div className="text-sm font-semibold whitespace-nowrap">
-                {valid ? fmtMoneyFromCents(Number(cents)) : "—"}
-              </div>
-            </div>
-            {error ? (
-              <div className="mt-2 text-xs" style={{ color: "rgb(239 68 68)" }}>
-                {error}
-              </div>
-            ) : (
-              <div className="mt-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                Tip: enter cents (no commas). Example: <span className="font-mono">15000</span> = $150.00
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-4 flex items-center justify-end gap-2">
-          <button
-            type="button"
-            className="rounded-lg border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-            onClick={onClose}
-            disabled={busy}
-            title="Cancel"
-          >
-            Cancel
-          </button>
-
-          <button
-            type="button"
-            className="rounded-lg border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-            onClick={() => {
-              setTouched(true);
-              if (!valid) return;
-              onConfirm(clampNonNegInt(Number(cents)));
-            }}
-            disabled={busy}
-            title="Complete job"
-          >
-            {busy ? "Working…" : "Set price & complete"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 /** ---------------------------
@@ -376,33 +276,32 @@ export default function WorkerJobsPage() {
 
   const [sortBy, setSortBy] = useState<"created" | "scheduled">("scheduled");
 
-  // pagination (history only)
   const HISTORY_PAGE_SIZE = 30;
   const [historyPage, setHistoryPage] = useState(1);
   const [historyTotalPages, setHistoryTotalPages] = useState(1);
   const [historyTotal, setHistoryTotal] = useState(0);
 
-  // view state like admin
   const [view, setView] = useState<"list" | "detail">("list");
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [detail, setDetail] = useState<WorkerBookingRow | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailErr, setDetailErr] = useState<string | null>(null);
 
-  // me
   const [me, setMe] = useState<MeShape | null>(null);
 
-  // messages (detail view)
   const [messages, setMessages] = useState<MessengerMessage[]>([]);
   const [msgLoading, setMsgLoading] = useState(false);
   const [msgErr, setMsgErr] = useState<string | null>(null);
   const [msgSending, setMsgSending] = useState(false);
   const [msgLocked, setMsgLocked] = useState(false);
 
-  // Complete modal
   const [modalOpen, setModalOpen] = useState(false);
   const [modalBookingId, setModalBookingId] = useState<string | null>(null);
   const [modalBookingTitle, setModalBookingTitle] = useState<string | null>(null);
+  const [modalInitialPriceCents, setModalInitialPriceCents] = useState<number | null>(null);
+  const [modalPriceLoading, setModalPriceLoading] = useState(false);
+  const [modalPriceInput, setModalPriceInput] = useState("");
+  const [modalPriceTouched, setModalPriceTouched] = useState(false);
 
   async function refresh(opts?: { historyPage?: number }) {
     const pageToLoad = opts?.historyPage ?? historyPage;
@@ -425,34 +324,20 @@ export default function WorkerJobsPage() {
     setMsgLoading(true);
 
     try {
-      const res = await listBookingMessages(publicId);
+      const res = (await listBookingMessages(publicId)) as ListBookingMessagesResponse;
 
-      const mapped: MessengerMessage[] = (res.messages ?? [])
-        .map((m: any) => {
-          const senderId = typeof m.sender_user_id === "string" ? Number(m.sender_user_id) : Number(m.sender_user_id);
-          if (!Number.isFinite(senderId) || senderId <= 0) return null;
-          return {
-            id: Number(m.id),
-            sender_user_id: senderId,
-            sender_role: m.sender_role,
-            body: m.body,
-            created_at: m.created_at,
-            updated_at: m.updated_at ?? null,
-            delivered_at: m.delivered_at ?? null,
-            first_name: m.first_name ?? null,
-            last_name: m.last_name ?? null,
-          } as MessengerMessage;
-        })
-        .filter(Boolean) as MessengerMessage[];
+      const mapped = (res.messages ?? [])
+        .map(toMessengerMessage)
+        .filter((m): m is MessengerMessage => m !== null);
 
       setMessages(mapped);
-    } catch (e: any) {
-      if (e instanceof MsgApiError && e.status === 403) {
+    } catch (error: unknown) {
+      if (error instanceof MsgApiError && error.status === 403) {
         setMsgLocked(true);
         setMsgErr("You’re no longer part of this booking chat (it may have been reassigned).");
         setMessages([]);
       } else {
-        setMsgErr(e?.message || "Failed to load messages");
+        setMsgErr(getErrorMessage(error, "Failed to load messages"));
         setMessages([]);
       }
     } finally {
@@ -468,8 +353,7 @@ export default function WorkerJobsPage() {
     setDetail(null);
     setDetailLoading(true);
 
-    // load messages in parallel
-    loadMessages(publicId);
+    void loadMessages(publicId);
 
     try {
       const all = [...assignedRows, ...historyRows];
@@ -479,8 +363,8 @@ export default function WorkerJobsPage() {
       if (!found) {
         setDetailErr("Booking not found in current list (try Refresh).");
       }
-    } catch (e: unknown) {
-      setDetailErr(e instanceof Error ? e.message : "Failed to load booking detail");
+    } catch (error: unknown) {
+      setDetailErr(getErrorMessage(error, "Failed to load booking detail"));
     } finally {
       setDetailLoading(false);
     }
@@ -493,7 +377,6 @@ export default function WorkerJobsPage() {
     setDetailErr(null);
     setDetailLoading(false);
 
-    // reset messages
     setMessages([]);
     setMsgErr(null);
     setMsgLocked(false);
@@ -534,32 +417,20 @@ export default function WorkerJobsPage() {
     setMessages((prev) => [...prev, optimistic]);
 
     try {
-      const res = await sendBookingMessage(publicId, trimmed);
-      const saved: any = res.message;
+      const res = (await sendBookingMessage(publicId, trimmed)) as BookingMessageMutationResponse;
+      const saved = toMessengerMessage(res.message);
 
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === tempId
-            ? {
-                id: Number(saved.id),
-                sender_user_id: Number(saved.sender_user_id),
-                sender_role: saved.sender_role,
-                body: saved.body,
-                created_at: saved.created_at,
-                updated_at: saved.updated_at ?? null,
-                delivered_at: saved.delivered_at ?? null,
-                first_name: saved.first_name ?? me?.first_name ?? null,
-                last_name: saved.last_name ?? me?.last_name ?? null,
-              }
-            : m
-        )
-      );
-    } catch (e: any) {
-      if (e instanceof MsgApiError && e.status === 403) {
+      if (!saved) {
+        throw new Error("Invalid message response");
+      }
+
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? saved : m)));
+    } catch (error: unknown) {
+      if (error instanceof MsgApiError && error.status === 403) {
         setMsgLocked(true);
         setMsgErr("You’re no longer part of this booking chat (it may have been reassigned).");
       } else {
-        setMsgErr(e?.message || "Failed to send message");
+        setMsgErr(getErrorMessage(error, "Failed to send message"));
       }
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
     } finally {
@@ -582,8 +453,8 @@ export default function WorkerJobsPage() {
     );
 
     try {
-      const res = await editBookingMessage(publicId, messageId, trimmed);
-      const saved: any = res.message;
+      const res = (await editBookingMessage(publicId, messageId, trimmed)) as BookingMessageMutationResponse;
+      const saved = res.message;
 
       setMessages((prev) =>
         prev.map((m) =>
@@ -596,12 +467,12 @@ export default function WorkerJobsPage() {
             : m
         )
       );
-    } catch (e: any) {
-      if (e instanceof MsgApiError && e.status === 403) {
+    } catch (error: unknown) {
+      if (error instanceof MsgApiError && error.status === 403) {
         setMsgLocked(true);
         setMsgErr("You’re no longer part of this booking chat (it may have been reassigned).");
       } else {
-        setMsgErr(e?.message || "Failed to edit message");
+        setMsgErr(getErrorMessage(error, "Failed to edit message"));
       }
       setMessages(before);
     }
@@ -613,10 +484,34 @@ export default function WorkerJobsPage() {
     return found?.service_title ?? null;
   }
 
-  function openCompleteModal(publicId: string) {
+  async function openCompleteModal(publicId: string) {
     setModalBookingId(publicId);
     setModalBookingTitle(findBookingTitle(publicId));
+    setModalInitialPriceCents(null);
+    setModalPriceInput("");
+    setModalPriceTouched(false);
+    setModalPriceLoading(true);
     setModalOpen(true);
+
+    try {
+      const res = await getBookingPrice(publicId);
+      const price = res.price ?? null;
+
+      const nextCents =
+        price?.final_price_cents !== null && price?.final_price_cents !== undefined
+          ? Number(price.final_price_cents)
+          : Number(price?.initial_price_cents ?? 0);
+
+      const safeCents = Number.isFinite(nextCents) ? nextCents : 0;
+
+      setModalInitialPriceCents(safeCents);
+      setModalPriceInput(dollarsStringFromCents(safeCents));
+    } catch {
+      setModalInitialPriceCents(0);
+      setModalPriceInput(dollarsStringFromCents(0));
+    } finally {
+      setModalPriceLoading(false);
+    }
   }
 
   function closeModal() {
@@ -624,10 +519,19 @@ export default function WorkerJobsPage() {
     setModalOpen(false);
     setModalBookingId(null);
     setModalBookingTitle(null);
+    setModalInitialPriceCents(null);
+    setModalPriceLoading(false);
+    setModalPriceInput("");
+    setModalPriceTouched(false);
   }
 
-  async function confirmCompleteWithPrice(finalPriceCents: number) {
+  async function confirmCompleteWithPrice() {
     if (!modalBookingId) return;
+
+    setModalPriceTouched(true);
+
+    const finalPriceCents = parseDollarInputToCents(modalPriceInput);
+    if (finalPriceCents === null) return;
 
     const bookingId = modalBookingId;
     const serviceTitle = modalBookingTitle ?? "Booking";
@@ -638,41 +542,32 @@ export default function WorkerJobsPage() {
       setBusyId(bookingId);
       setErr(null);
 
-      // 1) REQUIRED: set final price first
       await setFinalPrice(bookingId, finalPriceCents);
-
-      // 2) Complete booking
       await workerCompleteBooking(bookingId);
 
-      // 3) Post system-style completion note in messenger
-      //    - best effort: failure here should NOT block completion
       const completionMsg = `✅ ${serviceTitle} — completed ${completedAt} — Final price: ${money}`;
       try {
         await sendBookingMessage(bookingId, completionMsg);
-        // If we are currently in detail view of the same booking, refresh messages
         if (view === "detail" && selectedBookingId === bookingId) {
           await loadMessages(bookingId);
         }
-      } catch (e: any) {
-        // non-blocking
-        setErr((prev) => prev ?? (e?.message || "Completed, but failed to post completion message in chat."));
+      } catch (error: unknown) {
+        setErr((prev) => prev ?? getErrorMessage(error, "Completed, but failed to post completion message in chat."));
       }
 
       await refresh({ historyPage: 1 });
       closeModal();
 
-      // if viewing this booking in detail, refresh detail snapshot
       if (view === "detail" && selectedBookingId === bookingId) {
         await openDetail(bookingId);
       }
-    } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Failed to complete job");
+    } catch (error: unknown) {
+      setErr(getErrorMessage(error, "Failed to complete job"));
     } finally {
       setBusyId(null);
     }
   }
 
-  // load jobs + me
   useEffect(() => {
     let alive = true;
 
@@ -683,25 +578,25 @@ export default function WorkerJobsPage() {
 
         await refresh({ historyPage: 1 });
 
-        const res = await apiMe();
+        const res = (await apiMe()) as MeApiResponse;
         if (!alive) return;
 
         const user = res.user ?? null;
-        const idNum = safeToNumber((user as any)?.id);
+        const idNum = safeToNumber(user?.id);
 
         if (user && idNum) {
           setMe({
             id: idNum,
-            first_name: (user as any).first_name ?? null,
-            last_name: (user as any).last_name ?? null,
+            first_name: user.first_name ?? null,
+            last_name: user.last_name ?? null,
           });
         } else {
           setMe(null);
         }
-      } catch (e: unknown) {
+      } catch (error: unknown) {
         if (!alive) return;
         setMe(null);
-        setErr(e instanceof Error ? e.message : "Failed to load jobs");
+        setErr(getErrorMessage(error, "Failed to load jobs"));
       } finally {
         if (alive) setLoading(false);
       }
@@ -713,11 +608,10 @@ export default function WorkerJobsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // when switching to history, load current page
   useEffect(() => {
     if (tab !== "history") return;
-    refresh().catch((e: unknown) => {
-      setErr(e instanceof Error ? e.message : "Failed to load history");
+    refresh().catch((error: unknown) => {
+      setErr(getErrorMessage(error, "Failed to load history"));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
@@ -750,8 +644,20 @@ export default function WorkerJobsPage() {
   const canNext = historyPage < historyTotalPages;
 
   const modalBusy = !!modalBookingId && busyId === modalBookingId;
+  const modalParsedCents = parseDollarInputToCents(modalPriceInput);
+  const modalPriceError =
+    modalPriceTouched && modalParsedCents === null
+      ? "Final price is required. Enter a valid dollar amount like 300 or 300.00."
+      : null;
 
-  // ✅ DETAIL VIEW
+  const handleModalPriceBlur = () => {
+    setModalPriceTouched(true);
+    const nextCents = parseDollarInputToCents(modalPriceInput);
+    if (nextCents !== null) {
+      setModalPriceInput(dollarsStringFromCents(nextCents));
+    }
+  };
+
   if (view === "detail") {
     const b = detail;
 
@@ -814,7 +720,7 @@ export default function WorkerJobsPage() {
             </div>
           ) : null}
 
-          {!detailLoading && b ? <BookingInfoCard booking={b as any} /> : null}
+          {!detailLoading && b ? <BookingInfoCard booking={b} /> : null}
         </section>
 
         <section className="space-y-3">
@@ -844,6 +750,11 @@ export default function WorkerJobsPage() {
           busy={modalBusy}
           bookingId={modalBookingId}
           bookingTitle={modalBookingTitle}
+          priceInput={modalPriceInput}
+          priceLoading={modalPriceLoading}
+          errorText={modalPriceError}
+          onPriceInputChange={setModalPriceInput}
+          onPriceInputBlur={handleModalPriceBlur}
           onClose={closeModal}
           onConfirm={confirmCompleteWithPrice}
         />
@@ -851,7 +762,6 @@ export default function WorkerJobsPage() {
     );
   }
 
-  // ✅ LIST VIEW
   return (
     <div className="space-y-6">
       <CompleteWithPriceModal
@@ -859,6 +769,11 @@ export default function WorkerJobsPage() {
         busy={modalBusy}
         bookingId={modalBookingId}
         bookingTitle={modalBookingTitle}
+        priceInput={modalPriceInput}
+        priceLoading={modalPriceLoading}
+        errorText={modalPriceError}
+        onPriceInputChange={setModalPriceInput}
+        onPriceInputBlur={handleModalPriceBlur}
         onClose={closeModal}
         onConfirm={confirmCompleteWithPrice}
       />
@@ -901,7 +816,6 @@ export default function WorkerJobsPage() {
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="inline-flex rounded-base shadow-xs -space-x-px" role="group">
         <button
           type="button"

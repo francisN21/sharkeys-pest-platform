@@ -165,16 +165,22 @@ router.patch("/bookings/:publicId/price", requireAuth, async (req, res, next) =>
     }
 
     const adminish = await isAdminOrSuper(userId);
+
     if (!adminish) {
       const assigned = await isAssignedWorker(userId, booking.id);
+
       if (!assigned) {
         await client.query("ROLLBACK");
         return res.status(403).json({ ok: false, message: "Forbidden" });
       }
 
-      if (booking.status !== "assigned" && booking.status !== "completed") {
+      // Workers can ONLY set price while job is assigned
+      if (booking.status !== "assigned") {
         await client.query("ROLLBACK");
-        return res.status(409).json({ ok: false, message: "Price can only be set when assigned/completed" });
+        return res.status(409).json({
+          ok: false,
+          message: "Workers can only set price before completion",
+        });
       }
     }
 
