@@ -2,6 +2,7 @@ const express = require("express");
 const { z } = require("zod");
 const { pool } = require("../src/db");
 const { requireAuth } = require("../middleware/requireAuth");
+const { broadcast } = require("../src/realtime");
 
 const router = express.Router();
 
@@ -438,6 +439,12 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
 
     await client.query("COMMIT");
     res.json({ ok: true, booking: updated.rows[0] });
+    broadcast({
+      type: "booking.assigned",
+      bookingId: bookingPublicId,
+      technicianId: workerUserId,
+    });
+
   } catch (e) {
     try {
       await client.query("ROLLBACK");
