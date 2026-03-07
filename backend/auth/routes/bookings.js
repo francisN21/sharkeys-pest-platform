@@ -3,7 +3,9 @@ const { z } = require("zod");
 const { pool } = require("../src/db");
 const { requireAuth } = require("../middleware/requireAuth");
 const { requireRole } = require("../middleware/requireRole");
-const { broadcast } = require("../src/realtime");
+const {
+  broadcastToRoles
+} = require("../src/realtime");
 
 const router = express.Router();
 
@@ -101,7 +103,7 @@ router.post("/", requireAuth, async (req, res, next) => {
     await addEvent(client, booking.id, userId, "created", {});
 
     await client.query("COMMIT");
-    broadcast({
+    broadcastToRoles(["admin", "superuser"], {
       type: "booking.created",
       bookingId: booking.public_id,
       startsAt: booking.starts_at,
@@ -238,7 +240,7 @@ router.patch("/:publicId", requireAuth, requireRole("customer"), async (req, res
 
     await client.query("COMMIT");
 
-    broadcast({
+  broadcastToRoles(["admin", "superuser"], {
       type: "booking.edited",
       bookingId: booking.public_id,
       startsAt: booking.starts_at,
@@ -305,7 +307,7 @@ router.patch("/:publicId/cancel", requireAuth, async (req, res, next) => {
 
     await client.query("COMMIT");
 
-        broadcast({
+    broadcastToRoles(["admin", "superuser"], {
       type: "booking.deleted",
       bookingId: booking.public_id,
       startsAt: booking.starts_at,

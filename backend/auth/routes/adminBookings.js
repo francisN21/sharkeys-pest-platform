@@ -3,6 +3,10 @@ const { z } = require("zod");
 const { pool } = require("../src/db");
 const { requireAuth } = require("../middleware/requireAuth");
 const { broadcast } = require("../src/realtime");
+const {
+  broadcastToRoles,
+  broadcastToUser,
+} = require("../src/realtime");
 
 const router = express.Router();
 
@@ -168,6 +172,20 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
     });
 
     await client.query("COMMIT");
+    // send notifs
+    broadcastToRoles(["admin", "superuser"], {
+      type: "booking.created",
+      bookingId: booking.public_id,
+      startsAt: booking.starts_at,
+    });
+
+    if (customerUserId) {
+      broadcastToUser(customerUserId, {
+        type: "booking.created",
+        bookingId: booking.public_id,
+        startsAt: booking.starts_at,
+      });
+    }
 
     return res.status(201).json({
       ok: true,
@@ -308,7 +326,40 @@ router.patch("/:publicId/cancel", requireAuth, requireAnyRole(["admin", "superus
     );
 
     await addEvent(client, b.id, req.user.id, "cancelled_by_admin", {});
+
+    const participantsRes = await client.query(
+      `
+      SELECT
+        b.customer_user_id,
+        ba.worker_user_id
+      FROM bookings b
+      LEFT JOIN booking_assignments ba ON ba.booking_id = b.id
+      WHERE b.id = $1
+      LIMIT 1
+      `,
+      [b.id]
+    );
+
+    const customerUserId = participantsRes.rows[0]?.customer_user_id ?? null;
+    const workerUserId = participantsRes.rows[0]?.worker_user_id ?? null;
+
     await client.query("COMMIT");
+
+    if (customerUserId) {
+      broadcastToUser(customerUserId, {
+        type: "booking.cancelled",
+        bookingId: req.params.publicId,
+        cancelledAt: updated.rows[0].cancelled_at,
+      });
+    }
+
+    if (workerUserId) {
+      broadcastToUser(workerUserId, {
+        type: "booking.cancelled",
+        bookingId: req.params.publicId,
+        cancelledAt: updated.rows[0].cancelled_at,
+      });
+    }
 
     return res.json({ ok: true, booking: updated.rows[0] });
   } catch (e) {
@@ -358,7 +409,21 @@ router.patch("/:publicId/accept", requireAuth, requireAnyRole(["admin", "superus
     );
 
     await addEvent(client, booking.id, adminId, "accepted", {});
+
+    const ownerRes = await client.query(
+      `SELECT customer_user_id FROM bookings WHERE id = $1`,
+      [booking.id]
+    );
+    const customerUserId = ownerRes.rows[0]?.customer_user_id ?? null;
+
     await client.query("COMMIT");
+    if (customerUserId) {
+      broadcastToUser(customerUserId, {
+        type: "booking.accepted",
+        bookingId: bookingPublicId,
+        acceptedAt: updated.rows[0].accepted_at,
+      });
+    }
 
     res.json({ ok: true, booking: updated.rows[0] });
   } catch (e) {
@@ -436,8 +501,28 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
     );
 
     await addEvent(client, booking.id, adminId, "assigned", { workerUserId });
+    const ownerRes = await client.query(
+      `SELECT customer_user_id FROM bookings WHERE id = $1`,
+      [booking.id]
+    );
+    const customerUserId = ownerRes.rows[0]?.customer_user_id ?? null;
 
     await client.query("COMMIT");
+
+    broadcastToUser(workerUserId, {
+      type: "booking.assigned",
+      bookingId: bookingPublicId,
+      assignedAt: new Date().toISOString(),
+    });
+
+    if (customerUserId) {
+      broadcastToUser(customerUserId, {
+        type: "booking.assigned",
+        bookingId: bookingPublicId,
+        assignedAt: new Date().toISOString(),
+      });
+    }
+
     res.json({ ok: true, booking: updated.rows[0] });
     broadcast({
       type: "booking.assigned",
