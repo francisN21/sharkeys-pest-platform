@@ -3,7 +3,7 @@ const express = require("express");
 const { pool } = require("../src/db");
 const { z } = require("zod");
 const { requireAuth } = require("../middleware/requireAuth");
-const { broadcast } = require("../src/realtime");
+const { broadcastToUsers } = require("../src/realtime");
 
 const router = express.Router();
 
@@ -400,16 +400,35 @@ router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, 
       [booking.id, worker_user_id, userId]
     );
 
+    const participantsRes = await client.query(
+      `
+      SELECT
+        b.customer_user_id,
+        ba.worker_user_id AS old_worker_user_id
+      FROM bookings b
+      LEFT JOIN booking_assignments ba ON ba.booking_id = b.id
+      WHERE b.id = $1
+      LIMIT 1
+      `,
+      [booking.id]
+    );
+
+    const customerUserId = participantsRes.rows[0]?.customer_user_id ?? null;
+    const oldWorkerUserId = participantsRes.rows[0]?.old_worker_user_id ?? null;
+
     if (booking.status !== "assigned") {
       await client.query(`UPDATE bookings SET status = 'assigned', updated_at = now() WHERE id = $1`, [booking.id]);
     }
 
     await client.query("COMMIT");
-    broadcast({
-      type: "booking.assigned",
-      bookingId: bookingPublicId,
-      technicianId: workerUserId,
-    });
+    broadcastToUsers(
+      [customerUserId, oldWorkerUserId, worker_user_id].filter(Boolean),
+      {
+        type: "booking.reassigned",
+        bookingId: bookingPublicId,
+        assignedAt: new Date().toISOString(),
+      }
+    );
 
     return res.json({ ok: true });
   } catch (e) {
