@@ -3,7 +3,7 @@ const express = require("express");
 const { pool } = require("../src/db");
 const { requireAuth } = require("../middleware/requireAuth");
 const { requireRole } = require("../middleware/requireRole");
-const { broadcast } = require("../src/realtime");
+const { broadcastToBookingParticipants } = require("../src/realtime");
 
 const router = express.Router();
 
@@ -233,13 +233,19 @@ router.patch("/:id/complete", requireAuth, requireRole("worker"), async (req, re
 
     await client.query("COMMIT");
 
-    broadcast({
-      type: "booking.completed",
-      bookingId: bookingPublicId,
-      technicianId: workerId,
-      completedAt: updated.rows[0].completed_at,
-    });
-
+    await broadcastToBookingParticipants(
+      pool,
+      booking.id,
+      {
+        type: "booking.completed",
+        bookingId: bookingPublicId,
+        completedAt: updated.rows[0].completed_at,
+      },
+      {
+        includeAdminRoles: true,
+        excludeUserIds: [workerId],
+      }
+    );
     res.json({ ok: true, booking: updated.rows[0] });
   } catch (e) {
     try {
