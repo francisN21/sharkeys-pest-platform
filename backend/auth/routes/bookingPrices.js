@@ -3,7 +3,10 @@ const express = require("express");
 const { z } = require("zod");
 const { pool } = require("../src/db");
 const { requireAuth } = require("../middleware/requireAuth");
-const { broadcast } = require("../src/realtime");
+const {
+  broadcastToRoles,
+  broadcastToUser,
+} = require("../src/realtime");
 
 const router = express.Router();
 
@@ -201,14 +204,29 @@ router.patch("/bookings/:publicId/price", requireAuth, async (req, res, next) =>
       `,
       [booking.id, final_price_cents, userId]
     );
+    const ownerRes = await client.query(
+      `SELECT customer_user_id FROM bookings WHERE id = $1`,
+      [booking.id]
+    );
+    const customerUserId = ownerRes.rows[0]?.customer_user_id ?? null;
 
     await client.query("COMMIT");
 
-    broadcast({
+    broadcastToRoles(["admin", "superuser"], {
       type: "booking.price_set",
       bookingId: bookingPublicId,
       finalPriceCents: final_price_cents,
+      setAt: row?.set_at ?? new Date().toISOString(),
     });
+
+    if (customerUserId) {
+      broadcastToUser(customerUserId, {
+        type: "booking.price_set",
+        bookingId: bookingPublicId,
+        finalPriceCents: final_price_cents,
+        setAt: row?.set_at ?? new Date().toISOString(),
+      });
+    }
     // Normalize return types
     const row = pRes.rows[0] || null;
 
