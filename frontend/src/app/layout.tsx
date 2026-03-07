@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { AuthProvider } from "../components/AuthProvider";
 import ThemeProvider from "../components/ThemeProvider";
 import { Toaster } from "../components/ui/sonner";
-import { RealtimeProvider } from "../lib/realtime/RealtimeProvider";
+import { RealtimeBootstrap } from "../../src/lib/realtime/RealtimeBoostrap";
 
 export const metadata: Metadata = {
   title: "Sharkys Pest Control | Bay Area",
@@ -19,19 +19,28 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <link
-        rel="stylesheet"
-        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
-      />
+      <head>
+        <link
+          rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+        />
+      </head>
+
       <body>
         <AuthProvider>
-          <RealtimeProvider>
-            <ThemeProvider>{children}</ThemeProvider>
-            <Toaster />
-            </RealtimeProvider>
+          <ThemeProvider>
+            <RealtimeBootstrap>
+              {children}
+              <Toaster />
+            </RealtimeBootstrap>
+          </ThemeProvider>
         </AuthProvider>
       </body>
     </html>

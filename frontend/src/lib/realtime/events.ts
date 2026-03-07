@@ -9,11 +9,27 @@ export type RealtimeEvent =
       startsAt?: string;
     }
   | {
+      type: "booking.accepted";
+      bookingId: string;
+      acceptedAt?: string;
+    }
+  | {
       type: "booking.assigned";
       bookingId: string;
       bookingName?: string;
       technicianName?: string;
       assignedAt?: string;
+    }
+  | {
+      type: "booking.reassigned";
+      bookingId: string;
+      bookingName?: string;
+      assignedAt?: string;
+    }
+  | {
+      type: "booking.cancelled";
+      bookingId: string;
+      cancelledAt?: string;
     }
   | {
       type: "booking.completed";
@@ -22,6 +38,12 @@ export type RealtimeEvent =
       technicianName?: string;
       completedAt?: string;
       finalPriceCents?: number;
+    }
+  | {
+      type: "booking.price_set";
+      bookingId: string;
+      finalPriceCents?: number;
+      setAt?: string;
     }
   | {
       type: "message.new";

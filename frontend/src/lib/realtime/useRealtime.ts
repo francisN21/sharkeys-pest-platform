@@ -4,6 +4,21 @@ import { useEffect, useRef } from "react";
 import type { RealtimeEvent } from "./events";
 import { notifyFromEvent } from "./notifyFromEvent";
 
+type SystemEvent =
+  | { type: "system.connected"; at?: string; userId?: number | null; roles?: string[] }
+  | { type: "system.identified"; at?: string; userId?: number | null; roles?: string[] }
+  | { type: "pong"; at?: string };
+
+function isSystemEvent(evt: unknown): evt is SystemEvent {
+  if (!evt || typeof evt !== "object") return false;
+  const type = (evt as { type?: unknown }).type;
+  return (
+    type === "system.connected" ||
+    type === "system.identified" ||
+    type === "pong"
+  );
+}
+
 export function useRealtime(url?: string | null) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -20,27 +35,26 @@ export function useRealtime(url?: string | null) {
       wsRef.current = ws;
 
       const onOpen = () => {
-        // connection established
+        // connected
       };
 
       const onMessage = (ev: MessageEvent) => {
         try {
-          const evt = JSON.parse(String(ev.data)) as RealtimeEvent | { type: string };
+          const parsed = JSON.parse(String(ev.data));
 
-          if (!evt || typeof evt !== "object" || !("type" in evt)) return;
-
-          if (evt.type === "pong" || evt.type === "system.connected" || evt.type === "system.identified") {
+          if (isSystemEvent(parsed)) {
             return;
           }
 
-          notifyFromEvent(evt as RealtimeEvent);
+          notifyFromEvent(parsed as RealtimeEvent);
         } catch {
-          // ignore bad payloads
+          // ignore malformed payloads
         }
       };
 
       const onClose = () => {
         wsRef.current = null;
+
         if (disposed) return;
 
         reconnectTimerRef.current = window.setTimeout(() => {
@@ -51,7 +65,9 @@ export function useRealtime(url?: string | null) {
       const onError = () => {
         try {
           ws.close();
-        } catch {}
+        } catch {
+          // ignore
+        }
       };
 
       ws.addEventListener("open", onOpen);
@@ -82,7 +98,9 @@ export function useRealtime(url?: string | null) {
       if (wsRef.current) {
         try {
           wsRef.current.close();
-        } catch {}
+        } catch {
+          // ignore
+        }
       }
 
       wsRef.current = null;
