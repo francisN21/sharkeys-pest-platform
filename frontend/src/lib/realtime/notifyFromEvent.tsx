@@ -6,7 +6,6 @@ import { Wrench, Tag, User, Clock } from "lucide-react";
 import type { RealtimeEvent } from "./events";
 
 /**
- * This is your “company standard” router:
  * WS event -> decide toast content + decide browser notification behavior
  */
 export function notifyFromEvent(evt: RealtimeEvent) {
