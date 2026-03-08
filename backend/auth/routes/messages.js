@@ -27,10 +27,9 @@ async function getBookingIdByPublicId(publicId) {
 }
 
 /**
- * Policy A access model:
- * - superuser/admin: access
+ * Access model:
+ * - superuser/admin: access ANY booking thread
  * - otherwise: must be an ACTIVE booking_participant for the booking
- *   (customer + current worker only)
  */
 async function canAccessBooking({ userId, roles, bookingId }) {
   const isAdminish = roles.includes("admin") || roles.includes("superuser");
@@ -49,6 +48,33 @@ async function canAccessBooking({ userId, roles, bookingId }) {
   );
 
   return r.rowCount > 0;
+}
+
+async function getMessageWithUserFields(messageId, bookingId) {
+  const r = await pool.query(
+    `
+    SELECT
+      m.id,
+      m.booking_id,
+      m.sender_user_id,
+      m.sender_role,
+      m.body,
+      m.created_at,
+      m.updated_at,
+      m.delivered_at,
+      u.first_name,
+      u.last_name
+    FROM booking_messages m
+    LEFT JOIN users u ON u.id = m.sender_user_id
+    WHERE m.id = $1
+      AND m.booking_id = $2
+      AND m.deleted_at IS NULL
+    LIMIT 1
+    `,
+    [messageId, bookingId]
+  );
+
+  return r.rows[0] ?? null;
 }
 
 const sendSchema = z.object({
@@ -105,8 +131,14 @@ router.get("/admin/bookings/:publicId/messages", requireAuth, async (req, res, n
 
 /**
  * POST /admin/bookings/:publicId/messages
+ *
+ * Realtime policy:
+ * - notify active booking participants
+ * - ALSO notify all admin/superuser accounts
+ * - exclude the sender
  */
 router.post("/admin/bookings/:publicId/messages", requireAuth, async (req, res, next) => {
+  const client = await pool.connect();
   try {
     const userId = req.user?.id ?? req.auth?.userId ?? null;
     if (!userId) return res.status(401).json({ ok: false, message: "Not authenticated" });
@@ -123,11 +155,15 @@ router.post("/admin/bookings/:publicId/messages", requireAuth, async (req, res, 
     if (!parsed.success) {
       return res.status(400).json({ ok: false, message: "Invalid body", issues: parsed.error.issues });
     }
-    if (!parsed.data.body) return res.status(400).json({ ok: false, message: "Empty message" });
+    if (!parsed.data.body) {
+      return res.status(400).json({ ok: false, message: "Empty message" });
+    }
 
     const senderRole = computeSenderRole(roles);
 
-    const ins = await pool.query(
+    await client.query("BEGIN");
+
+    const ins = await client.query(
       `
       INSERT INTO booking_messages (booking_id, sender_user_id, sender_role, body)
       VALUES ($1, $2, $3, $4)
@@ -136,25 +172,61 @@ router.post("/admin/bookings/:publicId/messages", requireAuth, async (req, res, 
       [bookingId, userId, senderRole, parsed.data.body]
     );
 
+    const insertedId = ins.rows[0].id;
+
+    const message = await client.query(
+      `
+      SELECT
+        m.id,
+        m.booking_id,
+        m.sender_user_id,
+        m.sender_role,
+        m.body,
+        m.created_at,
+        m.updated_at,
+        m.delivered_at,
+        u.first_name,
+        u.last_name
+      FROM booking_messages m
+      LEFT JOIN users u ON u.id = m.sender_user_id
+      WHERE m.id = $1
+        AND m.booking_id = $2
+        AND m.deleted_at IS NULL
+      LIMIT 1
+      `,
+      [insertedId, bookingId]
+    );
+
+    const msg = message.rows[0] ?? ins.rows[0];
+    const fromName = [msg.first_name, msg.last_name].filter(Boolean).join(" ").trim() || null;
+
+    await client.query("COMMIT");
+
     await broadcastToBookingParticipants(
       pool,
       bookingId,
       {
         type: "message.new",
         threadId: publicId,
-        at: ins.rows[0].created_at,
-        snippet: ins.rows[0].body,
-        fromName: null,
+        at: msg.created_at,
+        snippet: msg.body,
+        fromName,
+        senderRole: msg.sender_role,
       },
       {
         includeAdminRoles: true,
         excludeUserIds: [userId],
       }
     );
-    
-    return res.json({ ok: true, message: ins.rows[0] });
+
+    return res.json({ ok: true, message: msg });
   } catch (e) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
     next(e);
+  } finally {
+    client.release();
   }
 });
 
@@ -176,36 +248,46 @@ router.patch("/admin/bookings/:publicId/messages/:messageId", requireAuth, async
     if (!allowed) return res.status(403).json({ ok: false, message: "Forbidden" });
 
     const messageId = Number(req.params.messageId);
-    if (!Number.isFinite(messageId)) return res.status(400).json({ ok: false, message: "Bad message id" });
+    if (!Number.isFinite(messageId)) {
+      return res.status(400).json({ ok: false, message: "Bad message id" });
+    }
 
     const parsed = editSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ ok: false, message: "Invalid body", issues: parsed.error.issues });
     }
-    if (!parsed.data.body) return res.status(400).json({ ok: false, message: "Empty message" });
+    if (!parsed.data.body) {
+      return res.status(400).json({ ok: false, message: "Empty message" });
+    }
 
-    // Only sender can edit
     const ownerCheck = await pool.query(
       `SELECT sender_user_id FROM booking_messages WHERE id = $1 AND booking_id = $2 AND deleted_at IS NULL`,
       [messageId, bookingId]
     );
+
     const senderUserId = ownerCheck.rows[0]?.sender_user_id ?? null;
-    if (!senderUserId) return res.status(404).json({ ok: false, message: "Message not found" });
+    if (!senderUserId) {
+      return res.status(404).json({ ok: false, message: "Message not found" });
+    }
     if (Number(senderUserId) !== Number(userId)) {
       return res.status(403).json({ ok: false, message: "Only the sender can edit this message" });
     }
 
-    const upd = await pool.query(
+    await pool.query(
       `
       UPDATE booking_messages
       SET body = $1, updated_at = now()
       WHERE id = $2
-      RETURNING id, booking_id, sender_user_id, sender_role, body, created_at, updated_at, delivered_at
       `,
       [parsed.data.body, messageId]
     );
 
-    return res.json({ ok: true, message: upd.rows[0] });
+    const updated = await getMessageWithUserFields(messageId, bookingId);
+    if (!updated) {
+      return res.status(404).json({ ok: false, message: "Message not found" });
+    }
+
+    return res.json({ ok: true, message: updated });
   } catch (e) {
     next(e);
   }
