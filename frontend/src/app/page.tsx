@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import Navbar from "../components/Navbar";
 import ScrollReveal from "../components/ScrollReveal";
+import ServiceAreaStrip from "../components/ui/service-area-strip";
 
 const SECTION = "min-h-screen snap-start flex items-center";
 const CONTAINER = "mx-auto w-full max-w-6xl px-4";
@@ -35,7 +36,7 @@ const SERVICES = [
   {
     title: "Customized Plans",
     desc: "Tailored solutions for residential and commercial needs based on your property and pest pressure.",
-    href: "/residential-pest-control-bay-area",
+    href: "/pest-control-bay-area",
   },
 ];
 
@@ -44,6 +45,18 @@ const HIGHLIGHTS = [
   { title: "Bay Area Service", desc: "Local coverage with reliable arrival windows." },
   { title: "Clear Pricing", desc: "Residential and commercial packages." },
   { title: "Professional Care", desc: "Respectful service for homes and businesses." },
+];
+
+const SERVICE_AREAS = [
+  "Benicia",
+  "Vallejo",
+  "Fairfield",
+  "Concord",
+  "Martinez",
+  "San Francisco",
+  "Daly City",
+  "San Ramon",
+  "Oakland",
 ];
 
 export default function HomePage() {
@@ -57,80 +70,95 @@ export default function HomePage() {
         className={`${SECTION} scroll-mt-24 md:scroll-mt-28`}
         style={{ borderColor: "rgb(var(--border))" }}
       >
-        <div className={`${CONTAINER} grid gap-10 md:grid-cols-2 md:items-center`}>
-          <ScrollReveal>
-            <div className="space-y-5">
-              <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
-                Sharkys Pest Control in Benicia, serving the Bay Area.
-              </h1>
+        <div className={`${CONTAINER} space-y-8`}>
+          <div className="grid gap-10 md:grid-cols-2 md:items-center">
+            <ScrollReveal>
+              <div className="space-y-5">
+                <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
+                  Sharkys Pest Control in Benicia, serving the Bay Area.
+                </h1>
 
-              <p
-                className="text-base md:text-lg"
-                style={{ color: "rgb(var(--muted))" }}
-              >
-                Reliable, honest, high-quality service backed by personal accountability.
-                From general pest control to wildlife removal and rodent exclusion—our plans
-                are tailored to your needs.
-              </p>
-
-              <div className="flex flex-wrap gap-3">
-                <Link
-                  href="/newcustomerbooking"
-                  className="rounded-xl px-5 py-3 text-sm font-semibold hover:opacity-90"
-                  style={{
-                    background: "rgb(var(--primary))",
-                    color: "rgb(var(--primary-fg))",
-                  }}
+                <p
+                  className="text-base md:text-lg"
+                  style={{ color: "rgb(var(--muted))" }}
                 >
-                  Book now
-                </Link>
+                  Reliable, honest, high-quality service backed by personal accountability.
+                  From general pest control to wildlife removal and rodent exclusion—our plans
+                  are tailored to your needs.
+                </p>
 
-                <a
-                  href="#services"
-                  className="rounded-xl border px-5 py-3 text-sm font-semibold hover:opacity-90"
-                  style={{ borderColor: "rgb(var(--border))", color: "rgb(var(--fg))" }}
-                >
-                  View services
-                </a>
-              </div>
-
-              <div className="grid gap-3 pt-3 sm:grid-cols-2">
-                {HIGHLIGHTS.map((h) => (
-                  <div
-                    key={h.title}
-                    className="rounded-2xl border p-4"
-                    style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                <div className="flex flex-wrap gap-3">
+                  <Link
+                    href="/pest-control-bay-area"
+                    className="rounded-xl px-5 py-3 text-sm font-semibold hover:opacity-90"
+                    style={{
+                      background: "rgb(var(--primary))",
+                      color: "rgb(var(--primary-fg))",
+                    }}
                   >
-                    <div className="text-sm font-semibold">{h.title}</div>
-                    <div className="mt-1 text-sm text-slate-600">{h.desc}</div>
-                  </div>
-                ))}
+                    Book now
+                  </Link>
+
+                  <a
+                    href="#services"
+                    className="rounded-xl border px-5 py-3 text-sm font-semibold hover:opacity-90"
+                    style={{ borderColor: "rgb(var(--border))", color: "rgb(var(--fg))" }}
+                  >
+                    View services
+                  </a>
+                </div>
+
+                <div className="grid gap-3 pt-3 sm:grid-cols-2">
+                  {HIGHLIGHTS.map((h) => (
+                    <div
+                      key={h.title}
+                      className="rounded-2xl border p-4"
+                      style={{
+                        borderColor: "rgb(var(--border))",
+                        background: "rgb(var(--card))",
+                      }}
+                    >
+                      <div className="text-sm font-semibold">{h.title}</div>
+                      <div className="mt-1 text-sm text-slate-600">{h.desc}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          </ScrollReveal>
+            </ScrollReveal>
+
+            <ScrollReveal>
+              <div
+                className="rounded-3xl border p-4 md:p-4"
+                style={{
+                  borderColor: "rgb(var(--border))",
+                  background: "rgb(var(--card))",
+                }}
+              >
+                <div
+                  className="relative aspect-[4/3.5] w-full overflow-hidden rounded-2xl border bg-white"
+                  style={{ borderColor: "rgb(var(--border))" }}
+                >
+                  <Image
+                    src="/main-logo.jpg"
+                    alt="Sharkys Pest Control"
+                    fill
+                    className="object-cover"
+                    priority
+                  />
+                </div>
+
+                <div className="mt-4 text-sm" style={{ color: "rgb(var(--muted))" }}>
+                  Local. Professional. Built on trust and long-term customer care.
+                </div>
+              </div>
+            </ScrollReveal>
+          </div>
 
           <ScrollReveal>
-            <div
-              className="rounded-3xl border p-4 md:p-4"
-              style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-            >
-              <div
-                className="relative aspect-[4/3.5] w-full overflow-hidden rounded-2xl border bg-white"
-                style={{ borderColor: "rgb(var(--border))" }}
-              >
-                <Image
-                  src="/main-logo.jpg"
-                  alt="Sharkys Pest Control"
-                  fill
-                  className="object-cover"
-                  priority
-                />
-              </div>
-
-              <div className="mt-4 text-sm" style={{ color: "rgb(var(--muted))" }}>
-                Local. Professional. Built on trust and long-term customer care.
-              </div>
-            </div>
+            <ServiceAreaStrip
+              title="Servicing"
+              areas={SERVICE_AREAS}
+            />
           </ScrollReveal>
         </div>
       </section>
@@ -141,7 +169,10 @@ export default function HomePage() {
           <ScrollReveal className="mx-auto max-w-4xl">
             <div
               className="rounded-3xl border p-8"
-              style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+              style={{
+                borderColor: "rgb(var(--border))",
+                background: "rgb(var(--card))",
+              }}
             >
               <h2 className="text-2xl font-semibold tracking-tight">How booking works</h2>
               <p className="mt-2" style={{ color: "rgb(var(--muted))" }}>
@@ -149,15 +180,35 @@ export default function HomePage() {
               </p>
 
               <ol className="mt-6 space-y-3 text-sm" style={{ color: "rgb(var(--muted))" }}>
-                <li><span className="font-semibold" style={{ color: "rgb(var(--fg))" }}>1)</span> Choose a service that matches your pest issue</li>
-                <li><span className="font-semibold" style={{ color: "rgb(var(--fg))" }}>2)</span> Enter your contact details and property information</li>
-                <li><span className="font-semibold" style={{ color: "rgb(var(--fg))" }}>3)</span> Select your preferred date and time</li>
-                <li><span className="font-semibold" style={{ color: "rgb(var(--fg))" }}>4)</span> Receive confirmation and next steps</li>
+                <li>
+                  <span className="font-semibold" style={{ color: "rgb(var(--fg))" }}>
+                    1)
+                  </span>{" "}
+                  Choose a service that matches your pest issue
+                </li>
+                <li>
+                  <span className="font-semibold" style={{ color: "rgb(var(--fg))" }}>
+                    2)
+                  </span>{" "}
+                  Enter your contact details and property information
+                </li>
+                <li>
+                  <span className="font-semibold" style={{ color: "rgb(var(--fg))" }}>
+                    3)
+                  </span>{" "}
+                  Select your preferred date and time
+                </li>
+                <li>
+                  <span className="font-semibold" style={{ color: "rgb(var(--fg))" }}>
+                    4)
+                  </span>{" "}
+                  Receive confirmation and next steps
+                </li>
               </ol>
 
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link
-                  href="/newcustomerbooking"
+                  href="/pest-control-bay-area"
                   className="rounded-xl px-5 py-3 text-sm font-semibold hover:opacity-90"
                   style={{
                     background: "rgb(var(--primary))",
@@ -194,7 +245,10 @@ export default function HomePage() {
                 <div
                   key={s.title}
                   className="rounded-2xl border p-6"
-                  style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                  style={{
+                    borderColor: "rgb(var(--border))",
+                    background: "rgb(var(--card))",
+                  }}
                 >
                   <div className="text-sm font-semibold">{s.title}</div>
                   <div className="mt-2 text-sm" style={{ color: "rgb(var(--muted))" }}>
@@ -226,13 +280,19 @@ export default function HomePage() {
               </p>
 
               <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border p-4" style={{ borderColor: "rgb(var(--border))" }}>
+                <div
+                  className="rounded-2xl border p-4"
+                  style={{ borderColor: "rgb(var(--border))" }}
+                >
                   <div className="text-sm font-semibold">Founded in Benicia, CA</div>
                   <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
                     Serving the Bay Area community with pride.
                   </div>
                 </div>
-                <div className="rounded-2xl border p-4" style={{ borderColor: "rgb(var(--border))" }}>
+                <div
+                  className="rounded-2xl border p-4"
+                  style={{ borderColor: "rgb(var(--border))" }}
+                >
                   <div className="text-sm font-semibold">Owner-operated</div>
                   <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
                     Direct attention and oversight on every service call.
@@ -243,7 +303,10 @@ export default function HomePage() {
 
             <div
               className="rounded-3xl border p-6"
-              style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+              style={{
+                borderColor: "rgb(var(--border))",
+                background: "rgb(var(--card))",
+              }}
             >
               <div className="space-y-4 text-sm leading-relaxed" style={{ color: "rgb(var(--muted))" }}>
                 <p>
@@ -270,6 +333,18 @@ export default function HomePage() {
                 </p>
               </div>
             </div>
+          </ScrollReveal>
+        </div>
+      </section>
+
+      {/* SERVICE AREA STRIP */}
+      <section className="snap-start">
+        <div className={`${CONTAINER} py-10`}>
+          <ScrollReveal>
+            <ServiceAreaStrip
+              title="Serving"
+              areas={SERVICE_AREAS}
+            />
           </ScrollReveal>
         </div>
       </section>
