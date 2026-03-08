@@ -4,6 +4,7 @@ const { pool } = require("../src/db");
 const { requireAuth } = require("../middleware/requireAuth");
 const { requireRole } = require("../middleware/requireRole");
 const { broadcastToRoles, broadcastToUser } = require("../src/realtime");
+const { createNotifications } = require("../src/notifications");
 
 const router = express.Router();
 
@@ -51,6 +52,20 @@ async function addEvent(client, bookingId, actorUserId, eventType, metadata = {}
   );
 }
 
+async function getAdminAndSuperUserIds(client) {
+  const r = await client.query(
+    `
+    SELECT DISTINCT user_id
+    FROM user_roles
+    WHERE role IN ('admin', 'superuser')
+    `
+  );
+
+  return r.rows
+    .map((row) => Number(row.user_id))
+    .filter((x) => Number.isInteger(x) && x > 0);
+}
+
 router.post("/", requireAuth, async (req, res, next) => {
   const client = await pool.connect();
   try {
@@ -84,6 +99,24 @@ router.post("/", requireAuth, async (req, res, next) => {
     const booking = created.rows[0];
 
     await addEvent(client, booking.id, userId, "created", {});
+
+    const adminUserIds = await getAdminAndSuperUserIds(client);
+
+    const notificationRows = adminUserIds.map((adminUserId) => ({
+      userId: adminUserId,
+      kind: "booking.created",
+      title: "New booking created",
+      body: `Customer created booking ${booking.public_id}.`,
+      bookingId: booking.id,
+      bookingPublicId: booking.public_id,
+      metadata: {
+        bookingPublicId: booking.public_id,
+        createdByUserId: userId,
+      },
+    }));
+
+    await createNotifications(client, notificationRows);
+
     await client.query("COMMIT");
 
     broadcastToRoles(["admin", "superuser"], {
@@ -153,13 +186,19 @@ router.patch("/:publicId", requireAuth, requireRole("customer"), async (req, res
     const wantsScheduleChange = payload.starts_at || payload.ends_at;
     if (booking.status === "accepted" && wantsScheduleChange) {
       await client.query("ROLLBACK");
-      return res.status(409).json({ ok: false, message: "Schedule cannot be changed after acceptance" });
+      return res.status(409).json({
+        ok: false,
+        message: "Schedule cannot be changed after acceptance",
+      });
     }
 
     if (booking.status === "pending" && wantsScheduleChange) {
       if (!payload.starts_at || !payload.ends_at) {
         await client.query("ROLLBACK");
-        return res.status(400).json({ ok: false, message: "Both starts_at and ends_at are required to change schedule" });
+        return res.status(400).json({
+          ok: false,
+          message: "Both starts_at and ends_at are required to change schedule",
+        });
       }
 
       const startsAt = new Date(payload.starts_at);
@@ -219,6 +258,24 @@ router.patch("/:publicId", requireAuth, requireRole("customer"), async (req, res
       notes: updatedBooking.notes,
     });
 
+    const adminUserIds = await getAdminAndSuperUserIds(client);
+
+    const notificationRows = adminUserIds.map((adminUserId) => ({
+      userId: adminUserId,
+      kind: "booking.edited",
+      title: "Booking updated",
+      body: `Customer updated booking ${updatedBooking.public_id}.`,
+      bookingId: booking.id,
+      bookingPublicId: updatedBooking.public_id,
+      metadata: {
+        bookingPublicId: updatedBooking.public_id,
+        startsAt: updatedBooking.starts_at,
+        endsAt: updatedBooking.ends_at,
+      },
+    }));
+
+    await createNotifications(client, notificationRows);
+
     await client.query("COMMIT");
 
     broadcastToRoles(["admin", "superuser"], {
@@ -239,7 +296,7 @@ router.patch("/:publicId", requireAuth, requireRole("customer"), async (req, res
   }
 });
 
-router.patch("/:publicId/cancel", requireAuth, async (req, res, next) => {
+router.patch("/:publicId/cancel", requireAuth, requireRole("customer"), async (req, res, next) => {
   const client = await pool.connect();
   try {
     const userId = req.user.id;
@@ -298,6 +355,37 @@ router.patch("/:publicId/cancel", requireAuth, async (req, res, next) => {
     );
 
     const workerUserId = participantsRes.rows[0]?.worker_user_id ?? null;
+    const adminUserIds = await getAdminAndSuperUserIds(client);
+
+    const notificationRows = adminUserIds.map((adminUserId) => ({
+      userId: adminUserId,
+      kind: "booking.cancelled",
+      title: "Booking cancelled",
+      body: `Customer cancelled booking ${updated.rows[0].public_id}.`,
+      bookingId: booking.id,
+      bookingPublicId: updated.rows[0].public_id,
+      metadata: {
+        bookingPublicId: updated.rows[0].public_id,
+        cancelledByUserId: userId,
+      },
+    }));
+
+    if (workerUserId) {
+      notificationRows.push({
+        userId: workerUserId,
+        kind: "booking.cancelled",
+        title: "Booking cancelled",
+        body: `Booking ${updated.rows[0].public_id} has been cancelled.`,
+        bookingId: booking.id,
+        bookingPublicId: updated.rows[0].public_id,
+        metadata: {
+          bookingPublicId: updated.rows[0].public_id,
+          cancelledByUserId: userId,
+        },
+      });
+    }
+
+    await createNotifications(client, notificationRows);
 
     await client.query("COMMIT");
 

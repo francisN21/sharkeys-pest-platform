@@ -1,4 +1,3 @@
-// backend/auth/routes/adminBookings.js
 const express = require("express");
 const { z } = require("zod");
 const { pool } = require("../src/db");
@@ -7,12 +6,12 @@ const {
   broadcastToRoles,
   broadcastToUser,
 } = require("../src/realtime");
+const { createNotifications } = require("../src/notifications");
 
 const router = express.Router();
 
 /**
  * Helper: accept BOTH admin + superuser for this router.
- * (We do this without depending on requireRole implementation.)
  */
 function requireAnyRole(roles) {
   return async (req, res, next) => {
@@ -108,7 +107,10 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
 
       if (!finalAddress || finalAddress.length < 5) {
         await client.query("ROLLBACK");
-        return res.status(400).json({ ok: false, message: "Address is required (customer has none saved)" });
+        return res.status(400).json({
+          ok: false,
+          message: "Address is required (customer has none saved)",
+        });
       }
     } else {
       const lead = payload.lead;
@@ -141,7 +143,10 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
 
       if (!finalAddress || finalAddress.length < 5) {
         await client.query("ROLLBACK");
-        return res.status(400).json({ ok: false, message: "Address is required for new customers" });
+        return res.status(400).json({
+          ok: false,
+          message: "Address is required for new customers",
+        });
       }
     }
 
@@ -160,6 +165,22 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
       customerPublicId: payload.customerPublicId || null,
       leadEmail: payload.lead?.email || null,
     });
+
+    const notificationRows = [];
+
+    if (customerUserId) {
+      notificationRows.push({
+        userId: customerUserId,
+        kind: "booking.created",
+        title: "Booking created",
+        body: `A booking was created for ${booking.public_id}.`,
+        bookingId: booking.id,
+        bookingPublicId: booking.public_id,
+        metadata: { bookingPublicId: booking.public_id },
+      });
+    }
+
+    await createNotifications(client, notificationRows);
 
     await client.query("COMMIT");
 
@@ -322,6 +343,34 @@ router.patch("/:publicId/cancel", requireAuth, requireAnyRole(["admin", "superus
     const customerUserId = participantsRes.rows[0]?.customer_user_id ?? null;
     const workerUserId = participantsRes.rows[0]?.worker_user_id ?? null;
 
+    const notificationRows = [];
+
+    if (customerUserId) {
+      notificationRows.push({
+        userId: customerUserId,
+        kind: "booking.cancelled",
+        title: "Booking cancelled",
+        body: `Booking ${req.params.publicId} has been cancelled.`,
+        bookingId: b.id,
+        bookingPublicId: req.params.publicId,
+        metadata: { bookingPublicId: req.params.publicId },
+      });
+    }
+
+    if (workerUserId) {
+      notificationRows.push({
+        userId: workerUserId,
+        kind: "booking.cancelled",
+        title: "Booking cancelled",
+        body: `Booking ${req.params.publicId} has been cancelled.`,
+        bookingId: b.id,
+        bookingPublicId: req.params.publicId,
+        metadata: { bookingPublicId: req.params.publicId },
+      });
+    }
+
+    await createNotifications(client, notificationRows);
+
     await client.query("COMMIT");
 
     if (customerUserId) {
@@ -388,6 +437,22 @@ router.patch("/:publicId/accept", requireAuth, requireAnyRole(["admin", "superus
     );
 
     await addEvent(client, booking.id, adminId, "accepted", {});
+
+    const notificationRows = [];
+
+    if (booking.customer_user_id) {
+      notificationRows.push({
+        userId: booking.customer_user_id,
+        kind: "booking.accepted",
+        title: "Booking accepted",
+        body: `Booking ${bookingPublicId} has been accepted.`,
+        bookingId: booking.id,
+        bookingPublicId,
+        metadata: { bookingPublicId },
+      });
+    }
+
+    await createNotifications(client, notificationRows);
 
     await client.query("COMMIT");
 
@@ -480,6 +545,44 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
     );
 
     await addEvent(client, booking.id, adminId, "assigned", { workerUserId });
+
+    const notificationRows = [];
+
+    notificationRows.push({
+      userId: workerUserId,
+      kind: "booking.assigned",
+      title: "New booking assigned",
+      body: `Booking ${bookingPublicId} was assigned to you.`,
+      bookingId: booking.id,
+      bookingPublicId,
+      metadata: { bookingPublicId, workerUserId },
+    });
+
+    if (booking.customer_user_id) {
+      notificationRows.push({
+        userId: booking.customer_user_id,
+        kind: "booking.assigned",
+        title: "Technician assigned",
+        body: `A technician has been assigned to booking ${bookingPublicId}.`,
+        bookingId: booking.id,
+        bookingPublicId,
+        metadata: { bookingPublicId, workerUserId },
+      });
+    }
+
+    if (previousWorkerUserId && previousWorkerUserId !== workerUserId) {
+      notificationRows.push({
+        userId: previousWorkerUserId,
+        kind: "booking.reassigned",
+        title: "Booking reassigned",
+        body: `Booking ${bookingPublicId} has been reassigned.`,
+        bookingId: booking.id,
+        bookingPublicId,
+        metadata: { bookingPublicId, previousWorkerUserId, workerUserId },
+      });
+    }
+
+    await createNotifications(client, notificationRows);
 
     await client.query("COMMIT");
 
