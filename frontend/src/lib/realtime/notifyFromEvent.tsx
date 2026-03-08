@@ -138,6 +138,33 @@ export function notifyFromEvent(evt: RealtimeEvent) {
       });
       return;
 
+    case "booking.edited":
+      appNotify({
+        level: "info",
+        toastTitle: "Booking updated",
+        toastDescription: `Booking ${evt.bookingId} was updated.`,
+        entity: "booking",
+        entityId: evt.bookingId,
+        at: evt.startsAt,
+        details: [
+          {
+            label: "Starts",
+            value: evt.startsAt ?? "—",
+            icon: <Clock className="h-4 w-4" />,
+          },
+          {
+            label: "Ends",
+            value: evt.endsAt ?? "—",
+            icon: <Clock className="h-4 w-4" />,
+          },
+        ],
+        browserTitle: "Booking updated",
+        browserBody: `Booking ${evt.bookingId} was updated.`,
+        browser: true,
+        browserOnlyWhenHidden: true,
+      });
+      return;
+
     case "booking.completed":
       appNotify({
         level: "success",

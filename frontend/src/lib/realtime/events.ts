@@ -32,6 +32,12 @@ export type RealtimeEvent =
       cancelledAt?: string;
     }
   | {
+      type: "booking.edited";
+      bookingId: string;
+      startsAt?: string;
+      endsAt?: string;
+    }
+  | {
       type: "booking.completed";
       bookingId: string;
       bookingName?: string;
