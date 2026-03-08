@@ -1,9 +1,7 @@
 const express = require("express");
 const { z } = require("zod");
 const { pool } = require("../src/db");
-const {
-  broadcastToRoles,
-} = require("../src/realtime");
+const { broadcastToRoles } = require("../src/realtime");
 const { createNotifications } = require("../src/notifications");
 
 const router = express.Router();
@@ -14,6 +12,14 @@ async function addEvent(client, bookingId, actorUserId, eventType, metadata = {}
      VALUES ($1, $2, $3, $4::jsonb)`,
     [bookingId, actorUserId || null, eventType, JSON.stringify(metadata)]
   );
+}
+
+function normalizeEmail(v) {
+  return String(v || "").trim().toLowerCase();
+}
+
+function normalizePhone(v) {
+  return String(v || "").replace(/\D/g, "");
 }
 
 const publicCreateBookingSchema = z.object({
@@ -42,8 +48,7 @@ router.post("/", async (req, res, next) => {
 
     await client.query("BEGIN");
 
-    // Optional safety: if someone is logged in and has internal roles,
-    // block this public lead route so staff do not create lead bookings for themselves.
+    // Block internal staff from using the public booking route
     if (req.user?.id) {
       const roleRes = await client.query(
         `SELECT role FROM user_roles WHERE user_id = $1`,
@@ -90,31 +95,113 @@ router.post("/", async (req, res, next) => {
       });
     }
 
-    // Upsert lead by email
-    const up = await client.query(
-      `
-      INSERT INTO leads (email, first_name, last_name, phone, account_type, address)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      ON CONFLICT (email) DO UPDATE SET
-        first_name = COALESCE(EXCLUDED.first_name, leads.first_name),
-        last_name = COALESCE(EXCLUDED.last_name, leads.last_name),
-        phone = COALESCE(EXCLUDED.phone, leads.phone),
-        account_type = COALESCE(EXCLUDED.account_type, leads.account_type),
-        address = COALESCE(EXCLUDED.address, leads.address),
-        updated_at = now()
-      RETURNING id, public_id, email, first_name, last_name, phone, address
-      `,
-      [
-        lead.email,
-        lead.first_name,
-        lead.last_name,
-        lead.phone || null,
-        lead.account_type || null,
-        finalAddress,
-      ]
-    );
+    const normalizedEmail = normalizeEmail(lead.email);
+    const normalizedPhone = normalizePhone(lead.phone);
 
-    const leadRow = up.rows[0];
+    let existingLead = null;
+    let matchedBy = "new";
+
+    // 1) Match by email first
+    if (normalizedEmail) {
+      const byEmail = await client.query(
+        `
+        SELECT
+          id,
+          public_id,
+          email,
+          first_name,
+          last_name,
+          phone,
+          address,
+          account_type
+        FROM leads
+        WHERE lower(email) = $1
+        LIMIT 1
+        `,
+        [normalizedEmail]
+      );
+
+      if (byEmail.rowCount > 0) {
+        existingLead = byEmail.rows[0];
+        matchedBy = "email";
+      }
+    }
+
+    // 2) If no email match, match by normalized phone
+    if (!existingLead && normalizedPhone) {
+      const byPhone = await client.query(
+        `
+        SELECT
+          id,
+          public_id,
+          email,
+          first_name,
+          last_name,
+          phone,
+          address,
+          account_type
+        FROM leads
+        WHERE regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') = $1
+        LIMIT 1
+        `,
+        [normalizedPhone]
+      );
+
+      if (byPhone.rowCount > 0) {
+        existingLead = byPhone.rows[0];
+        matchedBy = "phone";
+      }
+    }
+
+    let leadRow;
+
+    if (existingLead) {
+      const updatedLead = await client.query(
+        `
+        UPDATE leads
+        SET
+          email = COALESCE($2, email),
+          first_name = COALESCE($3, first_name),
+          last_name = COALESCE($4, last_name),
+          phone = COALESCE($5, phone),
+          account_type = COALESCE($6, account_type),
+          address = COALESCE($7, address),
+          updated_at = now()
+        WHERE id = $1
+        RETURNING id, public_id, email, first_name, last_name, phone, address, account_type
+        `,
+        [
+          existingLead.id,
+          normalizedEmail || null,
+          lead.first_name || null,
+          lead.last_name || null,
+          lead.phone || null,
+          lead.account_type || null,
+          finalAddress || null,
+        ]
+      );
+
+      leadRow = updatedLead.rows[0];
+    } else {
+      const insertedLead = await client.query(
+        `
+        INSERT INTO leads (email, first_name, last_name, phone, account_type, address)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id, public_id, email, first_name, last_name, phone, address, account_type
+        `,
+        [
+          normalizedEmail,
+          lead.first_name,
+          lead.last_name,
+          lead.phone || null,
+          lead.account_type || null,
+          finalAddress,
+        ]
+      );
+
+      leadRow = insertedLead.rows[0];
+    }
+
     const leadId = leadRow.id;
 
     const created = await client.query(
@@ -145,11 +232,11 @@ router.post("/", async (req, res, next) => {
     const booking = created.rows[0];
 
     await addEvent(client, booking.id, null, "created_public", {
-      leadEmail: lead.email,
+      leadEmail: normalizedEmail,
       leadPublicId: leadRow.public_id,
+      matchedBy,
     });
 
-    // Notify admin/superuser users in-app
     const adminUsersRes = await client.query(
       `
       SELECT DISTINCT ur.user_id
@@ -168,7 +255,8 @@ router.post("/", async (req, res, next) => {
       metadata: {
         bookingPublicId: booking.public_id,
         source: "public",
-        leadEmail: lead.email,
+        leadEmail: normalizedEmail,
+        matchedBy,
       },
     }));
 

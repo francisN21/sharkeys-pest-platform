@@ -128,7 +128,7 @@ export default function NewCustomerBookingPage() {
   const [loadingSubmit, setLoadingSubmit] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [bookingComplete, setBookingComplete] = useState(false);
 
   const [servicePublicId, setServicePublicId] = useState("");
 
@@ -332,11 +332,23 @@ export default function NewCustomerBookingPage() {
     setRecurringSameTime(true);
     setSelectedStartHour(null);
     setPendingStartHour(null);
+    setSelectedDateYmd(todayYmd);
+    setMonthCursor(startOfMonth(new Date()));
+    if (services.length > 0) {
+      setServicePublicId(services[0].public_id);
+    } else {
+      setServicePublicId("");
+    }
+  }
+
+  function handleStartAnotherBooking() {
+    setError(null);
+    setBookingComplete(false);
+    resetForm();
   }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSuccessMsg(null);
     setError(null);
 
     if (!firstName.trim()) return setError("Please enter your first name.");
@@ -377,11 +389,8 @@ export default function NewCustomerBookingPage() {
         },
       });
 
-      setSuccessMsg(
-        "Booking request submitted. Check your email for confirmation and next steps to create your account."
-      );
-
       resetForm();
+      setBookingComplete(true);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to create booking");
     } finally {
@@ -407,19 +416,59 @@ export default function NewCustomerBookingPage() {
           </div>
         ) : null}
 
-        {successMsg ? (
-          <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(34 197 94)" }}>
-            {successMsg}
-          </div>
-        ) : null}
-
         <div
-          className="rounded-2xl border p-6 space-y-6"
+          className="rounded-2xl border p-6"
           style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
         >
           {loadingServices ? (
             <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
               Loading…
+            </div>
+          ) : bookingComplete ? (
+            <div className="flex min-h-[420px] flex-col items-center justify-center text-center space-y-4">
+              <div
+                className="rounded-full border px-4 py-2 text-sm font-semibold"
+                style={{
+                  borderColor: "rgb(34 197 94)",
+                  background: "rgba(34, 197, 94, 0.10)",
+                  color: "rgb(22 101 52)",
+                }}
+              >
+                Success
+              </div>
+
+              <div className="space-y-2 max-w-xl">
+                <h2 className="text-2xl font-semibold">Booking request submitted</h2>
+                <p className="text-sm" style={{ color: "rgb(var(--muted))" }}>
+                  Your request has been received. Check your email for confirmation and next steps to create your account.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={handleStartAnotherBooking}
+                  className="rounded-xl border px-4 py-2 text-sm font-semibold hover:opacity-90"
+                  style={{
+                    borderColor: "rgb(var(--border))",
+                    background: "rgb(var(--card))",
+                  }}
+                >
+                  Create another booking
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => router.push("/login")}
+                  className="rounded-xl border px-4 py-2 text-sm font-semibold hover:opacity-90"
+                  style={{
+                    borderColor: "rgb(var(--border))",
+                    background: "transparent",
+                  }}
+                >
+                  Back to sign in
+                </button>
+              </div>
             </div>
           ) : (
             <form className="space-y-6" onSubmit={onSubmit}>
