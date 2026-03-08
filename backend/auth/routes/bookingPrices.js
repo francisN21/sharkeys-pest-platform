@@ -125,12 +125,6 @@ router.get("/bookings/:publicId/price", requireAuth, async (req, res, next) => {
   }
 });
 
-/**
- * PATCH /bookings/:publicId/price
- * - admin/superuser can set any
- * - assigned worker can set final price for their own booking
- * (customers can view but NOT edit)
- */
 router.patch("/bookings/:publicId/price", requireAuth, async (req, res, next) => {
   const client = await pool.connect();
   try {
@@ -170,11 +164,11 @@ router.patch("/bookings/:publicId/price", requireAuth, async (req, res, next) =>
         return res.status(403).json({ ok: false, message: "Forbidden" });
       }
 
-      if (booking.status !== "assigned") {
+      if (booking.status !== "assigned" && booking.status !== "completed") {
         await client.query("ROLLBACK");
         return res.status(409).json({
           ok: false,
-          message: "Workers can only set price before completion",
+          message: "Price can only be set when assigned/completed",
         });
       }
     }
