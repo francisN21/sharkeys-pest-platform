@@ -17,6 +17,7 @@ import {
 } from "../lib/api/notifications";
 import { subscribeRealtimeEvent } from "../lib/realtime/realtimeBus";
 import type { RealtimeEvent } from "../lib/realtime/events";
+import NotificationDropdown from "./notifications/NotificationDropdown";
 
 type NavItem = { label: string; href: string };
 
@@ -46,18 +47,6 @@ function displayName(user: { first_name?: string | null; last_name?: string | nu
   const last = (user.last_name || "").trim();
   const full = `${first} ${last}`.trim();
   return full || user.email;
-}
-
-function formatNotificationTime(value: string) {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "Just now";
-
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
 }
 
 function mapRealtimeEventToPreview(evt: RealtimeEvent): AppNotification | null {
@@ -234,7 +223,6 @@ export default function Navbar() {
   const hamburgerRef = useRef<HTMLButtonElement | null>(null);
 
   const [resolvedUser, setResolvedUser] = useState<NavbarUser | null>(null);
-
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [notifLoading, setNotifLoading] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -461,9 +449,7 @@ export default function Navbar() {
       return;
     }
 
-    if (item.kind === "system.error") {
-      router.push("/account");
-    }
+    router.push("/account");
   }
 
   return (
@@ -538,7 +524,6 @@ export default function Navbar() {
 
             {!loading && isAuthed ? (
               <>
-                {/* Notification Bell */}
                 <div className="relative" ref={notifRef}>
                   <button
                     type="button"
@@ -566,92 +551,16 @@ export default function Navbar() {
                     ) : null}
                   </button>
 
-                  {notifOpen ? (
-                    <div
-                      className="absolute right-0 mt-2 w-[360px] overflow-hidden rounded-2xl border shadow-sm"
-                      style={{
-                        borderColor: "rgb(var(--border))",
-                        background: "rgb(var(--card))",
-                      }}
-                      role="menu"
-                    >
-                      <div
-                        className="flex items-center justify-between px-4 py-3"
-                        style={{ borderBottom: "1px solid rgb(var(--border))" }}
-                      >
-                        <div className="text-sm font-semibold">Notifications</div>
-                        <button
-                          type="button"
-                          className="text-xs font-semibold hover:opacity-80"
-                          style={{ color: "rgb(var(--muted))" }}
-                          onClick={onMarkAllRead}
-                        >
-                          Mark all read
-                        </button>
-                      </div>
-
-                      <div className="max-h-[420px] overflow-y-auto">
-                        {notifLoading ? (
-                          <div className="px-4 py-4 text-sm" style={{ color: "rgb(var(--muted))" }}>
-                            Loading…
-                          </div>
-                        ) : notifications.length === 0 ? (
-                          <div className="px-4 py-4 text-sm" style={{ color: "rgb(var(--muted))" }}>
-                            No notifications yet.
-                          </div>
-                        ) : (
-                          <div className="space-y-2 p-3">
-                            {notifications.map((item) => {
-                              const unread = !item.read_at;
-
-                              return (
-                                <button
-                                  key={`${item.id}-${item.created_at}`}
-                                  type="button"
-                                  onClick={() => onNotificationClick(item)}
-                                  className="w-full rounded-xl border p-3 text-left transition hover:opacity-90"
-                                  style={{
-                                    borderColor: unread ? "rgb(239 68 68 / 0.35)" : "rgb(var(--border))",
-                                    background: unread ? "rgba(239, 68, 68, 0.06)" : "rgb(var(--bg))",
-                                  }}
-                                >
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0">
-                                      <div className="truncate text-sm font-semibold">{item.title}</div>
-                                      <div
-                                        className="mt-1 line-clamp-2 text-xs"
-                                        style={{ color: "rgb(var(--muted))" }}
-                                      >
-                                        {item.body || "Open to view details."}
-                                      </div>
-                                    </div>
-
-                                    {unread ? (
-                                      <span
-                                        className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
-                                        style={{ background: "rgb(239 68 68)" }}
-                                      />
-                                    ) : null}
-                                  </div>
-
-                                  <div
-                                    className="mt-2 flex items-center justify-between text-[11px]"
-                                    style={{ color: "rgb(var(--muted))" }}
-                                  >
-                                    <span>{item.kind}</span>
-                                    <span>{formatNotificationTime(item.created_at)}</span>
-                                  </div>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : null}
+                  <NotificationDropdown
+                    open={notifOpen}
+                    loading={notifLoading}
+                    notifications={notifications}
+                    unreadCount={unreadCount}
+                    onMarkAllRead={onMarkAllRead}
+                    onNotificationClick={onNotificationClick}
+                  />
                 </div>
 
-                {/* Compact initials-only account button */}
                 <div className="relative" ref={accountRef}>
                   <button
                     type="button"
@@ -867,7 +776,7 @@ export default function Navbar() {
                   style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
                   onClick={() => {
                     setMenuOpen(false);
-                    setNotifOpen(true);
+                    router.push("/account");
                   }}
                 >
                   Notifications {unreadCount > 0 ? `(${unreadCount})` : ""}

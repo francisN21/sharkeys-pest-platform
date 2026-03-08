@@ -1,0 +1,289 @@
+"use client";
+
+import React from "react";
+import { Bell, CheckCheck, MessageSquare, ClipboardList, CreditCard, ServerCog, Wrench, User } from "lucide-react";
+import type { AppNotification } from "../../lib/api/notifications";
+
+function formatNotificationTime(value: string) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "Just now";
+
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function getKindLabel(kind: string) {
+  switch (kind) {
+    case "message.new":
+      return "Message";
+    case "booking.created":
+      return "Booking";
+    case "booking.accepted":
+      return "Accepted";
+    case "booking.assigned":
+      return "Assigned";
+    case "booking.reassigned":
+      return "Reassigned";
+    case "booking.cancelled":
+      return "Cancelled";
+    case "booking.completed":
+      return "Completed";
+    case "booking.price_set":
+      return "Price";
+    case "booking.edited":
+      return "Updated";
+    case "system.error":
+      return "System";
+    default:
+      return kind;
+  }
+}
+
+function getKindIcon(kind: string) {
+  switch (kind) {
+    case "message.new":
+      return <MessageSquare className="h-4 w-4" />;
+    case "booking.created":
+    case "booking.accepted":
+    case "booking.assigned":
+    case "booking.reassigned":
+    case "booking.cancelled":
+    case "booking.completed":
+    case "booking.edited":
+      return <ClipboardList className="h-4 w-4" />;
+    case "booking.price_set":
+      return <CreditCard className="h-4 w-4" />;
+    case "technician":
+      return <Wrench className="h-4 w-4" />;
+    case "customer":
+    case "lead":
+      return <User className="h-4 w-4" />;
+    case "system.error":
+      return <ServerCog className="h-4 w-4" />;
+    default:
+      return <Bell className="h-4 w-4" />;
+  }
+}
+
+function getKindAccent(kind: string) {
+  switch (kind) {
+    case "message.new":
+      return {
+        bg: "rgba(6, 182, 212, 0.10)",
+        border: "rgba(6, 182, 212, 0.26)",
+        color: "rgb(6 182 212)",
+      };
+    case "booking.completed":
+      return {
+        bg: "rgba(16, 185, 129, 0.10)",
+        border: "rgba(16, 185, 129, 0.28)",
+        color: "rgb(16 185 129)",
+      };
+    case "booking.cancelled":
+      return {
+        bg: "rgba(239, 68, 68, 0.08)",
+        border: "rgba(239, 68, 68, 0.28)",
+        color: "rgb(239 68 68)",
+      };
+    case "booking.assigned":
+    case "booking.reassigned":
+      return {
+        bg: "rgba(168, 85, 247, 0.09)",
+        border: "rgba(168, 85, 247, 0.26)",
+        color: "rgb(168 85 247)",
+      };
+    case "booking.price_set":
+      return {
+        bg: "rgba(34, 197, 94, 0.09)",
+        border: "rgba(34, 197, 94, 0.26)",
+        color: "rgb(34 197 94)",
+      };
+    default:
+      return {
+        bg: "rgba(59, 130, 246, 0.08)",
+        border: "rgba(59, 130, 246, 0.22)",
+        color: "rgb(59 130 246)",
+      };
+  }
+}
+
+type NotificationDropdownProps = {
+  open: boolean;
+  loading?: boolean;
+  notifications: AppNotification[];
+  unreadCount: number;
+  onMarkAllRead: () => void | Promise<void>;
+  onNotificationClick: (item: AppNotification) => void | Promise<void>;
+};
+
+function NotificationCard({
+  item,
+  onClick,
+}: {
+  item: AppNotification;
+  onClick: (item: AppNotification) => void | Promise<void>;
+}) {
+  const unread = !item.read_at;
+  const accent = getKindAccent(item.kind);
+  const label = getKindLabel(item.kind);
+
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(item)}
+      className="w-full rounded-2xl border p-3 text-left transition hover:scale-[0.995] hover:opacity-95"
+      style={{
+        borderColor: unread ? accent.border : "rgb(var(--border))",
+        background: unread ? accent.bg : "rgb(var(--bg))",
+      }}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border"
+          style={{
+            borderColor: unread ? accent.border : "rgb(var(--border))",
+            background: unread ? accent.bg : "rgb(var(--card))",
+            color: accent.color,
+          }}
+        >
+          {getKindIcon(item.kind)}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-[rgb(var(--fg))]">
+                {item.title}
+              </div>
+              <div
+                className="mt-1 line-clamp-2 text-xs leading-5"
+                style={{ color: "rgb(var(--muted))" }}
+              >
+                {item.body || "Open to view details."}
+              </div>
+            </div>
+
+            {unread ? (
+              <span
+                className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ background: "rgb(239 68 68)" }}
+              />
+            ) : null}
+          </div>
+
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <span
+              className="inline-flex items-center rounded-full px-2 py-1 text-[10px] font-semibold"
+              style={{
+                background: accent.bg,
+                color: accent.color,
+              }}
+            >
+              {label}
+            </span>
+
+            <span
+              className="shrink-0 text-[11px]"
+              style={{ color: "rgb(var(--muted))" }}
+            >
+              {formatNotificationTime(item.created_at)}
+            </span>
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+export default function NotificationDropdown({
+  open,
+  loading = false,
+  notifications,
+  unreadCount,
+  onMarkAllRead,
+  onNotificationClick,
+}: NotificationDropdownProps) {
+  if (!open) return null;
+
+  return (
+    <div
+      className="absolute right-0 mt-2 w-[380px] overflow-hidden rounded-3xl border shadow-2xl"
+      style={{
+        borderColor: "rgb(var(--border))",
+        background: "rgb(var(--card))",
+        boxShadow: "0 18px 45px rgba(0,0,0,0.28)",
+      }}
+      role="menu"
+    >
+      <div
+        className="flex items-center justify-between px-4 py-4"
+        style={{ borderBottom: "1px solid rgb(var(--border))" }}
+      >
+        <div className="flex items-center gap-3">
+          <div
+            className="flex h-10 w-10 items-center justify-center rounded-2xl"
+            style={{ background: "rgba(59,130,246,0.10)", color: "rgb(59 130 246)" }}
+          >
+            <Bell className="h-5 w-5" />
+          </div>
+
+          <div>
+            <div className="text-sm font-semibold">Notifications</div>
+            <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+              {unreadCount > 0 ? `${unreadCount} unread` : "All caught up"}
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold hover:opacity-90"
+          style={{
+            borderColor: "rgb(var(--border))",
+            background: "rgb(var(--bg))",
+            color: "rgb(var(--fg))",
+          }}
+          onClick={onMarkAllRead}
+        >
+          <CheckCheck className="h-4 w-4" />
+          Mark all read
+        </button>
+      </div>
+
+      <div className="max-h-[430px] overflow-y-auto p-3">
+        {loading ? (
+          <div className="px-2 py-6 text-sm" style={{ color: "rgb(var(--muted))" }}>
+            Loading…
+          </div>
+        ) : notifications.length === 0 ? (
+          <div className="flex flex-col items-center justify-center px-4 py-10 text-center">
+            <div
+              className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl"
+              style={{ background: "rgba(59,130,246,0.08)", color: "rgb(59 130 246)" }}
+            >
+              <Bell className="h-6 w-6" />
+            </div>
+            <div className="text-sm font-semibold">No notifications yet</div>
+            <div className="mt-1 text-xs" style={{ color: "rgb(var(--muted))" }}>
+              New activity will appear here.
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {notifications.map((item) => (
+              <NotificationCard
+                key={`${item.id}-${item.created_at}`}
+                item={item}
+                onClick={onNotificationClick}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
