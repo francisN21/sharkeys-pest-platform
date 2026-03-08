@@ -434,9 +434,9 @@ export default function NewCustomerBookingPage() {
     </div>
 
     <div className="space-y-1">
-      <h1 className="text-2xl font-semibold">Book Pest Extermination</h1>
+      <h1 className="text-2xl font-semibold">Book Wildlife Control</h1>
       <p className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-        New customer booking for pest extermination. Choose your date and time, then submit your request.
+        New customer booking for Wildlife Control. Choose your date and time, then submit your request.
       </p>
     </div>
   </div>

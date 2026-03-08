@@ -121,7 +121,7 @@ function formatSelectedHeader(
 
 type RecurrenceFreq = "" | "biweekly" | "monthly" | "quarterly";
 
-const LOCKED_SERVICE_TITLE = "Specialty Services";
+const LOCKED_SERVICE_TITLE = "Customized Plans";
 
 export default function NewCustomerBookingPage() {
   const router = useRouter();
@@ -434,9 +434,9 @@ export default function NewCustomerBookingPage() {
     </div>
 
     <div className="space-y-1">
-      <h1 className="text-2xl font-semibold">Book Specialty Services</h1>
+      <h1 className="text-2xl font-semibold">Book Customized Plans Service</h1>
       <p className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-        New customer booking for Specialty Services. Choose your date and time, then submit your request.
+        Tailored solutions for residential and commercial needs based on your property and pest pressure. With customized plans please tell us in the description how you want your pest control needs are.
       </p>
     </div>
   </div>

@@ -436,7 +436,7 @@ export default function NewCustomerBookingPage() {
     <div className="space-y-1">
       <h1 className="text-2xl font-semibold">Book Eco/Green Options</h1>
       <p className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-        New customer booking for pest extermination. Choose your date and time, then submit your request.
+        New customer booking for Eco/Green Options. Choose your date and time, then submit your request.
       </p>
     </div>
   </div>
