@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Chrome, ArrowRight, Bug } from "lucide-react";
+
 import AuthTextField from "../../../components/forms/AuthTextField";
 import { loginSchema, type LoginValues } from "../../../lib/validators/auth";
 import { login } from "../../../lib/api/auth";
@@ -12,6 +14,7 @@ import { notifyAuthChanged } from "../../../components/AuthProvider";
 
 export default function LoginClient() {
   const [serverError, setServerError] = useState<string | null>(null);
+  const [googlePending, setGooglePending] = useState(false);
 
   const {
     register,
@@ -36,17 +39,38 @@ export default function LoginClient() {
     }
   }
 
+  function handleGuest() {
+    router.push("/newcustomerbooking");
+  }
+
+  function handleGooglePlaceholder() {
+    setServerError(null);
+    setGooglePending(true);
+
+    window.setTimeout(() => {
+      setGooglePending(false);
+      setServerError("Google sign-in is coming soon.");
+    }, 500);
+  }
+
+  const busy = isSubmitting || googlePending;
+
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
-        <p className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
-          Access your bookings and schedule new services.
-        </p>
+      <div className="flex items-center gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
+          <p className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
+            Access your bookings and schedule new services.
+          </p>
+        </div>
       </div>
 
       {serverError ? (
-        <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(239 68 68)" }}>
+        <div
+          className="rounded-xl border p-3 text-sm"
+          style={{ borderColor: "rgb(239 68 68)" }}
+        >
           {serverError}
         </div>
       ) : null}
@@ -75,24 +99,75 @@ export default function LoginClient() {
           >
             Forgot password?
           </Link>
-
-          <Link
-            href="/signup"
-            className="font-semibold hover:underline"
-            style={{ color: "rgb(var(--fg))" }}
-          >
-            Create account
-          </Link>
         </div>
 
         <button
-          disabled={isSubmitting}
-          className="w-full rounded-xl px-4 py-3 text-sm font-semibold disabled:opacity-60"
-          style={{ background: "rgb(var(--primary))", color: "rgb(var(--primary-fg))" }}
+          type="submit"
+          disabled={busy}
+          className="w-full rounded-xl px-4 py-3 text-sm font-semibold transition disabled:opacity-60"
+          style={{
+            background: "rgb(var(--primary))",
+            color: "rgb(var(--primary-fg))",
+          }}
         >
           {isSubmitting ? "Signing in..." : "Sign in"}
         </button>
       </form>
+
+      <div className="flex items-center gap-3">
+        <div
+          className="h-px flex-1"
+          style={{ background: "rgb(var(--border))" }}
+        />
+        <span className="text-xs uppercase tracking-wide" style={{ color: "rgb(var(--muted))" }}>
+          Or
+        </span>
+        <div
+          className="h-px flex-1"
+          style={{ background: "rgb(var(--border))" }}
+        />
+      </div>
+
+      <div className="space-y-3">
+        <button
+          type="button"
+          onClick={handleGooglePlaceholder}
+          disabled={busy}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold transition hover:opacity-90 disabled:opacity-60"
+          style={{
+            borderColor: "rgb(var(--border))",
+            background: "transparent",
+          }}
+        >
+          <Chrome className="h-4 w-4" />
+          <span>{googlePending ? "Preparing Google..." : "Continue with Google"}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleGuest}
+          disabled={busy}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold transition hover:opacity-90 disabled:opacity-60"
+          style={{
+            borderColor: "rgb(var(--border))",
+            background: "rgba(var(--bg), 0.18)",
+          }}
+        >
+          <span>Continue as guest</span>
+          <ArrowRight className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="text-center text-sm" style={{ color: "rgb(var(--muted))" }}>
+        Don&apos;t have an account?{" "}
+        <Link
+          href="/signup"
+          className="font-semibold hover:underline"
+          style={{ color: "rgb(var(--fg))" }}
+        >
+          Create an account
+        </Link>
+      </div>
     </div>
   );
 }
