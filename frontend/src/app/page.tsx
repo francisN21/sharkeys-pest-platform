@@ -1,20 +1,42 @@
 import Image from "next/image";
-// import Link from "next/link";
-// import ThemeToggle from "../src/components/ThemeToggle";
+import Link from "next/link";
 import Navbar from "../components/Navbar";
 import ScrollReveal from "../components/ScrollReveal";
-
 
 const SECTION = "min-h-screen snap-start flex items-center";
 const CONTAINER = "mx-auto w-full max-w-6xl px-4";
 
 const SERVICES = [
-  { title: "Pest Extermination", desc: "Ants, roaches, bed bugs, fleas/ticks, flies, snails, earwigs, mites, crickets, mosquitoes, spiders, wasps, gophers, moles, voles, and rodents." },
-  { title: "Wildlife Control", desc: "Raccoon, skunk, possum, squirrel, and other wildlife—removal and prevention." },
-  { title: "Specialty Services", desc: "General Pest Control, Rodent Exclusion, Crawl/Attic Clean Up, Vapor Barrier, Rodent Proofing, Pigeon Exclusion, Animal Removal, Tree/Yard Spray, Sanitize & Deodorize." },
-  { title: "Commercial Services", desc: "Partnership-based approach for restaurants, healthcare, and retail—with documentation support." },
-  { title: "Eco/Green Options", desc: "Environmentally conscious treatments available upon request—ask what fits your situation." },
-  { title: "Customized Plans", desc: "Tailored solutions for residential and commercial needs based on your property and pest pressure." },
+  {
+    title: "Pest Extermination",
+    desc: "Ants, roaches, bed bugs, fleas/ticks, flies, snails, earwigs, mites, crickets, mosquitoes, spiders, wasps, gophers, moles, voles, and rodents.",
+    href: "/pest-control-bay-area",
+  },
+  {
+    title: "Wildlife Control",
+    desc: "Raccoon, skunk, possum, squirrel, and other wildlife—removal and prevention.",
+    href: "/wildlife-control-bay-area",
+  },
+  {
+    title: "Specialty Services",
+    desc: "General Pest Control, Rodent Exclusion, Crawl/Attic Clean Up, Vapor Barrier, Rodent Proofing, Pigeon Exclusion, Animal Removal, Tree/Yard Spray, Sanitize & Deodorize.",
+    href: "/rodent-control-bay-area",
+  },
+  {
+    title: "Commercial Services",
+    desc: "Partnership-based approach for restaurants, healthcare, and retail—with documentation support.",
+    href: "/commercial-pest-control-bay-area",
+  },
+  {
+    title: "Eco/Green Options",
+    desc: "Environmentally conscious treatments available upon request—ask what fits your situation.",
+    href: "/eco-friendly-pest-control-bay-area",
+  },
+  {
+    title: "Customized Plans",
+    desc: "Tailored solutions for residential and commercial needs based on your property and pest pressure.",
+    href: "/residential-pest-control-bay-area",
+  },
 ];
 
 const HIGHLIGHTS = [
@@ -27,12 +49,14 @@ const HIGHLIGHTS = [
 export default function HomePage() {
   return (
     <main className="h-screen overflow-y-auto scroll-smooth md:snap-y md:snap-mandatory">
-      {/* Header */}
-      
       <Navbar />
 
       {/* Hero */}
-      <section id="home" className={`${SECTION} scroll-mt-24 md:scroll-mt-28`} style={{ borderColor: "rgb(var(--border))" }} >
+      <section
+        id="home"
+        className={`${SECTION} scroll-mt-24 md:scroll-mt-28`}
+        style={{ borderColor: "rgb(var(--border))" }}
+      >
         <div className={`${CONTAINER} grid gap-10 md:grid-cols-2 md:items-center`}>
           <ScrollReveal>
             <div className="space-y-5">
@@ -40,20 +64,26 @@ export default function HomePage() {
                 Sharkys Pest Control in Benicia, serving the Bay Area.
               </h1>
 
-              <p className="text-base md:text-lg" style={{ color: "rgb(var(--muted))" }}>
+              <p
+                className="text-base md:text-lg"
+                style={{ color: "rgb(var(--muted))" }}
+              >
                 Reliable, honest, high-quality service backed by personal accountability.
                 From general pest control to wildlife removal and rodent exclusion—our plans
                 are tailored to your needs.
               </p>
 
               <div className="flex flex-wrap gap-3">
-                <a
-                  href="#contact"
+                <Link
+                  href="/pest-control-bay-area"
                   className="rounded-xl px-5 py-3 text-sm font-semibold hover:opacity-90"
-                  style={{ background: "rgb(var(--primary))", color: "rgb(var(--primary-fg))" }}
+                  style={{
+                    background: "rgb(var(--primary))",
+                    color: "rgb(var(--primary-fg))",
+                  }}
                 >
-                  Contact & schedule
-                </a>
+                  Book now
+                </Link>
 
                 <a
                   href="#services"
@@ -66,7 +96,11 @@ export default function HomePage() {
 
               <div className="grid gap-3 pt-3 sm:grid-cols-2">
                 {HIGHLIGHTS.map((h) => (
-                  <div key={h.title} className="rounded-2xl border p-4">
+                  <div
+                    key={h.title}
+                    className="rounded-2xl border p-4"
+                    style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                  >
                     <div className="text-sm font-semibold">{h.title}</div>
                     <div className="mt-1 text-sm text-slate-600">{h.desc}</div>
                   </div>
@@ -75,23 +109,22 @@ export default function HomePage() {
             </div>
           </ScrollReveal>
 
-          {/* Hero image/logo placeholder */}
           <ScrollReveal>
             <div
               className="rounded-3xl border p-4 md:p-4"
               style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
             >
-              <div className="relative aspect-[4/3.5] w-full overflow-hidden rounded-2xl border bg-white"
-                   style={{ borderColor: "rgb(var(--border))" }}>
-                
+              <div
+                className="relative aspect-[4/3.5] w-full overflow-hidden rounded-2xl border bg-white"
+                style={{ borderColor: "rgb(var(--border))" }}
+              >
                 <Image
                   src="/main-logo.jpg"
-                  alt="Sharkeys Pest Control"
+                  alt="Sharkys Pest Control"
                   fill
                   className="object-cover"
                   priority
                 />
-               
               </div>
 
               <div className="mt-4 text-sm" style={{ color: "rgb(var(--muted))" }}>
@@ -102,33 +135,38 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* BOOKING FLOW (moved under hero) */}
+      {/* BOOKING FLOW */}
       <section id="booking" className={`${SECTION} scroll-mt-24 md:scroll-mt-28`}>
         <div className={CONTAINER}>
           <ScrollReveal className="mx-auto max-w-4xl">
-            <div className="rounded-3xl border p-8"
+            <div
+              className="rounded-3xl border p-8"
               style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
             >
-              <h2 className="text-2xl font-semibold tracking-tight">How booking will work</h2>
+              <h2 className="text-2xl font-semibold tracking-tight">How booking works</h2>
               <p className="mt-2" style={{ color: "rgb(var(--muted))" }}>
-                This is the flow we’ll implement next once the UI is finalized.
+                Choose a service, pick a date, and request your appointment online.
               </p>
 
               <ol className="mt-6 space-y-3 text-sm" style={{ color: "rgb(var(--muted))" }}>
-                <li><span className="font-semibold" style={{ color: "rgb(var(--fg))" }}>1)</span> Choose a service (pest, wildlife, or specialty)</li>
-                <li><span className="font-semibold" style={{ color: "rgb(var(--fg))" }}>2)</span> Select residential or commercial + enter address</li>
-                <li><span className="font-semibold" style={{ color: "rgb(var(--fg))" }}>3)</span> Pick a date & time (blocked if already reserved)</li>
-                <li><span className="font-semibold" style={{ color: "rgb(var(--fg))" }}>4)</span> Receive email confirmation + calendar invite</li>
+                <li><span className="font-semibold" style={{ color: "rgb(var(--fg))" }}>1)</span> Choose a service that matches your pest issue</li>
+                <li><span className="font-semibold" style={{ color: "rgb(var(--fg))" }}>2)</span> Enter your contact details and property information</li>
+                <li><span className="font-semibold" style={{ color: "rgb(var(--fg))" }}>3)</span> Select your preferred date and time</li>
+                <li><span className="font-semibold" style={{ color: "rgb(var(--fg))" }}>4)</span> Receive confirmation and next steps</li>
               </ol>
 
               <div className="mt-6 flex flex-wrap gap-3">
-                <a
-                  href="#contact"
+                <Link
+                  href="/pest-control-bay-area"
                   className="rounded-xl px-5 py-3 text-sm font-semibold hover:opacity-90"
-                  style={{ background: "rgb(var(--primary))", color: "rgb(var(--primary-fg))" }}
+                  style={{
+                    background: "rgb(var(--primary))",
+                    color: "rgb(var(--primary-fg))",
+                  }}
                 >
-                  Contact us
-                </a>
+                  Start booking
+                </Link>
+
                 <a
                   href="#services"
                   className="rounded-xl border px-5 py-3 text-sm font-semibold hover:opacity-90"
@@ -163,13 +201,13 @@ export default function HomePage() {
                     {s.desc}
                   </div>
 
-                  <a
-                    href="#contact"
+                  <Link
+                    href={s.href}
                     className="mt-4 inline-block text-sm font-semibold hover:underline"
                     style={{ color: "rgb(var(--fg))" }}
                   >
                     Request service →
-                  </a>
+                  </Link>
                 </div>
               ))}
             </div>
@@ -203,7 +241,8 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="rounded-3xl border p-6"
+            <div
+              className="rounded-3xl border p-6"
               style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
             >
               <div className="space-y-4 text-sm leading-relaxed" style={{ color: "rgb(var(--muted))" }}>
