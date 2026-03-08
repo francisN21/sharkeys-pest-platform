@@ -4,9 +4,19 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { Bell, ChevronDown } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import { useAuth } from "./AuthProvider";
 import { me as apiMe } from "../lib/api/auth";
+import {
+  type AppNotification,
+  getUnreadNotificationCount,
+  listNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from "../lib/api/notifications";
+import { subscribeRealtimeEvent } from "../lib/realtime/realtimeBus";
+import type { RealtimeEvent } from "../lib/realtime/events";
 
 type NavItem = { label: string; href: string };
 
@@ -38,6 +48,176 @@ function displayName(user: { first_name?: string | null; last_name?: string | nu
   return full || user.email;
 }
 
+function formatNotificationTime(value: string) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "Just now";
+
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function mapRealtimeEventToPreview(evt: RealtimeEvent): AppNotification | null {
+  const now = new Date().toISOString();
+
+  switch (evt.type) {
+    case "booking.created":
+      return {
+        id: Date.now(),
+        kind: evt.type,
+        title: "New booking created",
+        body: evt.bookingName ?? `Booking ${evt.bookingId}`,
+        booking_id: null,
+        booking_public_id: evt.bookingId,
+        message_id: null,
+        metadata: {},
+        read_at: null,
+        created_at: evt.startsAt ?? now,
+      };
+
+    case "booking.accepted":
+      return {
+        id: Date.now(),
+        kind: evt.type,
+        title: "Booking accepted",
+        body: `Booking ${evt.bookingId} has been accepted.`,
+        booking_id: null,
+        booking_public_id: evt.bookingId,
+        message_id: null,
+        metadata: {},
+        read_at: null,
+        created_at: evt.acceptedAt ?? now,
+      };
+
+    case "booking.assigned":
+      return {
+        id: Date.now(),
+        kind: evt.type,
+        title: "Booking assigned",
+        body: `Booking ${evt.bookingId} has been assigned.`,
+        booking_id: null,
+        booking_public_id: evt.bookingId,
+        message_id: null,
+        metadata: {},
+        read_at: null,
+        created_at: evt.assignedAt ?? now,
+      };
+
+    case "booking.reassigned":
+      return {
+        id: Date.now(),
+        kind: evt.type,
+        title: "Booking reassigned",
+        body: `Booking ${evt.bookingId} has a new technician.`,
+        booking_id: null,
+        booking_public_id: evt.bookingId,
+        message_id: null,
+        metadata: {},
+        read_at: null,
+        created_at: evt.assignedAt ?? now,
+      };
+
+    case "booking.cancelled":
+      return {
+        id: Date.now(),
+        kind: evt.type,
+        title: "Booking cancelled",
+        body: `Booking ${evt.bookingId} has been cancelled.`,
+        booking_id: null,
+        booking_public_id: evt.bookingId,
+        message_id: null,
+        metadata: {},
+        read_at: null,
+        created_at: evt.cancelledAt ?? now,
+      };
+
+    case "booking.edited":
+      return {
+        id: Date.now(),
+        kind: evt.type,
+        title: "Booking updated",
+        body: `Booking ${evt.bookingId} was updated.`,
+        booking_id: null,
+        booking_public_id: evt.bookingId,
+        message_id: null,
+        metadata: {},
+        read_at: null,
+        created_at: evt.startsAt ?? now,
+      };
+
+    case "booking.completed":
+      return {
+        id: Date.now(),
+        kind: evt.type,
+        title: "Booking completed",
+        body:
+          `Booking ${evt.bookingId}` +
+          (evt.technicianName ? ` by ${evt.technicianName}` : "") +
+          (typeof evt.finalPriceCents === "number"
+            ? ` • $${(evt.finalPriceCents / 100).toFixed(2)}`
+            : ""),
+        booking_id: null,
+        booking_public_id: evt.bookingId,
+        message_id: null,
+        metadata: {},
+        read_at: null,
+        created_at: evt.completedAt ?? now,
+      };
+
+    case "booking.price_set":
+      return {
+        id: Date.now(),
+        kind: evt.type,
+        title: "Final price updated",
+        body:
+          `Booking ${evt.bookingId}` +
+          (typeof evt.finalPriceCents === "number"
+            ? ` • $${(evt.finalPriceCents / 100).toFixed(2)}`
+            : ""),
+        booking_id: null,
+        booking_public_id: evt.bookingId,
+        message_id: null,
+        metadata: {},
+        read_at: null,
+        created_at: evt.setAt ?? now,
+      };
+
+    case "message.new":
+      return {
+        id: Date.now(),
+        kind: evt.type,
+        title: evt.fromName ? `New message from ${evt.fromName}` : "New message",
+        body: evt.snippet ?? "You received a new message.",
+        booking_id: null,
+        booking_public_id: evt.threadId,
+        message_id: null,
+        metadata: {},
+        read_at: null,
+        created_at: evt.at ?? now,
+      };
+
+    case "system.error":
+      return {
+        id: Date.now(),
+        kind: evt.type,
+        title: "System error",
+        body: evt.message,
+        booking_id: null,
+        booking_public_id: null,
+        message_id: null,
+        metadata: {},
+        read_at: null,
+        created_at: evt.at ?? now,
+      };
+
+    default:
+      return null;
+  }
+}
+
 export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
@@ -46,17 +226,18 @@ export default function Navbar() {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
 
   const menuRef = useRef<HTMLDivElement | null>(null);
   const accountRef = useRef<HTMLDivElement | null>(null);
+  const notifRef = useRef<HTMLDivElement | null>(null);
   const hamburgerRef = useRef<HTMLButtonElement | null>(null);
 
-  /**
-   * ✅ Local "resolved user" fallback:
-   * If AuthProvider doesn't update after login (cookie is set but context is stale),
-   * Navbar will call /auth/me and update itself without a hard reload.
-   */
   const [resolvedUser, setResolvedUser] = useState<NavbarUser | null>(null);
+
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const effectiveUser = (user as NavbarUser | null) ?? resolvedUser;
   const isAuthed = !!effectiveUser;
@@ -64,19 +245,14 @@ export default function Navbar() {
   const name = useMemo(() => (effectiveUser ? displayName(effectiveUser) : ""), [effectiveUser]);
   const initials = useMemo(() => (name ? getInitials(name) : "U"), [name]);
 
-  // Close dropdowns when navigating
+  const showLandingNav = pathname === "/";
+
   useEffect(() => {
     setMenuOpen(false);
     setAccountOpen(false);
+    setNotifOpen(false);
   }, [pathname]);
 
-  // ✅ Only show section nav items on landing page "/"
-  const showLandingNav = pathname === "/";
-
-  // ✅ Re-check /auth/me when:
-  // - auth context says "not authed"
-  // - or page changes (e.g., login -> /account)
-  // - or window regains focus
   useEffect(() => {
     let cancelled = false;
 
@@ -94,19 +270,16 @@ export default function Navbar() {
       }
     }
 
-    // If AuthProvider has a user, trust it and sync local
     if (!loading && user) {
       setResolvedUser(user as NavbarUser);
       return;
     }
 
-    // If AuthProvider says not loading and no user, try resolving from cookie session
     if (!loading && !user) {
       refreshMe();
     }
 
     function onFocus() {
-      // When user comes back to tab, re-check session cookie
       if (!loading && !user) refreshMe();
     }
 
@@ -118,12 +291,10 @@ export default function Navbar() {
     };
   }, [loading, user, pathname]);
 
-  // Close on outside click
   useEffect(() => {
     function onDown(e: MouseEvent) {
       const t = e.target as Node;
 
-      // ✅ Don’t treat hamburger button clicks as “outside click”
       if (hamburgerRef.current && hamburgerRef.current.contains(t)) return;
 
       if (menuOpen && menuRef.current && !menuRef.current.contains(t)) {
@@ -132,25 +303,27 @@ export default function Navbar() {
       if (accountOpen && accountRef.current && !accountRef.current.contains(t)) {
         setAccountOpen(false);
       }
+      if (notifOpen && notifRef.current && !notifRef.current.contains(t)) {
+        setNotifOpen(false);
+      }
     }
 
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
-  }, [menuOpen, accountOpen]);
+  }, [menuOpen, accountOpen, notifOpen]);
 
-  // ESC to close
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         setMenuOpen(false);
         setAccountOpen(false);
+        setNotifOpen(false);
       }
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  // Lock body scroll when mobile menu open
   useEffect(() => {
     if (!menuOpen) return;
     const prev = document.body.style.overflow;
@@ -159,6 +332,56 @@ export default function Navbar() {
       document.body.style.overflow = prev;
     };
   }, [menuOpen]);
+
+  useEffect(() => {
+    let alive = true;
+
+    async function loadNotifications() {
+      if (!isAuthed) {
+        setNotifications([]);
+        setUnreadCount(0);
+        return;
+      }
+
+      try {
+        setNotifLoading(true);
+
+        const [listRes, unreadRes] = await Promise.all([
+          listNotifications(12, false),
+          getUnreadNotificationCount(),
+        ]);
+
+        if (!alive) return;
+
+        setNotifications(Array.isArray(listRes.notifications) ? listRes.notifications : []);
+        setUnreadCount(unreadRes.unread_count ?? 0);
+      } catch {
+        if (!alive) return;
+      } finally {
+        if (alive) setNotifLoading(false);
+      }
+    }
+
+    loadNotifications();
+
+    return () => {
+      alive = false;
+    };
+  }, [isAuthed]);
+
+  useEffect(() => {
+    if (!isAuthed) return;
+
+    const unsubscribe = subscribeRealtimeEvent((evt: RealtimeEvent) => {
+      const preview = mapRealtimeEventToPreview(evt);
+      if (!preview) return;
+
+      setUnreadCount((prev) => prev + 1);
+      setNotifications((prev) => [preview, ...prev].slice(0, 12));
+    });
+
+    return unsubscribe;
+  }, [isAuthed]);
 
   function onNavClick(href: string) {
     setMenuOpen(false);
@@ -172,12 +395,74 @@ export default function Navbar() {
   async function onLogout() {
     setAccountOpen(false);
     setMenuOpen(false);
+    setNotifOpen(false);
     try {
       await logout();
     } finally {
-      // ✅ keep navbar consistent immediately
       setResolvedUser(null);
+      setNotifications([]);
+      setUnreadCount(0);
       router.push("/login");
+    }
+  }
+
+  async function onOpenNotifications() {
+    const next = !notifOpen;
+    setNotifOpen(next);
+    setAccountOpen(false);
+
+    if (!next || !isAuthed) return;
+
+    try {
+      setNotifLoading(true);
+      const listRes = await listNotifications(12, false);
+      setNotifications(Array.isArray(listRes.notifications) ? listRes.notifications : []);
+    } catch {
+      // ignore
+    } finally {
+      setNotifLoading(false);
+    }
+  }
+
+  async function onMarkAllRead() {
+    try {
+      await markAllNotificationsRead();
+      setUnreadCount(0);
+      setNotifications((prev) =>
+        prev.map((n) => ({
+          ...n,
+          read_at: n.read_at ?? new Date().toISOString(),
+        }))
+      );
+    } catch {
+      // ignore
+    }
+  }
+
+  async function onNotificationClick(item: AppNotification) {
+    try {
+      if (!item.read_at) {
+        await markNotificationRead(item.id);
+        setUnreadCount((prev) => Math.max(0, prev - 1));
+        setNotifications((prev) =>
+          prev.map((n) =>
+            n.id === item.id ? { ...n, read_at: n.read_at ?? new Date().toISOString() } : n
+          )
+        );
+      }
+    } catch {
+      // ignore
+    }
+
+    setNotifOpen(false);
+
+    if (item.booking_public_id) {
+      router.push("/account");
+      return;
+    }
+
+    if (item.kind === "system.error") {
+      router.push("/account");
     }
   }
 
@@ -190,7 +475,6 @@ export default function Navbar() {
       }}
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-        {/* Brand */}
         <Link href="/" className="flex items-center gap-3">
           <Image
             src="/main-logo.jpg"
@@ -208,7 +492,6 @@ export default function Navbar() {
           </div>
         </Link>
 
-        {/* Desktop nav (ONLY on "/") */}
         {showLandingNav ? (
           <nav className="hidden items-center gap-6 md:flex">
             {NAV.map((n) => (
@@ -230,11 +513,8 @@ export default function Navbar() {
           <div className="hidden md:block" />
         )}
 
-        {/* Right actions */}
         <div className="flex items-center gap-3">
-          {/* Desktop auth/actions */}
           <div className="hidden items-center gap-3 md:flex">
-            {/* Book a Service ALWAYS */}
             <Link
               href="/book"
               className="rounded-xl px-4 py-2 text-sm font-semibold hover:opacity-90"
@@ -257,78 +537,201 @@ export default function Navbar() {
             ) : null}
 
             {!loading && isAuthed ? (
-              <div className="relative" ref={accountRef}>
-                <button
-                  type="button"
-                  onClick={() => setAccountOpen((v) => !v)}
-                  className="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
-                  style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                  aria-haspopup="menu"
-                  aria-expanded={accountOpen}
-                >
-                  <span
-                    className="grid h-7 w-7 place-items-center rounded-full text-xs font-bold"
-                    style={{ background: "rgba(var(--fg), 0.12)" }}
-                    aria-hidden="true"
+              <>
+                {/* Notification Bell */}
+                <div className="relative" ref={notifRef}>
+                  <button
+                    type="button"
+                    onClick={onOpenNotifications}
+                    className="relative rounded-xl border p-2 hover:opacity-90"
+                    style={{
+                      borderColor: "rgb(var(--border))",
+                      background: "rgb(var(--card))",
+                    }}
+                    aria-label="Notifications"
+                    aria-haspopup="menu"
+                    aria-expanded={notifOpen}
                   >
-                    {initials}
-                  </span>
-                  <span className="max-w-[160px] truncate">{name}</span>
-                  <span className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                    ▾
-                  </span>
-                </button>
+                    <Bell className="h-5 w-5" />
+                    {unreadCount > 0 ? (
+                      <span
+                        className="absolute -right-1 -top-1 min-w-[18px] rounded-full px-1 text-center text-[10px] font-bold"
+                        style={{
+                          background: "rgb(239 68 68)",
+                          color: "white",
+                        }}
+                      >
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                      </span>
+                    ) : null}
+                  </button>
 
-                {accountOpen ? (
-                  <div
-                    className="absolute right-0 mt-2 w-56 overflow-hidden rounded-2xl border shadow-sm"
-                    style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                    role="menu"
-                  >
-                    {/* Account */}
-                    <button
-                      className="w-full px-4 py-3 text-left text-sm font-semibold hover:opacity-90"
-                      style={{ color: "rgb(var(--fg))" }}
-                      onClick={() => {
-                        setAccountOpen(false);
-                        router.push("/account");
-                      }}
-                      role="menuitem"
-                    >
-                      Account
-                    </button>
-
-                    {/* Theme (moved into dropdown) */}
+                  {notifOpen ? (
                     <div
-                      className="flex items-center justify-between px-4 py-3 text-sm"
-                      style={{ borderTop: "1px solid rgb(var(--border))" }}
-                      role="menuitem"
-                    >
-                      <div className="font-semibold" style={{ color: "rgb(var(--fg))" }}>
-                        Theme
-                      </div>
-                      <ThemeToggle />
-                    </div>
-
-                    {/* Logout */}
-                    <button
-                      className="w-full px-4 py-3 text-left text-sm font-semibold hover:opacity-90"
+                      className="absolute right-0 mt-2 w-[360px] overflow-hidden rounded-2xl border shadow-sm"
                       style={{
-                        color: "rgb(var(--fg))",
-                        borderTop: "1px solid rgb(var(--border))",
+                        borderColor: "rgb(var(--border))",
+                        background: "rgb(var(--card))",
                       }}
-                      onClick={onLogout}
-                      role="menuitem"
+                      role="menu"
                     >
-                      Logout
-                    </button>
-                  </div>
-                ) : null}
-              </div>
+                      <div
+                        className="flex items-center justify-between px-4 py-3"
+                        style={{ borderBottom: "1px solid rgb(var(--border))" }}
+                      >
+                        <div className="text-sm font-semibold">Notifications</div>
+                        <button
+                          type="button"
+                          className="text-xs font-semibold hover:opacity-80"
+                          style={{ color: "rgb(var(--muted))" }}
+                          onClick={onMarkAllRead}
+                        >
+                          Mark all read
+                        </button>
+                      </div>
+
+                      <div className="max-h-[420px] overflow-y-auto">
+                        {notifLoading ? (
+                          <div className="px-4 py-4 text-sm" style={{ color: "rgb(var(--muted))" }}>
+                            Loading…
+                          </div>
+                        ) : notifications.length === 0 ? (
+                          <div className="px-4 py-4 text-sm" style={{ color: "rgb(var(--muted))" }}>
+                            No notifications yet.
+                          </div>
+                        ) : (
+                          <div className="space-y-2 p-3">
+                            {notifications.map((item) => {
+                              const unread = !item.read_at;
+
+                              return (
+                                <button
+                                  key={`${item.id}-${item.created_at}`}
+                                  type="button"
+                                  onClick={() => onNotificationClick(item)}
+                                  className="w-full rounded-xl border p-3 text-left transition hover:opacity-90"
+                                  style={{
+                                    borderColor: unread ? "rgb(239 68 68 / 0.35)" : "rgb(var(--border))",
+                                    background: unread ? "rgba(239, 68, 68, 0.06)" : "rgb(var(--bg))",
+                                  }}
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <div className="truncate text-sm font-semibold">{item.title}</div>
+                                      <div
+                                        className="mt-1 line-clamp-2 text-xs"
+                                        style={{ color: "rgb(var(--muted))" }}
+                                      >
+                                        {item.body || "Open to view details."}
+                                      </div>
+                                    </div>
+
+                                    {unread ? (
+                                      <span
+                                        className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
+                                        style={{ background: "rgb(239 68 68)" }}
+                                      />
+                                    ) : null}
+                                  </div>
+
+                                  <div
+                                    className="mt-2 flex items-center justify-between text-[11px]"
+                                    style={{ color: "rgb(var(--muted))" }}
+                                  >
+                                    <span>{item.kind}</span>
+                                    <span>{formatNotificationTime(item.created_at)}</span>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* Compact initials-only account button */}
+                <div className="relative" ref={accountRef}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccountOpen((v) => !v);
+                      setNotifOpen(false);
+                    }}
+                    className="flex items-center gap-2 rounded-xl border px-2.5 py-2 text-sm font-semibold hover:opacity-90"
+                    style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                    aria-haspopup="menu"
+                    aria-expanded={accountOpen}
+                  >
+                    <span
+                      className="grid h-8 w-8 place-items-center rounded-full text-xs font-bold"
+                      style={{ background: "rgba(var(--fg), 0.12)" }}
+                      aria-hidden="true"
+                      title={name}
+                    >
+                      {initials}
+                    </span>
+                    <ChevronDown className="h-4 w-4" style={{ color: "rgb(var(--muted))" }} />
+                  </button>
+
+                  {accountOpen ? (
+                    <div
+                      className="absolute right-0 mt-2 w-56 overflow-hidden rounded-2xl border shadow-sm"
+                      style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                      role="menu"
+                    >
+                      <div
+                        className="px-4 py-3"
+                        style={{ borderBottom: "1px solid rgb(var(--border))" }}
+                      >
+                        <div className="text-sm font-semibold truncate">{name}</div>
+                        <div className="mt-1 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                          Signed in
+                        </div>
+                      </div>
+
+                      <button
+                        className="w-full px-4 py-3 text-left text-sm font-semibold hover:opacity-90"
+                        style={{ color: "rgb(var(--fg))" }}
+                        onClick={() => {
+                          setAccountOpen(false);
+                          router.push("/account");
+                        }}
+                        role="menuitem"
+                      >
+                        Account
+                      </button>
+
+                      <div
+                        className="flex items-center justify-between px-4 py-3 text-sm"
+                        style={{ borderTop: "1px solid rgb(var(--border))" }}
+                        role="menuitem"
+                      >
+                        <div className="font-semibold" style={{ color: "rgb(var(--fg))" }}>
+                          Theme
+                        </div>
+                        <ThemeToggle />
+                      </div>
+
+                      <button
+                        className="w-full px-4 py-3 text-left text-sm font-semibold hover:opacity-90"
+                        style={{
+                          color: "rgb(var(--fg))",
+                          borderTop: "1px solid rgb(var(--border))",
+                        }}
+                        onClick={onLogout}
+                        role="menuitem"
+                      >
+                        Logout
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </>
             ) : null}
           </div>
 
-          {/* Hamburger (mobile) */}
           <button
             ref={hamburgerRef}
             type="button"
@@ -366,14 +769,12 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile dropdown */}
       {menuOpen ? (
         <div
           className="md:hidden border-t"
           style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.95)" }}
         >
           <div ref={menuRef} className="mx-auto max-w-6xl px-4 py-4 space-y-4">
-            {/* Landing page section links ONLY on "/" */}
             {showLandingNav ? (
               <div className="grid gap-2">
                 {NAV.map((n) => (
@@ -393,7 +794,6 @@ export default function Navbar() {
               </div>
             ) : null}
 
-            {/* Book a Service ALWAYS */}
             <Link
               href="/book"
               className="block rounded-xl px-3 py-3 text-center text-sm font-semibold hover:opacity-90"
@@ -434,13 +834,23 @@ export default function Navbar() {
                   className="rounded-xl border p-3"
                   style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
                 >
-                  <div className="text-sm font-semibold truncate">{name}</div>
-                  <div className="text-xs mt-1" style={{ color: "rgb(var(--muted))" }}>
-                    Signed in
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold truncate">{name}</div>
+                      <div className="text-xs mt-1" style={{ color: "rgb(var(--muted))" }}>
+                        Signed in
+                      </div>
+                    </div>
+
+                    <div
+                      className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold"
+                      style={{ background: "rgba(var(--fg), 0.12)" }}
+                    >
+                      {initials}
+                    </div>
                   </div>
                 </div>
 
-                {/* Order: Account -> Theme -> Logout */}
                 <button
                   className="rounded-xl border px-3 py-3 text-sm font-semibold hover:opacity-90"
                   style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
@@ -450,6 +860,17 @@ export default function Navbar() {
                   }}
                 >
                   Account
+                </button>
+
+                <button
+                  className="rounded-xl border px-3 py-3 text-sm font-semibold hover:opacity-90"
+                  style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setNotifOpen(true);
+                  }}
+                >
+                  Notifications {unreadCount > 0 ? `(${unreadCount})` : ""}
                 </button>
 
                 <div
