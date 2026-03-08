@@ -35,7 +35,13 @@ type TabKey =
   | "admin_jobhistory"
   | "admin_tech_bookings";
 
-type Tab = { key: TabKey; label: string; icon: string; badgeCount?: number };
+type Tab = {
+  key: TabKey;
+  label: string;
+  icon: string;
+  badgeCount?: number;
+  pulseBadge?: boolean;
+};
 
 function normalizeRole(user: AuthedUser | null): AppRole {
   const primary = user?.user_role;
@@ -50,13 +56,19 @@ function normalizeRole(user: AuthedUser | null): AppRole {
   return "customer";
 }
 
-function incrementBadge(
+function markTabActivity(
   setTabBadges: React.Dispatch<React.SetStateAction<Record<TabKey, number>>>,
+  setPulsingTabs: React.Dispatch<React.SetStateAction<Record<TabKey, boolean>>>,
   key: TabKey
 ) {
   setTabBadges((prev) => ({
     ...prev,
     [key]: (prev[key] ?? 0) + 1,
+  }));
+
+  setPulsingTabs((prev) => ({
+    ...prev,
+    [key]: true,
   }));
 }
 
@@ -77,10 +89,29 @@ export default function AccountShellPage() {
     admin_tech_bookings: 0,
   });
 
+  const [pulsingTabs, setPulsingTabs] = useState<Record<TabKey, boolean>>({
+    account: false,
+    bookings: false,
+    tech: false,
+    admin_customers: false,
+    admin_leads: false,
+    admin_jobs: false,
+    admin_jobhistory: false,
+    admin_tech_bookings: false,
+  });
+
   const [activeTab, setActiveTab] = useState<TabKey>("account");
 
   const tabs: Tab[] = useMemo(() => {
-    const base: Tab[] = [{ key: "account", label: "Account", icon: "fa-regular fa-id-badge" }];
+    const base: Tab[] = [
+      {
+        key: "account",
+        label: "Account",
+        icon: "fa-regular fa-id-badge",
+        badgeCount: tabBadges.account,
+        pulseBadge: pulsingTabs.account,
+      },
+    ];
 
     if (role === "customer") {
       base.push({
@@ -88,6 +119,7 @@ export default function AccountShellPage() {
         label: "Bookings",
         icon: "fa-regular fa-calendar-check",
         badgeCount: tabBadges.bookings,
+        pulseBadge: pulsingTabs.bookings,
       });
       return base;
     }
@@ -98,42 +130,51 @@ export default function AccountShellPage() {
         label: "Technician",
         icon: "fa-solid fa-screwdriver-wrench",
         badgeCount: tabBadges.tech,
+        pulseBadge: pulsingTabs.tech,
       });
       return base;
     }
 
     base.push(
-      { key: "admin_customers", label: "Customers", icon: "fa-regular fa-user" },
-      { key: "admin_leads", label: "Admin Booking", icon: "fa-solid fa-user-plus" },
+      {
+        key: "admin_customers",
+        label: "Customers",
+        icon: "fa-regular fa-user",
+        badgeCount: tabBadges.admin_customers,
+        pulseBadge: pulsingTabs.admin_customers,
+      },
+      {
+        key: "admin_leads",
+        label: "Admin Booking",
+        icon: "fa-solid fa-user-plus",
+        badgeCount: tabBadges.admin_leads,
+        pulseBadge: pulsingTabs.admin_leads,
+      },
       {
         key: "admin_jobs",
         label: "Jobs",
         icon: "fa-solid fa-briefcase",
         badgeCount: tabBadges.admin_jobs,
+        pulseBadge: pulsingTabs.admin_jobs,
       },
       {
         key: "admin_jobhistory",
         label: "Completed",
         icon: "fa-regular fa-circle-check",
         badgeCount: tabBadges.admin_jobhistory,
+        pulseBadge: pulsingTabs.admin_jobhistory,
       },
       {
         key: "admin_tech_bookings",
         label: "Tech Bookings",
         icon: "fa-solid fa-clipboard-list",
         badgeCount: tabBadges.admin_tech_bookings,
+        pulseBadge: pulsingTabs.admin_tech_bookings,
       }
     );
 
     return base;
-  }, [
-    role,
-    tabBadges.bookings,
-    tabBadges.tech,
-    tabBadges.admin_jobs,
-    tabBadges.admin_jobhistory,
-    tabBadges.admin_tech_bookings,
-  ]);
+  }, [role, tabBadges, pulsingTabs]);
 
   function handleTabClick(key: TabKey) {
     setActiveTab(key);
@@ -141,6 +182,11 @@ export default function AccountShellPage() {
     setTabBadges((prev) => ({
       ...prev,
       [key]: 0,
+    }));
+
+    setPulsingTabs((prev) => ({
+      ...prev,
+      [key]: false,
     }));
   }
 
@@ -183,7 +229,6 @@ export default function AccountShellPage() {
 
   useEffect(() => {
     const unsubscribe = subscribeRealtimeEvent((evt: RealtimeEvent) => {
-      // Don't badge if user is currently viewing the relevant tab.
       if (role === "admin") {
         switch (evt.type) {
           case "booking.created":
@@ -192,7 +237,7 @@ export default function AccountShellPage() {
           case "booking.edited":
           case "message.new":
             if (activeTab !== "admin_jobs") {
-              incrementBadge(setTabBadges, "admin_jobs");
+              markTabActivity(setTabBadges, setPulsingTabs, "admin_jobs");
             }
             break;
 
@@ -200,13 +245,13 @@ export default function AccountShellPage() {
           case "booking.reassigned":
           case "booking.price_set":
             if (activeTab !== "admin_tech_bookings") {
-              incrementBadge(setTabBadges, "admin_tech_bookings");
+              markTabActivity(setTabBadges, setPulsingTabs, "admin_tech_bookings");
             }
             break;
 
           case "booking.completed":
             if (activeTab !== "admin_jobhistory") {
-              incrementBadge(setTabBadges, "admin_jobhistory");
+              markTabActivity(setTabBadges, setPulsingTabs, "admin_jobhistory");
             }
             break;
 
@@ -223,7 +268,7 @@ export default function AccountShellPage() {
           case "booking.price_set":
           case "message.new":
             if (activeTab !== "tech") {
-              incrementBadge(setTabBadges, "tech");
+              markTabActivity(setTabBadges, setPulsingTabs, "tech");
             }
             break;
 
@@ -243,7 +288,7 @@ export default function AccountShellPage() {
           case "message.new":
           case "booking.edited":
             if (activeTab !== "bookings") {
-              incrementBadge(setTabBadges, "bookings");
+              markTabActivity(setTabBadges, setPulsingTabs, "bookings");
             }
             break;
 
@@ -263,6 +308,7 @@ export default function AccountShellPage() {
         label: t.label,
         icon: t.icon,
         badgeCount: t.badgeCount,
+        pulseBadge: t.pulseBadge,
       })),
     [tabs]
   );

@@ -13,6 +13,7 @@ export type SlideTabItem<K extends string> = {
   label: string;
   icon?: string;
   badgeCount?: number;
+  pulseBadge?: boolean;
 };
 
 type Position = {
@@ -33,6 +34,7 @@ type TabButtonProps = {
   icon?: string;
   label: string;
   badgeCount?: number;
+  pulseBadge?: boolean;
   onClick: () => void;
   onHover?: () => void;
 };
@@ -101,8 +103,7 @@ export function SlideTabs<K extends string>({
     return tabs.filter((t) => !visibleKeys.has(t.key));
   }, [tabs, mobilePrimaryTabs]);
 
-  const mobileOverflowActive =
-    mobileOverflowTabs.find((t) => t.key === value) ?? null;
+  const mobileOverflowActive = mobileOverflowTabs.find((t) => t.key === value) ?? null;
 
   return (
     <>
@@ -123,6 +124,7 @@ export function SlideTabs<K extends string>({
                 icon={t.icon}
                 label={t.label}
                 badgeCount={t.badgeCount}
+                pulseBadge={t.pulseBadge}
                 onClick={() => onChange(t.key)}
               />
             </div>
@@ -167,6 +169,7 @@ export function SlideTabs<K extends string>({
               icon={t.icon}
               label={t.label}
               badgeCount={badge}
+              pulseBadge={t.pulseBadge}
               onClick={() => onChange(t.key)}
               onHover={() => syncToIndex(i)}
             />
@@ -180,7 +183,7 @@ export function SlideTabs<K extends string>({
 }
 
 const DesktopTab = React.forwardRef<HTMLLIElement, TabButtonProps>(function DesktopTabInner(
-  { active, icon, label, badgeCount, onClick, onHover },
+  { active, icon, label, badgeCount, pulseBadge, onClick, onHover },
   ref
 ) {
   const hasBadge = typeof badgeCount === "number" && badgeCount > 0;
@@ -210,17 +213,27 @@ const DesktopTab = React.forwardRef<HTMLLIElement, TabButtonProps>(function Desk
         <span className="whitespace-nowrap">{label}</span>
 
         {hasBadge ? (
-          <span
-            className="ml-1 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full border px-1 text-[11px] font-semibold"
-            style={{
-              background: "rgb(239 68 68)",
-              color: "white",
-              borderColor: "rgba(0,0,0,0.15)",
-            }}
-            aria-label={`${badgeCount} new items`}
-            title={`${badgeCount} new`}
-          >
-            {badgeCount > 99 ? "99+" : badgeCount}
+          <span className="relative ml-1 inline-flex h-[18px] min-w-[18px] items-center justify-center">
+            {pulseBadge ? (
+              <span
+                className="absolute inset-0 rounded-full animate-ping"
+                style={{ background: "rgb(239 68 68)", opacity: 0.75 }}
+                aria-hidden="true"
+              />
+            ) : null}
+
+            <span
+              className="relative inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full border px-1 text-[11px] font-semibold"
+              style={{
+                background: "rgb(239 68 68)",
+                color: "white",
+                borderColor: "rgba(0,0,0,0.15)",
+              }}
+              aria-label={`${badgeCount} new items`}
+              title={`${badgeCount} new`}
+            >
+              {badgeCount > 99 ? "99+" : badgeCount}
+            </span>
           </span>
         ) : null}
       </span>
@@ -228,7 +241,14 @@ const DesktopTab = React.forwardRef<HTMLLIElement, TabButtonProps>(function Desk
   );
 });
 
-function MobileTabButton({ active, icon, label, badgeCount, onClick }: TabButtonProps) {
+function MobileTabButton({
+  active,
+  icon,
+  label,
+  badgeCount,
+  pulseBadge,
+  onClick,
+}: TabButtonProps) {
   const hasBadge = typeof badgeCount === "number" && badgeCount > 0;
 
   return (
@@ -248,17 +268,27 @@ function MobileTabButton({ active, icon, label, badgeCount, onClick }: TabButton
       <span className="truncate whitespace-nowrap">{label}</span>
 
       {hasBadge ? (
-        <span
-          className="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full border px-1 text-[11px] font-semibold"
-          style={{
-            background: "rgb(239 68 68)",
-            color: "white",
-            borderColor: "rgba(0,0,0,0.15)",
-          }}
-          aria-label={`${badgeCount} new items`}
-          title={`${badgeCount} new`}
-        >
-          {badgeCount > 99 ? "99+" : badgeCount}
+        <span className="relative inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center">
+          {pulseBadge ? (
+            <span
+              className="absolute inset-0 rounded-full animate-ping"
+              style={{ background: "rgb(239 68 68)", opacity: 0.75 }}
+              aria-hidden="true"
+            />
+          ) : null}
+
+          <span
+            className="relative inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full border px-1 text-[11px] font-semibold"
+            style={{
+              background: "rgb(239 68 68)",
+              color: "white",
+              borderColor: "rgba(0,0,0,0.15)",
+            }}
+            aria-label={`${badgeCount} new items`}
+            title={`${badgeCount} new`}
+          >
+            {badgeCount > 99 ? "99+" : badgeCount}
+          </span>
         </span>
       ) : null}
     </button>
@@ -296,9 +326,7 @@ function MobileOverflowMenu<K extends string>({
           )}
           aria-label="More tabs"
         >
-          <option value="">
-            {activeOverflowLabel ? activeOverflowLabel : "More"}
-          </option>
+          <option value="">{activeOverflowLabel ? activeOverflowLabel : "More"}</option>
           {tabs.map((t) => (
             <option key={t.key} value={t.key}>
               {typeof t.badgeCount === "number" && t.badgeCount > 0
