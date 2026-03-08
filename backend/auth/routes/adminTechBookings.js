@@ -3,6 +3,7 @@ const { pool } = require("../src/db");
 const { z } = require("zod");
 const { requireAuth } = require("../middleware/requireAuth");
 const { broadcastToUsers } = require("../src/realtime");
+const { createNotifications } = require("../src/notifications");
 
 const router = express.Router();
 
@@ -16,6 +17,14 @@ async function getRolesByDb(userId) {
 async function requireAdminOrSuperByDb(userId) {
   const roles = await getRolesByDb(userId);
   return roles.includes("admin") || roles.includes("superuser");
+}
+
+async function addEvent(client, bookingId, actorUserId, eventType, metadata = {}) {
+  await client.query(
+    `INSERT INTO booking_events (booking_id, actor_user_id, event_type, metadata)
+     VALUES ($1, $2, $3, $4::jsonb)`,
+    [bookingId, actorUserId || null, eventType, JSON.stringify(metadata)]
+  );
 }
 
 const reassignSchema = z.object({
@@ -143,7 +152,8 @@ router.get("/admin/tech-bookings", requireAuth, async (req, res, next) => {
         address: r.address,
         notes: r.notes ?? null,
         service_title: r.service_title,
-        service_base_price_cents: typeof r.service_base_price_cents === "number" ? r.service_base_price_cents : 0,
+        service_base_price_cents:
+          typeof r.service_base_price_cents === "number" ? r.service_base_price_cents : 0,
         customer_name: displayName,
         customer_email: r.customer_email ?? r.lead_email ?? null,
         customer_phone: r.customer_phone ?? r.lead_phone ?? null,
@@ -271,7 +281,8 @@ router.get("/admin/tech-bookings/:publicId", requireAuth, async (req, res, next)
       starts_at: r.starts_at ?? null,
       ends_at: r.ends_at ?? null,
       service_title: r.service_title ?? null,
-      service_base_price_cents: typeof r.service_base_price_cents === "number" ? r.service_base_price_cents : 0,
+      service_base_price_cents:
+        typeof r.service_base_price_cents === "number" ? r.service_base_price_cents : 0,
       worker_user_id: r.worker_user_id ?? null,
       worker_first_name: r.worker_first_name ?? null,
       worker_last_name: r.worker_last_name ?? null,
@@ -369,8 +380,66 @@ router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, 
     );
 
     if (booking.status !== "assigned") {
-      await client.query(`UPDATE bookings SET status = 'assigned', updated_at = now() WHERE id = $1`, [booking.id]);
+      await client.query(
+        `UPDATE bookings SET status = 'assigned', updated_at = now() WHERE id = $1`,
+        [booking.id]
+      );
     }
+
+    await addEvent(client, booking.id, userId, "reassigned", {
+      oldWorkerUserId,
+      newWorkerUserId: worker_user_id,
+    });
+
+    const notificationRows = [];
+
+    if (booking.customer_user_id) {
+      notificationRows.push({
+        userId: booking.customer_user_id,
+        kind: "booking.reassigned",
+        title: "Booking reassigned",
+        body: `Booking ${bookingPublicId} has a new technician.`,
+        bookingId: booking.id,
+        bookingPublicId,
+        metadata: {
+          bookingPublicId,
+          oldWorkerUserId,
+          newWorkerUserId: worker_user_id,
+        },
+      });
+    }
+
+    if (oldWorkerUserId && oldWorkerUserId !== worker_user_id) {
+      notificationRows.push({
+        userId: oldWorkerUserId,
+        kind: "booking.reassigned",
+        title: "Booking reassigned",
+        body: `Booking ${bookingPublicId} is no longer assigned to you.`,
+        bookingId: booking.id,
+        bookingPublicId,
+        metadata: {
+          bookingPublicId,
+          oldWorkerUserId,
+          newWorkerUserId: worker_user_id,
+        },
+      });
+    }
+
+    notificationRows.push({
+      userId: worker_user_id,
+      kind: "booking.reassigned",
+      title: "Booking assigned to you",
+      body: `Booking ${bookingPublicId} has been assigned to you.`,
+      bookingId: booking.id,
+      bookingPublicId,
+      metadata: {
+        bookingPublicId,
+        oldWorkerUserId,
+        newWorkerUserId: worker_user_id,
+      },
+    });
+
+    await createNotifications(client, notificationRows);
 
     await client.query("COMMIT");
 
