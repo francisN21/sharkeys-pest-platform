@@ -14,6 +14,8 @@ import { me, type MeResponse } from "../../lib/api/auth";
 import TechBookingsPage from "./techbookings/page";
 
 import { SlideTabs, type SlideTabItem } from "../../components/ui/slide-tabs";
+import { subscribeRealtimeEvent } from "../../lib/realtime/realtimeBus";
+import type { RealtimeEvent } from "../../lib/realtime/events";
 
 type AppRole = "customer" | "technician" | "admin";
 type ApiUserRole = "customer" | "worker" | "admin";
@@ -48,6 +50,16 @@ function normalizeRole(user: AuthedUser | null): AppRole {
   return "customer";
 }
 
+function incrementBadge(
+  setTabBadges: React.Dispatch<React.SetStateAction<Record<TabKey, number>>>,
+  key: TabKey
+) {
+  setTabBadges((prev) => ({
+    ...prev,
+    [key]: (prev[key] ?? 0) + 1,
+  }));
+}
+
 export default function AccountShellPage() {
   const router = useRouter();
   const [role, setRole] = useState<AppRole>("customer");
@@ -65,16 +77,28 @@ export default function AccountShellPage() {
     admin_tech_bookings: 0,
   });
 
+  const [activeTab, setActiveTab] = useState<TabKey>("account");
+
   const tabs: Tab[] = useMemo(() => {
     const base: Tab[] = [{ key: "account", label: "Account", icon: "fa-regular fa-id-badge" }];
 
     if (role === "customer") {
-      base.push({ key: "bookings", label: "Bookings", icon: "fa-regular fa-calendar-check" });
+      base.push({
+        key: "bookings",
+        label: "Bookings",
+        icon: "fa-regular fa-calendar-check",
+        badgeCount: tabBadges.bookings,
+      });
       return base;
     }
 
     if (role === "technician") {
-      base.push({ key: "tech", label: "Technician", icon: "fa-solid fa-screwdriver-wrench" });
+      base.push({
+        key: "tech",
+        label: "Technician",
+        icon: "fa-solid fa-screwdriver-wrench",
+        badgeCount: tabBadges.tech,
+      });
       return base;
     }
 
@@ -87,7 +111,12 @@ export default function AccountShellPage() {
         icon: "fa-solid fa-briefcase",
         badgeCount: tabBadges.admin_jobs,
       },
-      { key: "admin_jobhistory", label: "Completed", icon: "fa-regular fa-circle-check" },
+      {
+        key: "admin_jobhistory",
+        label: "Completed",
+        icon: "fa-regular fa-circle-check",
+        badgeCount: tabBadges.admin_jobhistory,
+      },
       {
         key: "admin_tech_bookings",
         label: "Tech Bookings",
@@ -97,16 +126,22 @@ export default function AccountShellPage() {
     );
 
     return base;
-  }, [role, tabBadges.admin_jobs, tabBadges.admin_tech_bookings]);
-
-  const [activeTab, setActiveTab] = useState<TabKey>("account");
+  }, [
+    role,
+    tabBadges.bookings,
+    tabBadges.tech,
+    tabBadges.admin_jobs,
+    tabBadges.admin_jobhistory,
+    tabBadges.admin_tech_bookings,
+  ]);
 
   function handleTabClick(key: TabKey) {
     setActiveTab(key);
 
-    if (key === "admin_jobs" || key === "admin_tech_bookings") {
-      setTabBadges((prev) => ({ ...prev, [key]: 0 }));
-    }
+    setTabBadges((prev) => ({
+      ...prev,
+      [key]: 0,
+    }));
   }
 
   useEffect(() => {
@@ -125,14 +160,6 @@ export default function AccountShellPage() {
 
         const r = normalizeRole(res.user as AuthedUser);
         setRole(r);
-
-        if (r === "admin") {
-          setTabBadges((prev) => ({
-            ...prev,
-            admin_jobs: prev.admin_jobs || 0,
-            admin_tech_bookings: prev.admin_tech_bookings || 0,
-          }));
-        }
       } catch (e: unknown) {
         if (!alive) return;
         const msg = e instanceof Error ? e.message : "Not logged in";
@@ -149,8 +176,85 @@ export default function AccountShellPage() {
   }, [router]);
 
   useEffect(() => {
-    if (!tabs.find((t) => t.key === activeTab)) setActiveTab("account");
+    if (!tabs.find((t) => t.key === activeTab)) {
+      setActiveTab("account");
+    }
   }, [tabs, activeTab]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeRealtimeEvent((evt: RealtimeEvent) => {
+      // Don't badge if user is currently viewing the relevant tab.
+      if (role === "admin") {
+        switch (evt.type) {
+          case "booking.created":
+          case "booking.accepted":
+          case "booking.cancelled":
+          case "booking.edited":
+          case "message.new":
+            if (activeTab !== "admin_jobs") {
+              incrementBadge(setTabBadges, "admin_jobs");
+            }
+            break;
+
+          case "booking.assigned":
+          case "booking.reassigned":
+          case "booking.price_set":
+            if (activeTab !== "admin_tech_bookings") {
+              incrementBadge(setTabBadges, "admin_tech_bookings");
+            }
+            break;
+
+          case "booking.completed":
+            if (activeTab !== "admin_jobhistory") {
+              incrementBadge(setTabBadges, "admin_jobhistory");
+            }
+            break;
+
+          default:
+            break;
+        }
+      }
+
+      if (role === "technician") {
+        switch (evt.type) {
+          case "booking.assigned":
+          case "booking.reassigned":
+          case "booking.cancelled":
+          case "booking.price_set":
+          case "message.new":
+            if (activeTab !== "tech") {
+              incrementBadge(setTabBadges, "tech");
+            }
+            break;
+
+          default:
+            break;
+        }
+      }
+
+      if (role === "customer") {
+        switch (evt.type) {
+          case "booking.accepted":
+          case "booking.assigned":
+          case "booking.reassigned":
+          case "booking.cancelled":
+          case "booking.completed":
+          case "booking.price_set":
+          case "message.new":
+          case "booking.edited":
+            if (activeTab !== "bookings") {
+              incrementBadge(setTabBadges, "bookings");
+            }
+            break;
+
+          default:
+            break;
+        }
+      }
+    });
+
+    return unsubscribe;
+  }, [role, activeTab]);
 
   const slideTabs: Array<SlideTabItem<TabKey>> = useMemo(
     () =>
@@ -174,7 +278,6 @@ export default function AccountShellPage() {
           </div>
         ) : null}
 
-        {/* Slide tabs bar */}
         <div className="w-full border-b pb-3 sm:pb-4" style={{ borderColor: "rgb(var(--border))" }}>
           <div className="-mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0">
             <div className="min-w-max">
@@ -183,7 +286,6 @@ export default function AccountShellPage() {
           </div>
         </div>
 
-        {/* Content card */}
         <div
           className="rounded-2xl border p-4 sm:p-5 md:p-6"
           style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}

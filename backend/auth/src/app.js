@@ -25,7 +25,6 @@ const adminEditServiceRouter = require("../routes/adminServices");
 const adminTechBookingsRouter = require("../routes/adminTechBookings");
 
 // Prices Routes Pipeline
-
 const bookingPricesRouter = require("../routes/bookingPrices.js")
 
 // Metrics routes pipeline
@@ -40,6 +39,9 @@ const adminRevenueMetrics = require("../routes/adminRevenueMetrics");
 
 // Messaging system pipeline
 const messages = require("../routes/messages");
+
+// Notifications Pipeline
+const notificationsRouter = require("../routes/notifications");
 
 const app = express();
 
@@ -115,6 +117,9 @@ app.use(adminRevenueMetrics);
 
 // Messaging system pipeline
 app.use(messages);
+
+// Notifications Pipeline
+app.use(notificationsRouter);
 
 // Prices Routes Pipeline
 app.use(bookingPricesRouter)

@@ -3,10 +3,7 @@ const { z } = require("zod");
 const { pool } = require("../src/db");
 const { requireAuth } = require("../middleware/requireAuth");
 const { requireRole } = require("../middleware/requireRole");
-const {
-  broadcastToRoles,
-  broadcastToUser,
-} = require("../src/realtime");
+const { broadcastToRoles, broadcastToUser } = require("../src/realtime");
 
 const router = express.Router();
 
@@ -15,13 +12,8 @@ const createBookingSchema = z
     servicePublicId: z.string().uuid(),
     startsAt: z.string().datetime(),
     endsAt: z.string().datetime(),
-
-    // Customer booking always sends address
     address: z.string().min(5),
-
     notes: z.string().max(2000).optional(),
-
-    // Admin/CRM payloads (optional)
     customerPublicId: z.string().uuid().optional(),
     lead: z
       .object({
@@ -33,8 +25,6 @@ const createBookingSchema = z
         address: z.string().min(5),
       })
       .optional(),
-
-    // Optional override address when booking for an existing customer (admin use)
     addressOverride: z.string().min(5).optional(),
   })
   .superRefine((x, ctx) => {
@@ -61,10 +51,6 @@ async function addEvent(client, bookingId, actorUserId, eventType, metadata = {}
   );
 }
 
-/**
- * POST /bookings
- * Creates booking (pending) + logs event + commits.
- */
 router.post("/", requireAuth, async (req, res, next) => {
   const client = await pool.connect();
   try {
@@ -98,7 +84,6 @@ router.post("/", requireAuth, async (req, res, next) => {
     const booking = created.rows[0];
 
     await addEvent(client, booking.id, userId, "created", {});
-
     await client.query("COMMIT");
 
     broadcastToRoles(["admin", "superuser"], {
@@ -139,7 +124,6 @@ router.patch("/:publicId", requireAuth, requireRole("customer"), async (req, res
   try {
     const bookingPublicId = req.params.publicId;
     const userId = req.user.id;
-
     const payload = updateBookingSchema.parse(req.body);
 
     await client.query("BEGIN");
@@ -255,7 +239,6 @@ router.patch("/:publicId", requireAuth, requireRole("customer"), async (req, res
   }
 });
 
-// Cancel my booking (customer)
 router.patch("/:publicId/cancel", requireAuth, async (req, res, next) => {
   const client = await pool.connect();
   try {
@@ -343,7 +326,6 @@ router.patch("/:publicId/cancel", requireAuth, async (req, res, next) => {
   }
 });
 
-// GET /bookings/availability?date=YYYY-MM-DD&tzOffsetMinutes=480
 router.get("/availability", requireAuth, async (req, res, next) => {
   try {
     const date = String(req.query.date || "").trim();

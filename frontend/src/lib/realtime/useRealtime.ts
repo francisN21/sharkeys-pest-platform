@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import type { RealtimeEvent } from "./events";
 import { notifyFromEvent } from "./notifyFromEvent";
+import { publishRealtimeEvent } from "./realtimeBus";
 
 type SystemEvent =
   | { type: "system.connected"; at?: string; userId?: number | null; roles?: string[] }
@@ -42,11 +43,15 @@ export function useRealtime(url?: string | null) {
         try {
           const parsed = JSON.parse(String(ev.data));
 
-          if (isSystemEvent(parsed)) {
-            return;
-          }
+          if (isSystemEvent(parsed)) return;
 
-          notifyFromEvent(parsed as RealtimeEvent);
+          const realtimeEvent = parsed as RealtimeEvent;
+
+          // 1) toast + browser notif
+          notifyFromEvent(realtimeEvent);
+
+          // 2) app-wide UI reactions (tab badges, counters, etc.)
+          publishRealtimeEvent(realtimeEvent);
         } catch {
           // ignore malformed payloads
         }
