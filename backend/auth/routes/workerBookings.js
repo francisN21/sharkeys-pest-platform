@@ -1,9 +1,9 @@
-// backend/auth/routes/workerBookings.js
 const express = require("express");
 const { pool } = require("../src/db");
 const { requireAuth } = require("../middleware/requireAuth");
 const { requireRole } = require("../middleware/requireRole");
 const { broadcastToBookingParticipants } = require("../src/realtime");
+const { createNotifications } = require("../src/notifications");
 
 const router = express.Router();
 
@@ -13,6 +13,20 @@ async function addEvent(client, bookingId, actorUserId, eventType, metadata = {}
      VALUES ($1, $2, $3, $4::jsonb)`,
     [bookingId, actorUserId || null, eventType, JSON.stringify(metadata)]
   );
+}
+
+async function getAdminAndSuperUserIds(client) {
+  const r = await client.query(
+    `
+    SELECT DISTINCT user_id
+    FROM user_roles
+    WHERE role IN ('admin', 'superuser')
+    `
+  );
+
+  return r.rows
+    .map((row) => Number(row.user_id))
+    .filter((x) => Number.isInteger(x) && x > 0);
 }
 
 /**
@@ -36,7 +50,6 @@ router.get("/assigned", requireAuth, requireRole("worker"), async (req, res, nex
         b.cancelled_at,
         s.title AS service_title,
 
-        -- registered customer fields (nullable for leads)
         cu.public_id AS customer_public_id,
         cu.first_name AS customer_first_name,
         cu.last_name AS customer_last_name,
@@ -45,7 +58,6 @@ router.get("/assigned", requireAuth, requireRole("worker"), async (req, res, nex
         cu.address AS customer_address,
         cu.account_type AS customer_account_type,
 
-        -- lead fields (nullable for registered customers)
         l.public_id AS lead_public_id,
         l.first_name AS lead_first_name,
         l.last_name AS lead_last_name,
@@ -56,8 +68,6 @@ router.get("/assigned", requireAuth, requireRole("worker"), async (req, res, nex
       FROM bookings b
       JOIN booking_assignments ba ON ba.booking_id = b.id
       JOIN services s ON s.id = b.service_id
-
-      -- IMPORTANT: LEFT JOIN so lead bookings don't get filtered out
       LEFT JOIN users cu ON cu.id = b.customer_user_id
       LEFT JOIN leads l ON l.id = b.lead_id
 
@@ -82,11 +92,10 @@ router.get("/assigned", requireAuth, requireRole("worker"), async (req, res, nex
  */
 router.get("/history", requireAuth, requireRole("worker"), async (req, res, next) => {
   try {
-    const pageSize = Math.max(1, Math.min(30, Number(req.query.pageSize ?? 30))); // max 30
+    const pageSize = Math.max(1, Math.min(30, Number(req.query.pageSize ?? 30)));
     const page = Math.max(1, Number(req.query.page ?? 1));
     const offset = (page - 1) * pageSize;
 
-    // total count (PERMANENT: completed_worker_user_id)
     const countRes = await pool.query(
       `
       SELECT COUNT(*)::int AS total
@@ -100,7 +109,6 @@ router.get("/history", requireAuth, requireRole("worker"), async (req, res, next
     const total = countRes.rows[0]?.total ?? 0;
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-    // page data
     const q = await pool.query(
       `
       SELECT
@@ -116,7 +124,6 @@ router.get("/history", requireAuth, requireRole("worker"), async (req, res, next
         b.cancelled_at,
         s.title AS service_title,
 
-        -- registered customer fields (nullable for leads)
         cu.public_id AS customer_public_id,
         cu.first_name AS customer_first_name,
         cu.last_name AS customer_last_name,
@@ -125,7 +132,6 @@ router.get("/history", requireAuth, requireRole("worker"), async (req, res, next
         cu.address AS customer_address,
         cu.account_type AS customer_account_type,
 
-        -- lead fields (nullable for registered customers)
         l.public_id AS lead_public_id,
         l.first_name AS lead_first_name,
         l.last_name AS lead_last_name,
@@ -135,8 +141,6 @@ router.get("/history", requireAuth, requireRole("worker"), async (req, res, next
 
       FROM bookings b
       JOIN services s ON s.id = b.service_id
-
-      -- IMPORTANT: LEFT JOIN so lead bookings don't get filtered out
       LEFT JOIN users cu ON cu.id = b.customer_user_id
       LEFT JOIN leads l ON l.id = b.lead_id
 
@@ -176,9 +180,15 @@ router.patch("/:id/complete", requireAuth, requireRole("worker"), async (req, re
     await client.query("BEGIN");
 
     const b = await client.query(
-      `SELECT id, status, completed_worker_user_id FROM bookings WHERE public_id = $1 FOR UPDATE`,
+      `
+      SELECT id, status, completed_worker_user_id, customer_user_id
+      FROM bookings
+      WHERE public_id = $1
+      FOR UPDATE
+      `,
       [bookingPublicId]
     );
+
     if (b.rowCount === 0) {
       await client.query("ROLLBACK");
       return res.status(404).json({ ok: false, message: "Booking not found" });
@@ -186,10 +196,12 @@ router.patch("/:id/complete", requireAuth, requireRole("worker"), async (req, re
 
     const booking = b.rows[0];
 
-    // Idempotent: if already completed, do not mutate final audit field
     if (booking.status === "completed") {
       await client.query("COMMIT");
-      return res.json({ ok: true, booking: { public_id: bookingPublicId, status: "completed" } });
+      return res.json({
+        ok: true,
+        booking: { public_id: bookingPublicId, status: "completed" },
+      });
     }
 
     if (booking.status !== "assigned") {
@@ -197,7 +209,6 @@ router.patch("/:id/complete", requireAuth, requireRole("worker"), async (req, re
       return res.status(409).json({ ok: false, message: "Booking must be assigned first" });
     }
 
-    // Ensure worker is currently assigned (current assignment table)
     const a = await client.query(
       `SELECT worker_user_id FROM booking_assignments WHERE booking_id = $1 LIMIT 1`,
       [booking.id]
@@ -226,10 +237,87 @@ router.patch("/:id/complete", requireAuth, requireRole("worker"), async (req, re
       [booking.id, workerId]
     );
 
-    // keep your existing event name to avoid breaking dashboards that rely on it
     await addEvent(client, booking.id, workerId, "completed", {
       completed_worker_user_id: workerId,
     });
+
+    /**
+     * Enrich completion payload for nicer realtime toast:
+     * - technician name
+     * - final price
+     */
+    const enrichRes = await client.query(
+      `
+      SELECT
+        u.first_name AS worker_first_name,
+        u.last_name AS worker_last_name,
+        bp.final_price_cents
+      FROM bookings b
+      LEFT JOIN users u ON u.id = b.completed_worker_user_id
+      LEFT JOIN booking_prices bp ON bp.booking_id = b.id
+      WHERE b.id = $1
+      LIMIT 1
+      `,
+      [booking.id]
+    );
+
+    const enrich = enrichRes.rows[0] ?? null;
+    const technicianName = enrich
+      ? [enrich.worker_first_name, enrich.worker_last_name].filter(Boolean).join(" ").trim() || null
+      : null;
+
+    const finalPriceCents =
+      enrich?.final_price_cents === null || enrich?.final_price_cents === undefined
+        ? undefined
+        : Number(enrich.final_price_cents);
+
+    const adminUserIds = await getAdminAndSuperUserIds(client);
+
+    const notificationRows = adminUserIds.map((adminUserId) => ({
+      userId: adminUserId,
+      kind: "booking.completed",
+      title: "Booking completed",
+      body:
+        `Booking ${bookingPublicId} was completed` +
+        (technicianName ? ` by ${technicianName}` : "") +
+        (typeof finalPriceCents === "number"
+          ? ` for $${(finalPriceCents / 100).toFixed(2)}`
+          : "") +
+        ".",
+      bookingId: booking.id,
+      bookingPublicId,
+      metadata: {
+        bookingPublicId,
+        completedByUserId: workerId,
+        technicianName,
+        finalPriceCents,
+      },
+    }));
+
+    if (booking.customer_user_id) {
+      notificationRows.push({
+        userId: booking.customer_user_id,
+        kind: "booking.completed",
+        title: "Your booking is complete",
+        body:
+          `Booking ${bookingPublicId} has been completed` +
+          (technicianName ? ` by ${technicianName}` : "") +
+          (typeof finalPriceCents === "number"
+            ? ` for $${(finalPriceCents / 100).toFixed(2)}`
+            : "") +
+          ".",
+        bookingId: booking.id,
+        bookingPublicId,
+        metadata: {
+          bookingPublicId,
+          completedByUserId: workerId,
+          technicianName,
+          finalPriceCents,
+        },
+      });
+    }
+
+    await createNotifications(client, notificationRows);
 
     await client.query("COMMIT");
 
@@ -240,13 +328,15 @@ router.patch("/:id/complete", requireAuth, requireRole("worker"), async (req, re
         type: "booking.completed",
         bookingId: bookingPublicId,
         completedAt: updated.rows[0].completed_at,
+        technicianName,
+        finalPriceCents,
       },
       {
         includeAdminRoles: true,
         excludeUserIds: [workerId],
       }
     );
-    
+
     res.json({ ok: true, booking: updated.rows[0] });
   } catch (e) {
     try {
