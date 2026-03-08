@@ -1,9 +1,9 @@
-// backend/auth/routes/messages.js
 const express = require("express");
 const { pool } = require("../src/db");
 const { z } = require("zod");
 const { requireAuth } = require("../middleware/requireAuth");
 const { broadcastToBookingParticipants } = require("../src/realtime");
+const { createNotifications } = require("../src/notifications");
 
 const router = express.Router();
 
@@ -24,6 +24,23 @@ function computeSenderRole(roles) {
 async function getBookingIdByPublicId(publicId) {
   const r = await pool.query(`SELECT id FROM bookings WHERE public_id = $1 LIMIT 1`, [publicId]);
   return r.rows[0]?.id ?? null;
+}
+
+async function getBookingLabelById(bookingId) {
+  const r = await pool.query(
+    `
+    SELECT
+      b.public_id,
+      s.title AS service_title
+    FROM bookings b
+    JOIN services s ON s.id = b.service_id
+    WHERE b.id = $1
+    LIMIT 1
+    `,
+    [bookingId]
+  );
+
+  return r.rows[0] ?? null;
 }
 
 /**
@@ -75,6 +92,50 @@ async function getMessageWithUserFields(messageId, bookingId) {
   );
 
   return r.rows[0] ?? null;
+}
+
+async function getNotificationRecipientUserIds(client, bookingId, excludeUserIds = []) {
+  const exclude = new Set(
+    (Array.isArray(excludeUserIds) ? excludeUserIds : [])
+      .map((x) => Number(x))
+      .filter((x) => Number.isInteger(x) && x > 0)
+  );
+
+  const participantRes = await client.query(
+    `
+    SELECT DISTINCT bp.user_id
+    FROM booking_participants bp
+    WHERE bp.booking_id = $1
+      AND bp.removed_at IS NULL
+    `,
+    [bookingId]
+  );
+
+  const adminRes = await client.query(
+    `
+    SELECT DISTINCT ur.user_id
+    FROM user_roles ur
+    WHERE ur.role IN ('admin', 'superuser')
+    `
+  );
+
+  const ids = new Set();
+
+  for (const row of participantRes.rows) {
+    const id = Number(row.user_id);
+    if (Number.isInteger(id) && id > 0 && !exclude.has(id)) {
+      ids.add(id);
+    }
+  }
+
+  for (const row of adminRes.rows) {
+    const id = Number(row.user_id);
+    if (Number.isInteger(id) && id > 0 && !exclude.has(id)) {
+      ids.add(id);
+    }
+  }
+
+  return Array.from(ids);
 }
 
 const sendSchema = z.object({
@@ -174,7 +235,7 @@ router.post("/admin/bookings/:publicId/messages", requireAuth, async (req, res, 
 
     const insertedId = ins.rows[0].id;
 
-    const message = await client.query(
+    const msgRes = await client.query(
       `
       SELECT
         m.id,
@@ -197,8 +258,33 @@ router.post("/admin/bookings/:publicId/messages", requireAuth, async (req, res, 
       [insertedId, bookingId]
     );
 
-    const msg = message.rows[0] ?? ins.rows[0];
-    const fromName = [msg.first_name, msg.last_name].filter(Boolean).join(" ").trim() || null;
+    const msg = msgRes.rows[0] ?? ins.rows[0];
+    const fromName =
+      [msg.first_name, msg.last_name].filter(Boolean).join(" ").trim() || null;
+
+    const bookingLabel = await getBookingLabelById(bookingId);
+    const serviceTitle = bookingLabel?.service_title ?? null;
+
+    const recipientUserIds = await getNotificationRecipientUserIds(client, bookingId, [userId]);
+
+    const notificationRows = recipientUserIds.map((recipientUserId) => ({
+      userId: recipientUserId,
+      kind: "message.new",
+      title: fromName ? `New message from ${fromName}` : "New message",
+      body: msg.body,
+      bookingId,
+      bookingPublicId: publicId,
+      messageId: msg.id,
+      metadata: {
+        bookingPublicId: publicId,
+        messageId: msg.id,
+        fromName,
+        senderRole: msg.sender_role,
+        serviceTitle,
+      },
+    }));
+
+    await createNotifications(client, notificationRows);
 
     await client.query("COMMIT");
 
@@ -211,7 +297,6 @@ router.post("/admin/bookings/:publicId/messages", requireAuth, async (req, res, 
         at: msg.created_at,
         snippet: msg.body,
         fromName,
-        senderRole: msg.sender_role,
       },
       {
         includeAdminRoles: true,
