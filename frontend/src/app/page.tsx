@@ -89,7 +89,7 @@ export default function HomePage() {
 
                 <div className="flex flex-wrap gap-3">
                   <Link
-                    href="/pest-control-bay-area"
+                    href="/sharkeys-pest-control-booking"
                     className="rounded-xl px-5 py-3 text-sm font-semibold hover:opacity-90"
                     style={{
                       background: "rgb(var(--primary))",
@@ -208,7 +208,7 @@ export default function HomePage() {
 
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link
-                  href="/pest-control-bay-area"
+                  href="/sharkeys-pest-control-booking"
                   className="rounded-xl px-5 py-3 text-sm font-semibold hover:opacity-90"
                   style={{
                     background: "rgb(var(--primary))",
@@ -337,17 +337,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* SERVICE AREA STRIP */}
-      <section className="snap-start">
-        <div className={`${CONTAINER} py-10`}>
-          <ScrollReveal>
-            <ServiceAreaStrip
-              title="Serving"
-              areas={SERVICE_AREAS}
-            />
-          </ScrollReveal>
-        </div>
-      </section>
+
 
       {/* CONTACT */}
       <section id="contact" className={`${SECTION} scroll-mt-24 md:scroll-mt-28`}>
