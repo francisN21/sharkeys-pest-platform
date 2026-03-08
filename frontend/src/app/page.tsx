@@ -75,7 +75,7 @@ export default function HomePage() {
 
               <div className="flex flex-wrap gap-3">
                 <Link
-                  href="/pest-control-bay-area"
+                  href="/newcustomerbooking"
                   className="rounded-xl px-5 py-3 text-sm font-semibold hover:opacity-90"
                   style={{
                     background: "rgb(var(--primary))",
@@ -157,7 +157,7 @@ export default function HomePage() {
 
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link
-                  href="/pest-control-bay-area"
+                  href="/newcustomerbooking"
                   className="rounded-xl px-5 py-3 text-sm font-semibold hover:opacity-90"
                   style={{
                     background: "rgb(var(--primary))",
