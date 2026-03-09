@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Navbar from "../../../components/Navbar";
+import PageTracker from "../../../components/PageTracker";
 
 export default function CommonPestsBeniciaPage() {
 
@@ -9,7 +10,15 @@ export default function CommonPestsBeniciaPage() {
     <main className="min-h-screen">
       <Navbar />
 
-      <article className="mx-auto max-w-4xl px-4 py-16 space-y-8">
+      <article className="mx-auto max-w-4xl space-y-8 px-4 py-16">
+        <PageTracker
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Blog", href: "/blog" },
+            { label: "Common Pests in Benicia, CA Homes" },
+          ]}
+        />
+
         <header>
           <h1 className="text-3xl font-semibold">
             Common Pests in Benicia, CA Homes
@@ -22,7 +31,6 @@ export default function CommonPestsBeniciaPage() {
 
         <section className="space-y-6">
           <h2 className="text-xl font-semibold">Ants</h2>
-
           <p>
             Ant infestations are one of the most frequent pest issues in Benicia
             homes. They often enter through small cracks searching for food and
@@ -31,7 +39,6 @@ export default function CommonPestsBeniciaPage() {
           </p>
 
           <h2 className="text-xl font-semibold">Rodents</h2>
-
           <p>
             Mice and rats often enter homes through attic vents, crawlspaces, or
             foundation gaps. Rodents can cause structural damage and contaminate
@@ -39,7 +46,6 @@ export default function CommonPestsBeniciaPage() {
           </p>
 
           <h2 className="text-xl font-semibold">Spiders</h2>
-
           <p>
             Spiders thrive in quiet indoor spaces such as garages, storage areas,
             and basements. While most are harmless, spider infestations usually
@@ -47,7 +53,6 @@ export default function CommonPestsBeniciaPage() {
           </p>
 
           <h2 className="text-xl font-semibold">Wasps and Stinging Insects</h2>
-
           <p>
             Wasps often build nests under rooflines, patios, and outdoor
             structures. These insects can become aggressive when nests are
@@ -57,7 +62,6 @@ export default function CommonPestsBeniciaPage() {
 
         <section className="space-y-4">
           <h2 className="text-xl font-semibold">When to call a professional</h2>
-
           <p>
             If you notice recurring pest activity, unusual noises in walls or
             attics, or visible pest damage, professional pest control may be
