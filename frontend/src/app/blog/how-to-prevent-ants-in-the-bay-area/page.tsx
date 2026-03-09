@@ -1,12 +1,21 @@
 import Link from "next/link";
 import Navbar from "../../../components/Navbar";
+import PageTracker from "../../../components/PageTracker";
 
 export default function AntPreventionPage() {
   return (
     <main className="min-h-screen">
       <Navbar />
 
-      <article className="mx-auto max-w-4xl px-4 py-16 space-y-8">
+      <article className="mx-auto max-w-4xl space-y-8 px-4 py-16">
+        <PageTracker
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Blog", href: "/blog" },
+            { label: "How to Prevent Ant Infestations in the Bay Area" },
+          ]}
+        />
+
         <header>
           <h1 className="text-3xl font-semibold">
             How to Prevent Ant Infestations in the Bay Area
@@ -22,7 +31,6 @@ export default function AntPreventionPage() {
 
         <section className="space-y-6">
           <h2 className="text-xl font-semibold">Keep food sealed</h2>
-
           <p>
             Ants are attracted to sugar, grease, and crumbs. Store food in sealed
             containers and clean kitchen surfaces regularly to eliminate food
@@ -30,7 +38,6 @@ export default function AntPreventionPage() {
           </p>
 
           <h2 className="text-xl font-semibold">Seal entry points</h2>
-
           <p>
             Small cracks around doors, windows, and foundation areas can allow
             ants to enter your home. Sealing these entry points can reduce pest
@@ -38,7 +45,6 @@ export default function AntPreventionPage() {
           </p>
 
           <h2 className="text-xl font-semibold">Maintain outdoor areas</h2>
-
           <p>
             Trim vegetation away from the house and remove debris near the
             foundation. Ant colonies often form near landscaping or garden
@@ -46,7 +52,6 @@ export default function AntPreventionPage() {
           </p>
 
           <h2 className="text-xl font-semibold">Schedule routine pest control</h2>
-
           <p>
             Preventative pest control services help manage pest populations
             before infestations become severe.
