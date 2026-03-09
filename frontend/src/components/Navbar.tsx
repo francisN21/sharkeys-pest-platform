@@ -26,7 +26,8 @@ const NAV: NavItem[] = [
   { label: "Booking", href: "#booking" },
   { label: "Services", href: "#services" },
   { label: "About", href: "#about" },
-  { label: "Contact", href: "#contact" },
+  { label: "Blog", href: "/blog" },
+  { label: "Service Area", href: "/service-area" },
 ];
 
 type NavbarUser = {
