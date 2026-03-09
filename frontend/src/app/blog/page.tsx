@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Navbar from "../../components/Navbar";
+import PageTracker from "../../components/PageTracker";
 
 const POSTS = [
   {
@@ -24,7 +25,14 @@ export default function BlogPage() {
     <main className="min-h-screen">
       <Navbar />
 
-      <section className="mx-auto max-w-5xl px-4 py-16 space-y-8">
+      <section className="mx-auto max-w-5xl space-y-8 px-4 py-16">
+        <PageTracker
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Blog" },
+          ]}
+        />
+
         <div>
           <h1 className="text-3xl font-semibold">Pest Control Blog</h1>
           <p className="mt-2 text-sm" style={{ color: "rgb(var(--muted))" }}>
