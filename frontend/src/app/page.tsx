@@ -36,7 +36,7 @@ const SERVICES = [
   {
     title: "Customized Plans",
     desc: "Tailored solutions for residential and commercial needs based on your property and pest pressure.",
-    href: "/pest-control-bay-area",
+    href: "/residential-pest-control-bay-area",
   },
 ];
 
@@ -155,10 +155,7 @@ export default function HomePage() {
           </div>
 
           <ScrollReveal>
-            <ServiceAreaStrip
-              title="Servicing"
-              areas={SERVICE_AREAS}
-            />
+            <ServiceAreaStrip title="Servicing" areas={SERVICE_AREAS} />
           </ScrollReveal>
         </div>
       </section>
@@ -289,6 +286,7 @@ export default function HomePage() {
                     Serving the Bay Area community with pride.
                   </div>
                 </div>
+
                 <div
                   className="rounded-2xl border p-4"
                   style={{ borderColor: "rgb(var(--border))" }}
@@ -296,6 +294,44 @@ export default function HomePage() {
                   <div className="text-sm font-semibold">Owner-operated</div>
                   <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
                     Direct attention and oversight on every service call.
+                  </div>
+                </div>
+
+                <div
+                  className="rounded-2xl border p-4"
+                  style={{
+                    borderColor: "rgb(var(--border))",
+                    background: "rgb(var(--card))",
+                  }}
+                >
+                  <div className="text-sm font-semibold">Green Pro Certified</div>
+                  <div
+                    className="mt-3 flex min-h-[96px] items-center justify-center rounded-xl border border-dashed text-sm"
+                    style={{
+                      borderColor: "rgb(var(--border))",
+                      color: "rgb(var(--muted))",
+                    }}
+                  >
+                    Add Green Pro logo here
+                  </div>
+                </div>
+
+                <div
+                  className="rounded-2xl border p-4"
+                  style={{
+                    borderColor: "rgb(var(--border))",
+                    background: "rgb(var(--card))",
+                  }}
+                >
+                  <div className="text-sm font-semibold">Bird Barrier Certified Installer</div>
+                  <div
+                    className="mt-3 flex min-h-[96px] items-center justify-center rounded-xl border border-dashed text-sm"
+                    style={{
+                      borderColor: "rgb(var(--border))",
+                      color: "rgb(var(--muted))",
+                    }}
+                  >
+                    Add Bird Barrier logo here
                   </div>
                 </div>
               </div>
@@ -332,48 +368,73 @@ export default function HomePage() {
                   Whether residential or commercial, we treat every space with the same care and respect as our own.
                 </p>
               </div>
-            </div>
-          </ScrollReveal>
-        </div>
-      </section>
 
-
-
-      {/* CONTACT */}
-      <section id="contact" className={`${SECTION} scroll-mt-24 md:scroll-mt-28`}>
-        <div className={CONTAINER}>
-          <ScrollReveal className="mx-auto max-w-4xl">
-            <div className="rounded-3xl border p-8" style={{ borderColor: "rgb(var(--border))" }}>
-              <h2 className="text-2xl font-semibold tracking-tight">Contact</h2>
-              <p className="mt-2" style={{ color: "rgb(var(--muted))" }}>
-                Need help fast? Contact us and we’ll get you taken care of.
-              </p>
-
-              <div className="mt-6 grid gap-3 text-sm md:grid-cols-3">
-                <div className="rounded-2xl p-4" style={{ background: "rgb(var(--card))" }}>
-                  <div className="font-semibold" style={{ color: "rgb(var(--fg))" }}>Email</div>
-                  <div className="mt-1" style={{ color: "rgb(var(--muted))" }}>
-                    Office.sharkyspestcontrol@gmail.com
+              <div
+                className="mt-6 rounded-2xl border p-5"
+                style={{
+                  borderColor: "rgb(var(--border))",
+                  background: "rgba(var(--bg), 0.2)",
+                }}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-semibold" style={{ color: "rgb(var(--fg))" }}>
+                      Need help fast?
+                    </h3>
+                    <p className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
+                      Contact Sharkys Pest Control and we’ll help you get scheduled.
+                    </p>
                   </div>
+
+                  <Link
+                    href="/sharkeys-pest-control-booking"
+                    className="shrink-0 rounded-xl px-4 py-2 text-sm font-semibold hover:opacity-90"
+                    style={{
+                      background: "rgb(var(--primary))",
+                      color: "rgb(var(--primary-fg))",
+                    }}
+                  >
+                    Book now
+                  </Link>
                 </div>
 
-                <div className="rounded-2xl p-4" style={{ background: "rgb(var(--card))" }}>
-                  <div className="font-semibold" style={{ color: "rgb(var(--fg))" }}>Office</div>
-                  <div className="mt-1" style={{ color: "rgb(var(--muted))" }}>
-                    (707) 361-5023
+                <div className="mt-5 grid gap-3 text-sm sm:grid-cols-3">
+                  <div
+                    className="rounded-xl p-4"
+                    style={{ background: "rgb(var(--card))" }}
+                  >
+                    <div className="font-semibold" style={{ color: "rgb(var(--fg))" }}>
+                      Email
+                    </div>
+                    <div className="mt-1 break-all" style={{ color: "rgb(var(--muted))" }}>
+                      Office.sharkyspestcontrol@gmail.com
+                    </div>
+                  </div>
+
+                  <div
+                    className="rounded-xl p-4"
+                    style={{ background: "rgb(var(--card))" }}
+                  >
+                    <div className="font-semibold" style={{ color: "rgb(var(--fg))" }}>
+                      Office
+                    </div>
+                    <div className="mt-1" style={{ color: "rgb(var(--muted))" }}>
+                      (707) 361-5023
+                    </div>
+                  </div>
+
+                  <div
+                    className="rounded-xl p-4"
+                    style={{ background: "rgb(var(--card))" }}
+                  >
+                    <div className="font-semibold" style={{ color: "rgb(var(--fg))" }}>
+                      Field Operations
+                    </div>
+                    <div className="mt-1" style={{ color: "rgb(var(--muted))" }}>
+                      (707) 716-9469
+                    </div>
                   </div>
                 </div>
-
-                <div className="rounded-2xl p-4" style={{ background: "rgb(var(--card))" }}>
-                  <div className="font-semibold" style={{ color: "rgb(var(--fg))" }}>Field Operations</div>
-                  <div className="mt-1" style={{ color: "rgb(var(--muted))" }}>
-                    (707) 716-9469
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-8 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                © {new Date().getFullYear()} Sharkys Pest Control. All rights reserved.
               </div>
             </div>
           </ScrollReveal>

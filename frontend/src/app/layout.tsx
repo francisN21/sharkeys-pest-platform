@@ -31,6 +31,36 @@ export default function RootLayout({
           rel="stylesheet"
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
         />
+
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "PestControl",
+              "name": "Sharkys Pest Control",
+              "image": "https://sharkeyspestcontrolbayarea.com/main-logo.jpg",
+              "telephone": "+1-707-361-5023",
+              "email": "office.sharkyspestcontrol@gmail.com",
+              "address": {
+                "@type": "PostalAddress",
+                "addressLocality": "Benicia",
+                "addressRegion": "CA",
+                "addressCountry": "US"
+              },
+              "areaServed": [
+                "Benicia CA",
+                "Vallejo CA",
+                "Fairfield CA",
+                "Concord CA",
+                "Martinez CA",
+                "San Francisco CA",
+                "Oakland CA"
+              ],
+              "url": "https://sharkeyspestcontrolbayarea.com"
+            })
+          }}
+        />
       </head>
 
       <body>
