@@ -115,7 +115,7 @@ function isSuperUser(res: MeResponse | null) {
   return rolesRaw.map((r) => String(r).trim().toLowerCase()).includes("superuser");
 }
 
-export default function ProfilePage() {
+export default function AccountViewPage() {
   const router = useRouter();
 
   const [data, setData] = useState<MeResponse | null>(null);
