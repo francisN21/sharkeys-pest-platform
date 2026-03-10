@@ -18,6 +18,10 @@ import {
 import { subscribeRealtimeEvent } from "../lib/realtime/realtimeBus";
 import type { RealtimeEvent } from "../lib/realtime/events";
 import NotificationDropdown from "./notifications/NotificationDropdown";
+import {
+  notifyBrowser,
+  requestBrowserNotificationPermission,
+} from "../lib/notify";
 
 type NavItem = { label: string; href: string };
 
@@ -36,6 +40,8 @@ type NavbarUser = {
   last_name?: string | null;
 };
 
+const BROWSER_NOTIFY_PREF_KEY = "spc_browser_notifications_enabled";
+
 function getInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   const a = parts[0]?.[0] ?? "";
@@ -43,7 +49,11 @@ function getInitials(name: string) {
   return (a + b).toUpperCase() || "U";
 }
 
-function displayName(user: { first_name?: string | null; last_name?: string | null; email: string }) {
+function displayName(user: {
+  first_name?: string | null;
+  last_name?: string | null;
+  email: string;
+}) {
   const first = (user.first_name || "").trim();
   const last = (user.last_name || "").trim();
   const full = `${first} ${last}`.trim();
@@ -228,19 +238,38 @@ export default function Navbar() {
   const [notifLoading, setNotifLoading] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
+  const [browserNotifEnabled, setBrowserNotifEnabled] = useState(false);
+  const [browserNotifPermission, setBrowserNotifPermission] = useState<
+    NotificationPermission | "unsupported"
+  >("unsupported");
+
   const effectiveUser = (user as NavbarUser | null) ?? resolvedUser;
   const isAuthed = !!effectiveUser;
 
-  const name = useMemo(() => (effectiveUser ? displayName(effectiveUser) : ""), [effectiveUser]);
+  const name = useMemo(
+    () => (effectiveUser ? displayName(effectiveUser) : ""),
+    [effectiveUser]
+  );
   const initials = useMemo(() => (name ? getInitials(name) : "U"), [name]);
-
-  const showLandingNav = pathname === "/";
 
   useEffect(() => {
     setMenuOpen(false);
     setAccountOpen(false);
     setNotifOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!("Notification" in window)) {
+      setBrowserNotifPermission("unsupported");
+      setBrowserNotifEnabled(false);
+      return;
+    }
+
+    setBrowserNotifPermission(Notification.permission);
+    const saved = window.localStorage.getItem(BROWSER_NOTIFY_PREF_KEY);
+    setBrowserNotifEnabled(saved === "true" && Notification.permission === "granted");
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -265,11 +294,19 @@ export default function Navbar() {
     }
 
     if (!loading && !user) {
-      refreshMe();
+      void refreshMe();
     }
 
     function onFocus() {
-      if (!loading && !user) refreshMe();
+      if (!loading && !user) {
+        void refreshMe();
+      }
+
+      if (typeof window !== "undefined" && "Notification" in window) {
+        setBrowserNotifPermission(Notification.permission);
+        const saved = window.localStorage.getItem(BROWSER_NOTIFY_PREF_KEY);
+        setBrowserNotifEnabled(saved === "true" && Notification.permission === "granted");
+      }
     }
 
     window.addEventListener("focus", onFocus);
@@ -351,7 +388,7 @@ export default function Navbar() {
       }
     }
 
-    loadNotifications();
+    void loadNotifications();
 
     return () => {
       alive = false;
@@ -367,24 +404,37 @@ export default function Navbar() {
 
       setUnreadCount((prev) => prev + 1);
       setNotifications((prev) => [preview, ...prev].slice(0, 12));
+
+      if (browserNotifEnabled) {
+        void notifyBrowser(preview.title, preview.body ?? "");
+      }
     });
 
     return unsubscribe;
-  }, [isAuthed]);
+  }, [isAuthed, browserNotifEnabled]);
 
   function onNavClick(href: string) {
     setMenuOpen(false);
 
     if (href.startsWith("#")) {
+      if (pathname !== "/") {
+        router.push(`/${href}`);
+        return;
+      }
+
       const el = document.querySelector(href);
       el?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
     }
+
+    router.push(href);
   }
 
   async function onLogout() {
     setAccountOpen(false);
     setMenuOpen(false);
     setNotifOpen(false);
+
     try {
       await logout();
     } finally {
@@ -413,6 +463,29 @@ export default function Navbar() {
     }
   }
 
+  async function onToggleBrowserNotifications() {
+    if (browserNotifEnabled) {
+      localStorage.setItem(BROWSER_NOTIFY_PREF_KEY, "false");
+      setBrowserNotifEnabled(false);
+
+      if (typeof window !== "undefined" && "Notification" in window) {
+        setBrowserNotifPermission(Notification.permission);
+      }
+      return;
+    }
+
+    const permission = await requestBrowserNotificationPermission();
+    setBrowserNotifPermission(permission);
+
+    if (permission === "granted") {
+      localStorage.setItem(BROWSER_NOTIFY_PREF_KEY, "true");
+      setBrowserNotifEnabled(true);
+    } else {
+      localStorage.setItem(BROWSER_NOTIFY_PREF_KEY, "false");
+      setBrowserNotifEnabled(false);
+    }
+  }
+
   async function onMarkAllRead() {
     try {
       await markAllNotificationsRead();
@@ -435,7 +508,9 @@ export default function Navbar() {
         setUnreadCount((prev) => Math.max(0, prev - 1));
         setNotifications((prev) =>
           prev.map((n) =>
-            n.id === item.id ? { ...n, read_at: n.read_at ?? new Date().toISOString() } : n
+            n.id === item.id
+              ? { ...n, read_at: n.read_at ?? new Date().toISOString() }
+              : n
           )
         );
       }
@@ -479,31 +554,27 @@ export default function Navbar() {
           </div>
         </Link>
 
-        {showLandingNav ? (
-          <nav className="hidden items-center gap-6 md:flex">
-            {NAV.map((n) => (
-              <a
-                key={n.href}
-                href={n.href}
-                className="text-sm hover:opacity-90"
-                style={{ color: "rgb(var(--muted))" }}
-                onClick={(e) => {
-                  e.preventDefault();
-                  onNavClick(n.href);
-                }}
-              >
-                {n.label}
-              </a>
-            ))}
-          </nav>
-        ) : (
-          <div className="hidden md:block" />
-        )}
+        <nav className="hidden items-center gap-6 md:flex">
+          {NAV.map((n) => (
+            <a
+              key={n.href}
+              href={n.href}
+              className="text-sm hover:opacity-90"
+              style={{ color: "rgb(var(--muted))" }}
+              onClick={(e) => {
+                e.preventDefault();
+                onNavClick(n.href);
+              }}
+            >
+              {n.label}
+            </a>
+          ))}
+        </nav>
 
         <div className="flex items-center gap-3">
           <div className="hidden items-center gap-3 md:flex">
             <Link
-              href="/book"
+              href="/sharkeys-pest-control-booking"
               className="rounded-xl px-4 py-2 text-sm font-semibold hover:opacity-90"
               style={{
                 background: "rgb(var(--primary))",
@@ -528,7 +599,7 @@ export default function Navbar() {
                 <div className="relative" ref={notifRef}>
                   <button
                     type="button"
-                    onClick={onOpenNotifications}
+                    onClick={() => void onOpenNotifications()}
                     className="relative rounded-xl border p-2 hover:opacity-90"
                     style={{
                       borderColor: "rgb(var(--border))",
@@ -559,6 +630,9 @@ export default function Navbar() {
                     unreadCount={unreadCount}
                     onMarkAllRead={onMarkAllRead}
                     onNotificationClick={onNotificationClick}
+                    browserNotifEnabled={browserNotifEnabled}
+                    browserNotifPermission={browserNotifPermission}
+                    onToggleBrowserNotifications={onToggleBrowserNotifications}
                   />
                 </div>
 
@@ -570,7 +644,10 @@ export default function Navbar() {
                       setNotifOpen(false);
                     }}
                     className="flex items-center gap-2 rounded-xl border px-2.5 py-2 text-sm font-semibold hover:opacity-90"
-                    style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                    style={{
+                      borderColor: "rgb(var(--border))",
+                      background: "rgb(var(--card))",
+                    }}
                     aria-haspopup="menu"
                     aria-expanded={accountOpen}
                   >
@@ -582,21 +659,30 @@ export default function Navbar() {
                     >
                       {initials}
                     </span>
-                    <ChevronDown className="h-4 w-4" style={{ color: "rgb(var(--muted))" }} />
+                    <ChevronDown
+                      className="h-4 w-4"
+                      style={{ color: "rgb(var(--muted))" }}
+                    />
                   </button>
 
                   {accountOpen ? (
                     <div
                       className="absolute right-0 mt-2 w-56 overflow-hidden rounded-2xl border shadow-sm"
-                      style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                      style={{
+                        borderColor: "rgb(var(--border))",
+                        background: "rgb(var(--card))",
+                      }}
                       role="menu"
                     >
                       <div
                         className="px-4 py-3"
                         style={{ borderBottom: "1px solid rgb(var(--border))" }}
                       >
-                        <div className="text-sm font-semibold truncate">{name}</div>
-                        <div className="mt-1 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                        <div className="truncate text-sm font-semibold">{name}</div>
+                        <div
+                          className="mt-1 text-xs"
+                          style={{ color: "rgb(var(--muted))" }}
+                        >
                           Signed in
                         </div>
                       </div>
@@ -618,7 +704,10 @@ export default function Navbar() {
                         style={{ borderTop: "1px solid rgb(var(--border))" }}
                         role="menuitem"
                       >
-                        <div className="font-semibold" style={{ color: "rgb(var(--fg))" }}>
+                        <div
+                          className="font-semibold"
+                          style={{ color: "rgb(var(--fg))" }}
+                        >
                           Theme
                         </div>
                         <ThemeToggle />
@@ -630,7 +719,7 @@ export default function Navbar() {
                           color: "rgb(var(--fg))",
                           borderTop: "1px solid rgb(var(--border))",
                         }}
-                        onClick={onLogout}
+                        onClick={() => void onLogout()}
                         role="menuitem"
                       >
                         Logout
@@ -646,7 +735,10 @@ export default function Navbar() {
             ref={hamburgerRef}
             type="button"
             className="md:hidden rounded-xl border p-2 hover:opacity-90"
-            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+            style={{
+              borderColor: "rgb(var(--border))",
+              background: "rgb(var(--card))",
+            }}
             aria-label="Open menu"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((v) => !v)}
@@ -682,30 +774,34 @@ export default function Navbar() {
       {menuOpen ? (
         <div
           className="md:hidden border-t"
-          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.95)" }}
+          style={{
+            borderColor: "rgb(var(--border))",
+            background: "rgba(var(--bg), 0.95)",
+          }}
         >
-          <div ref={menuRef} className="mx-auto max-w-6xl px-4 py-4 space-y-4">
-            {showLandingNav ? (
-              <div className="grid gap-2">
-                {NAV.map((n) => (
-                  <a
-                    key={n.href}
-                    href={n.href}
-                    className="rounded-xl px-3 py-3 text-sm font-semibold hover:opacity-90"
-                    style={{ background: "rgb(var(--card))", color: "rgb(var(--fg))" }}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      onNavClick(n.href);
-                    }}
-                  >
-                    {n.label}
-                  </a>
-                ))}
-              </div>
-            ) : null}
+          <div ref={menuRef} className="mx-auto max-w-6xl space-y-4 px-4 py-4">
+            <div className="grid gap-2">
+              {NAV.map((n) => (
+                <a
+                  key={n.href}
+                  href={n.href}
+                  className="rounded-xl px-3 py-3 text-sm font-semibold hover:opacity-90"
+                  style={{
+                    background: "rgb(var(--card))",
+                    color: "rgb(var(--fg))",
+                  }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onNavClick(n.href);
+                  }}
+                >
+                  {n.label}
+                </a>
+              ))}
+            </div>
 
             <Link
-              href="/book"
+              href="/sharkeys-pest-control-booking"
               className="block rounded-xl px-3 py-3 text-center text-sm font-semibold hover:opacity-90"
               style={{
                 background: "rgb(var(--primary))",
@@ -721,7 +817,10 @@ export default function Navbar() {
                 <Link
                   href="/login"
                   className="rounded-xl border px-3 py-3 text-center text-sm font-semibold hover:opacity-90"
-                  style={{ borderColor: "rgb(var(--border))", color: "rgb(var(--fg))" }}
+                  style={{
+                    borderColor: "rgb(var(--border))",
+                    color: "rgb(var(--fg))",
+                  }}
                   onClick={() => setMenuOpen(false)}
                 >
                   Sign in
@@ -730,7 +829,10 @@ export default function Navbar() {
                 <Link
                   href="/signup"
                   className="rounded-xl border px-3 py-3 text-center text-sm font-semibold hover:opacity-90"
-                  style={{ borderColor: "rgb(var(--border))", color: "rgb(var(--fg))" }}
+                  style={{
+                    borderColor: "rgb(var(--border))",
+                    color: "rgb(var(--fg))",
+                  }}
                   onClick={() => setMenuOpen(false)}
                 >
                   Sign up
@@ -742,12 +844,18 @@ export default function Navbar() {
               <div className="grid gap-2">
                 <div
                   className="rounded-xl border p-3"
-                  style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                  style={{
+                    borderColor: "rgb(var(--border))",
+                    background: "rgb(var(--card))",
+                  }}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-sm font-semibold truncate">{name}</div>
-                      <div className="text-xs mt-1" style={{ color: "rgb(var(--muted))" }}>
+                      <div className="truncate text-sm font-semibold">{name}</div>
+                      <div
+                        className="mt-1 text-xs"
+                        style={{ color: "rgb(var(--muted))" }}
+                      >
                         Signed in
                       </div>
                     </div>
@@ -763,7 +871,10 @@ export default function Navbar() {
 
                 <button
                   className="rounded-xl border px-3 py-3 text-sm font-semibold hover:opacity-90"
-                  style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                  style={{
+                    borderColor: "rgb(var(--border))",
+                    background: "rgb(var(--card))",
+                  }}
                   onClick={() => {
                     setMenuOpen(false);
                     router.push("/account");
@@ -774,18 +885,39 @@ export default function Navbar() {
 
                 <button
                   className="rounded-xl border px-3 py-3 text-sm font-semibold hover:opacity-90"
-                  style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                  style={{
+                    borderColor: "rgb(var(--border))",
+                    background: "rgb(var(--card))",
+                  }}
                   onClick={() => {
                     setMenuOpen(false);
-                    router.push("/account");
+                    void onOpenNotifications();
                   }}
                 >
                   Notifications {unreadCount > 0 ? `(${unreadCount})` : ""}
                 </button>
 
+                <button
+                  className="rounded-xl border px-3 py-3 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+                  style={{
+                    borderColor: "rgb(var(--border))",
+                    background: "rgb(var(--card))",
+                  }}
+                  onClick={() => void onToggleBrowserNotifications()}
+                  disabled={
+                    browserNotifPermission === "unsupported" ||
+                    browserNotifPermission === "denied"
+                  }
+                >
+                  Browser Alerts {browserNotifEnabled ? "On" : "Off"}
+                </button>
+
                 <div
                   className="flex items-center justify-between rounded-xl border px-3 py-3"
-                  style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                  style={{
+                    borderColor: "rgb(var(--border))",
+                    background: "rgb(var(--card))",
+                  }}
                 >
                   <div className="text-sm font-semibold">Theme</div>
                   <ThemeToggle />
@@ -793,8 +925,11 @@ export default function Navbar() {
 
                 <button
                   className="rounded-xl border px-3 py-3 text-sm font-semibold hover:opacity-90"
-                  style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                  onClick={onLogout}
+                  style={{
+                    borderColor: "rgb(var(--border))",
+                    background: "rgb(var(--card))",
+                  }}
+                  onClick={() => void onLogout()}
                 >
                   Logout
                 </button>
