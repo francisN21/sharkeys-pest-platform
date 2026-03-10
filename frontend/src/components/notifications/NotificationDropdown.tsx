@@ -1,7 +1,16 @@
 "use client";
 
 import React from "react";
-import { Bell, CheckCheck, MessageSquare, ClipboardList, CreditCard, ServerCog, Wrench, User } from "lucide-react";
+import {
+  Bell,
+  CheckCheck,
+  MessageSquare,
+  ClipboardList,
+  CreditCard,
+  ServerCog,
+  Wrench,
+  User,
+} from "lucide-react";
 import type { AppNotification } from "../../lib/api/notifications";
 
 function formatNotificationTime(value: string) {
@@ -111,6 +120,26 @@ function getKindAccent(kind: string) {
   }
 }
 
+function getBrowserAlertStatusText(
+  browserNotifEnabled: boolean,
+  browserNotifPermission: NotificationPermission | "unsupported"
+) {
+  if (browserNotifPermission === "unsupported") return "Not supported in this browser";
+  if (browserNotifPermission === "denied") return "Blocked in browser settings";
+  if (browserNotifEnabled) return "Enabled";
+  return "Off";
+}
+
+function getBrowserAlertButtonLabel(
+  browserNotifEnabled: boolean,
+  browserNotifPermission: NotificationPermission | "unsupported"
+) {
+  if (browserNotifPermission === "unsupported") return "Unavailable";
+  if (browserNotifPermission === "denied") return "Blocked";
+  if (browserNotifEnabled) return "On";
+  return "Turn on";
+}
+
 type NotificationDropdownProps = {
   open: boolean;
   loading?: boolean;
@@ -118,6 +147,9 @@ type NotificationDropdownProps = {
   unreadCount: number;
   onMarkAllRead: () => void | Promise<void>;
   onNotificationClick: (item: AppNotification) => void | Promise<void>;
+  browserNotifEnabled: boolean;
+  browserNotifPermission: NotificationPermission | "unsupported";
+  onToggleBrowserNotifications: () => void | Promise<void>;
 };
 
 function NotificationCard({
@@ -206,8 +238,14 @@ export default function NotificationDropdown({
   unreadCount,
   onMarkAllRead,
   onNotificationClick,
+  browserNotifEnabled,
+  browserNotifPermission,
+  onToggleBrowserNotifications,
 }: NotificationDropdownProps) {
   if (!open) return null;
+
+  const browserAlertsDisabled =
+    browserNotifPermission === "unsupported" || browserNotifPermission === "denied";
 
   return (
     <div
@@ -251,6 +289,34 @@ export default function NotificationDropdown({
         >
           <CheckCheck className="h-4 w-4" />
           Mark all read
+        </button>
+      </div>
+
+      <div
+        className="flex items-center justify-between px-4 py-3"
+        style={{ borderBottom: "1px solid rgb(var(--border))" }}
+      >
+        <div>
+          <div className="text-sm font-semibold" style={{ color: "rgb(var(--fg))" }}>
+            Browser alerts
+          </div>
+          <div className="mt-1 text-xs" style={{ color: "rgb(var(--muted))" }}>
+            {getBrowserAlertStatusText(browserNotifEnabled, browserNotifPermission)}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onToggleBrowserNotifications}
+          disabled={browserAlertsDisabled}
+          className="rounded-full border px-3 py-1 text-xs font-semibold hover:opacity-90 disabled:opacity-60"
+          style={{
+            borderColor: browserNotifEnabled ? "rgb(34 197 94)" : "rgb(var(--border))",
+            background: browserNotifEnabled ? "rgba(34, 197, 94, 0.10)" : "rgb(var(--bg))",
+            color: browserNotifEnabled ? "rgb(22 101 52)" : "rgb(var(--fg))",
+          }}
+        >
+          {getBrowserAlertButtonLabel(browserNotifEnabled, browserNotifPermission)}
         </button>
       </div>
 
