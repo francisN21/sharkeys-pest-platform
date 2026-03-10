@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useRouter } from "next/navigation";
 import {
   Bell,
   CheckCheck,
@@ -12,6 +13,16 @@ import {
   User,
 } from "lucide-react";
 import type { AppNotification } from "../../lib/api/notifications";
+
+type NotificationViewerRole = "customer" | "technician" | "worker" | "admin";
+
+function normalizeViewerRole(
+  role: NotificationViewerRole | null | undefined
+): "customer" | "technician" | "admin" {
+  if (role === "admin") return "admin";
+  if (role === "technician" || role === "worker") return "technician";
+  return "customer";
+}
 
 function formatNotificationTime(value: string) {
   const d = new Date(value);
@@ -140,11 +151,75 @@ function getBrowserAlertButtonLabel(
   return "Turn on";
 }
 
+function getNotificationHref(
+  kind: string,
+  rawViewerRole: NotificationViewerRole | null | undefined
+): string {
+  const viewerRole = normalizeViewerRole(rawViewerRole);
+
+  if (viewerRole === "admin") {
+    switch (kind) {
+      case "booking.created":
+      case "booking.accepted":
+      case "booking.cancelled":
+      case "booking.edited":
+        return "/account/admin/jobs";
+
+      case "booking.assigned":
+      case "booking.reassigned":
+      case "booking.price_set":
+      case "message.new":
+        return "/account/techbookings";
+
+      case "booking.completed":
+        return "/account/admin/jobhistory";
+
+      default:
+        return "/account";
+    }
+  }
+
+  if (viewerRole === "technician") {
+    switch (kind) {
+      case "booking.assigned":
+      case "booking.reassigned":
+      case "booking.cancelled":
+      case "booking.price_set":
+      case "booking.completed":
+      case "message.new":
+      case "booking.edited":
+      case "booking.accepted":
+      case "booking.created":
+        return "/account/technician";
+
+      default:
+        return "/account/technician";
+    }
+  }
+
+  switch (kind) {
+    case "message.new":
+    case "booking.accepted":
+    case "booking.assigned":
+    case "booking.reassigned":
+    case "booking.cancelled":
+    case "booking.completed":
+    case "booking.price_set":
+    case "booking.edited":
+    case "booking.created":
+      return "/account/bookings";
+
+    default:
+      return "/account";
+  }
+}
+
 type NotificationDropdownProps = {
   open: boolean;
   loading?: boolean;
   notifications: AppNotification[];
   unreadCount: number;
+  viewerRole: NotificationViewerRole;
   onMarkAllRead: () => void | Promise<void>;
   onNotificationClick: (item: AppNotification) => void | Promise<void>;
   browserNotifEnabled: boolean;
@@ -236,16 +311,29 @@ export default function NotificationDropdown({
   loading = false,
   notifications,
   unreadCount,
+  viewerRole,
   onMarkAllRead,
   onNotificationClick,
   browserNotifEnabled,
   browserNotifPermission,
   onToggleBrowserNotifications,
 }: NotificationDropdownProps) {
+  const router = useRouter();
+
   if (!open) return null;
 
   const browserAlertsDisabled =
     browserNotifPermission === "unsupported" || browserNotifPermission === "denied";
+
+  async function handleNotificationClick(item: AppNotification) {
+    const href = getNotificationHref(item.kind, viewerRole);
+
+    try {
+      await onNotificationClick(item);
+    } finally {
+      router.push(href);
+    }
+  }
 
   return (
     <div
@@ -344,7 +432,7 @@ export default function NotificationDropdown({
               <NotificationCard
                 key={`${item.id}-${item.created_at}`}
                 item={item}
-                onClick={onNotificationClick}
+                onClick={handleNotificationClick}
               />
             ))}
           </div>
