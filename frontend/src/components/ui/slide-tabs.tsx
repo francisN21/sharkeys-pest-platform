@@ -58,6 +58,7 @@ export function SlideTabs<K extends string>({
 
   const containerRef = useRef<HTMLUListElement | null>(null);
   const refs = useRef<Array<HTMLLIElement | null>>([]);
+  const frameRef = useRef<number | null>(null);
 
   const syncToIndex = (i: number) => {
     const el = refs.current[i];
@@ -74,15 +75,33 @@ export function SlideTabs<K extends string>({
     });
   };
 
+  const syncToIndexRaf = (i: number) => {
+    if (frameRef.current !== null) {
+      window.cancelAnimationFrame(frameRef.current);
+    }
+
+    frameRef.current = window.requestAnimationFrame(() => {
+      syncToIndex(i);
+      frameRef.current = null;
+    });
+  };
+
   useLayoutEffect(() => {
     syncToIndex(selectedIndex);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIndex, tabs.length]);
 
   useEffect(() => {
-    const onResize = () => syncToIndex(selectedIndex);
+    const onResize = () => syncToIndexRaf(selectedIndex);
+
     window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+
+    return () => {
+      window.removeEventListener("resize", onResize);
+      if (frameRef.current !== null) {
+        window.cancelAnimationFrame(frameRef.current);
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIndex, tabs.length]);
 
@@ -111,7 +130,7 @@ export function SlideTabs<K extends string>({
       <div className={cn("md:hidden", className)}>
         <div
           className={cn(
-            "flex items-center gap-2 rounded-full border p-1",
+            "flex items-center gap-2 rounded-full border p-1 shadow-sm",
             "bg-[rgb(var(--card))] border-[rgb(var(--border))]"
           )}
           aria-label="Account navigation"
@@ -143,12 +162,12 @@ export function SlideTabs<K extends string>({
         </div>
       </div>
 
-      {/* Desktop: original slide tabs */}
+      {/* Desktop */}
       <ul
         ref={containerRef}
-        onMouseLeave={() => syncToIndex(selectedIndex)}
+        onMouseLeave={() => syncToIndexRaf(selectedIndex)}
         className={cn(
-          "relative hidden w-fit max-w-full items-center gap-1 rounded-full border p-1 md:flex",
+          "relative hidden w-fit max-w-full items-center gap-1 rounded-full border p-1 shadow-sm md:flex",
           "bg-[rgb(var(--card))] border-[rgb(var(--border))]",
           className
         )}
@@ -171,7 +190,7 @@ export function SlideTabs<K extends string>({
               badgeCount={badge}
               pulseBadge={t.pulseBadge}
               onClick={() => onChange(t.key)}
-              onHover={() => syncToIndex(i)}
+              onHover={() => syncToIndexRaf(i)}
             />
           );
         })}
@@ -204,7 +223,9 @@ const DesktopTab = React.forwardRef<HTMLLIElement, TabButtonProps>(function Desk
       }}
       className={cn(
         "relative z-10 cursor-pointer select-none rounded-full px-3 py-2 text-sm font-medium transition-colors",
-        "text-[rgb(var(--fg))] mix-blend-difference"
+        active
+          ? "text-white"
+          : "text-[rgba(var(--fg),0.72)] hover:bg-[rgba(var(--fg),0.05)] hover:text-[rgb(var(--fg))]"
       )}
     >
       <span className="inline-flex items-center gap-2">
@@ -227,7 +248,7 @@ const DesktopTab = React.forwardRef<HTMLLIElement, TabButtonProps>(function Desk
               style={{
                 background: "rgb(239 68 68)",
                 color: "white",
-                borderColor: "rgba(0,0,0,0.15)",
+                borderColor: "rgba(0,0,0,0.12)",
               }}
               aria-label={`${badgeCount} new items`}
               title={`${badgeCount} new`}
@@ -260,8 +281,8 @@ function MobileTabButton({
       className={cn(
         "flex w-full min-w-0 items-center justify-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition-colors",
         active
-          ? "bg-[rgb(var(--fg))] text-[rgb(var(--bg))]"
-          : "bg-transparent text-[rgb(var(--fg))]"
+          ? "bg-[rgb(59,130,246)] text-white"
+          : "bg-transparent text-[rgba(var(--fg),0.72)] hover:text-[rgb(var(--fg))]"
       )}
     >
       {icon ? <i className={cn(icon, "shrink-0 text-[13px]")} aria-hidden="true" /> : null}
@@ -282,7 +303,7 @@ function MobileTabButton({
             style={{
               background: "rgb(239 68 68)",
               color: "white",
-              borderColor: "rgba(0,0,0,0.15)",
+              borderColor: "rgba(0,0,0,0.12)",
             }}
             aria-label={`${badgeCount} new items`}
             title={`${badgeCount} new`}
@@ -355,9 +376,9 @@ function Cursor({ position }: { position: Position }) {
         opacity: position.opacity,
       }}
       transition={{ type: "spring", stiffness: 500, damping: 45 }}
-      className="pointer-events-none absolute z-0 h-[38px] rounded-full"
+      className="pointer-events-none absolute z-0 h-[38px] rounded-full shadow-sm"
       style={{
-        background: "rgb(var(--fg))",
+        background: "rgb(59 130 246)",
       }}
     />
   );
