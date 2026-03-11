@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
   CheckCheck,
@@ -15,13 +15,36 @@ import {
 import type { AppNotification } from "../../lib/api/notifications";
 
 type NotificationViewerRole = "customer" | "technician" | "worker" | "admin";
+type NormalizedViewerRole = "customer" | "technician" | "admin";
 
 function normalizeViewerRole(
   role: NotificationViewerRole | null | undefined
-): "customer" | "technician" | "admin" {
+): NormalizedViewerRole {
   if (role === "admin") return "admin";
   if (role === "technician" || role === "worker") return "technician";
   return "customer";
+}
+
+function inferViewerRoleFromPathname(
+  pathname: string | null | undefined
+): NormalizedViewerRole | null {
+  if (!pathname) return null;
+
+  if (pathname.startsWith("/account/admin/")) return "admin";
+  if (pathname.startsWith("/account/techbookings")) return "admin";
+  if (pathname.startsWith("/account/technician")) return "technician";
+  if (pathname.startsWith("/account/bookings")) return "customer";
+
+  return null;
+}
+
+function resolveViewerRole(
+  pathname: string | null | undefined,
+  role: NotificationViewerRole | null | undefined
+): NormalizedViewerRole {
+  const inferred = inferViewerRoleFromPathname(pathname);
+  if (inferred) return inferred;
+  return normalizeViewerRole(role);
 }
 
 function formatNotificationTime(value: string) {
@@ -153,17 +176,15 @@ function getBrowserAlertButtonLabel(
 
 function getNotificationHref(
   kind: string,
-  rawViewerRole: NotificationViewerRole | null | undefined
+  viewerRole: NormalizedViewerRole
 ): string {
-  const viewerRole = normalizeViewerRole(rawViewerRole);
-
   if (viewerRole === "admin") {
     switch (kind) {
       case "booking.created":
       case "booking.accepted":
       case "booking.cancelled":
       case "booking.edited":
-        return "/account/admin/jobs";
+        return "/account/admin/dispatch";
 
       case "booking.assigned":
       case "booking.reassigned":
@@ -219,7 +240,7 @@ type NotificationDropdownProps = {
   loading?: boolean;
   notifications: AppNotification[];
   unreadCount: number;
-  viewerRole: NotificationViewerRole;
+  viewerRole?: NotificationViewerRole | null;
   onMarkAllRead: () => void | Promise<void>;
   onNotificationClick: (item: AppNotification) => void | Promise<void>;
   browserNotifEnabled: boolean;
@@ -242,7 +263,7 @@ function NotificationCard({
     <button
       type="button"
       onClick={() => onClick(item)}
-      className="w-full rounded-2xl border p-3 text-left transition hover:scale-[0.995] hover:opacity-95"
+      className="w-full rounded-2xl border p-3 text-left transition hover:scale-[0.995] hover:opacity-95 sm:p-3"
       style={{
         borderColor: unread ? accent.border : "rgb(var(--border))",
         background: unread ? accent.bg : "rgb(var(--bg))",
@@ -267,7 +288,7 @@ function NotificationCard({
                 {item.title}
               </div>
               <div
-                className="mt-1 line-clamp-2 text-xs leading-5"
+                className="mt-1 line-clamp-3 text-xs leading-5 sm:line-clamp-2"
                 style={{ color: "rgb(var(--muted))" }}
               >
                 {item.body || "Open to view details."}
@@ -311,7 +332,7 @@ export default function NotificationDropdown({
   loading = false,
   notifications,
   unreadCount,
-  viewerRole,
+  viewerRole = null,
   onMarkAllRead,
   onNotificationClick,
   browserNotifEnabled,
@@ -319,14 +340,17 @@ export default function NotificationDropdown({
   onToggleBrowserNotifications,
 }: NotificationDropdownProps) {
   const router = useRouter();
+  const pathname = usePathname();
 
   if (!open) return null;
 
   const browserAlertsDisabled =
     browserNotifPermission === "unsupported" || browserNotifPermission === "denied";
 
+  const resolvedViewerRole = resolveViewerRole(pathname, viewerRole);
+
   async function handleNotificationClick(item: AppNotification) {
-    const href = getNotificationHref(item.kind, viewerRole);
+    const href = getNotificationHref(item.kind, resolvedViewerRole);
 
     try {
       await onNotificationClick(item);
@@ -337,27 +361,32 @@ export default function NotificationDropdown({
 
   return (
     <div
-      className="absolute right-0 mt-2 w-[380px] overflow-hidden rounded-3xl border shadow-2xl"
+      className="
+        absolute z-[70] mt-2 overflow-hidden rounded-3xl border shadow-2xl
+        left-1/2 w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] -translate-x-1/2
+        sm:left-auto sm:right-0 sm:w-[380px] sm:max-w-[380px] sm:translate-x-0
+      "
       style={{
         borderColor: "rgb(var(--border))",
         background: "rgb(var(--card))",
         boxShadow: "0 18px 45px rgba(0,0,0,0.28)",
       }}
       role="menu"
+      data-viewer-role={resolvedViewerRole}
     >
       <div
-        className="flex items-center justify-between px-4 py-4"
+        className="flex items-center justify-between gap-3 px-4 py-4"
         style={{ borderBottom: "1px solid rgb(var(--border))" }}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <div
-            className="flex h-10 w-10 items-center justify-center rounded-2xl"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl"
             style={{ background: "rgba(59,130,246,0.10)", color: "rgb(59 130 246)" }}
           >
             <Bell className="h-5 w-5" />
           </div>
 
-          <div>
+          <div className="min-w-0">
             <div className="text-sm font-semibold">Notifications</div>
             <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
               {unreadCount > 0 ? `${unreadCount} unread` : "All caught up"}
@@ -367,7 +396,7 @@ export default function NotificationDropdown({
 
         <button
           type="button"
-          className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold hover:opacity-90"
+          className="shrink-0 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold hover:opacity-90"
           style={{
             borderColor: "rgb(var(--border))",
             background: "rgb(var(--bg))",
@@ -376,15 +405,16 @@ export default function NotificationDropdown({
           onClick={onMarkAllRead}
         >
           <CheckCheck className="h-4 w-4" />
-          Mark all read
+          <span className="hidden xs:inline">Mark all read</span>
+          <span className="xs:hidden">Mark read</span>
         </button>
       </div>
 
       <div
-        className="flex items-center justify-between px-4 py-3"
+        className="flex items-center justify-between gap-3 px-4 py-3"
         style={{ borderBottom: "1px solid rgb(var(--border))" }}
       >
-        <div>
+        <div className="min-w-0">
           <div className="text-sm font-semibold" style={{ color: "rgb(var(--fg))" }}>
             Browser alerts
           </div>
@@ -397,7 +427,7 @@ export default function NotificationDropdown({
           type="button"
           onClick={onToggleBrowserNotifications}
           disabled={browserAlertsDisabled}
-          className="rounded-full border px-3 py-1 text-xs font-semibold hover:opacity-90 disabled:opacity-60"
+          className="shrink-0 rounded-full border px-3 py-1 text-xs font-semibold hover:opacity-90 disabled:opacity-60"
           style={{
             borderColor: browserNotifEnabled ? "rgb(34 197 94)" : "rgb(var(--border))",
             background: browserNotifEnabled ? "rgba(34, 197, 94, 0.10)" : "rgb(var(--bg))",
@@ -408,7 +438,7 @@ export default function NotificationDropdown({
         </button>
       </div>
 
-      <div className="max-h-[430px] overflow-y-auto p-3">
+      <div className="max-h-[60svh] overflow-y-auto p-3 sm:max-h-[430px]">
         {loading ? (
           <div className="px-2 py-6 text-sm" style={{ color: "rgb(var(--muted))" }}>
             Loading…

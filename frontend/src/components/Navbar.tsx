@@ -33,10 +33,15 @@ const NAV: NavItem[] = [
   { label: "Service Area", href: "/service-area" },
 ];
 
+type NavbarApiRole = "customer" | "worker" | "admin";
+type NotificationViewerRole = "customer" | "technician" | "worker" | "admin";
+
 type NavbarUser = {
   email: string;
   first_name?: string | null;
   last_name?: string | null;
+  user_role?: NavbarApiRole | null;
+  roles?: NavbarApiRole[] | null;
 };
 
 const BROWSER_NOTIFY_PREF_KEY = "spc_browser_notifications_enabled";
@@ -57,6 +62,21 @@ function displayName(user: {
   const last = (user.last_name || "").trim();
   const full = `${first} ${last}`.trim();
   return full || user.email;
+}
+
+function normalizeViewerRole(user: NavbarUser | null): NotificationViewerRole | null {
+  if (!user) return null;
+
+  if (user.user_role === "admin") return "admin";
+  if (user.user_role === "worker") return "worker";
+  if (user.user_role === "customer") return "customer";
+
+  const roles = user.roles ?? [];
+  if (roles.includes("admin")) return "admin";
+  if (roles.includes("worker")) return "worker";
+  if (roles.includes("customer")) return "customer";
+
+  return null;
 }
 
 function mapRealtimeEventToPreview(evt: RealtimeEvent): AppNotification | null {
@@ -244,6 +264,10 @@ export default function Navbar() {
 
   const effectiveUser = (user as NavbarUser | null) ?? resolvedUser;
   const isAuthed = !!effectiveUser;
+  const viewerRole = useMemo(
+    () => normalizeViewerRole(effectiveUser),
+    [effectiveUser]
+  );
 
   const name = useMemo(
     () => (effectiveUser ? displayName(effectiveUser) : ""),
@@ -277,6 +301,7 @@ export default function Navbar() {
       try {
         const res = await apiMe();
         if (cancelled) return;
+
         if (res?.ok && res.user) {
           setResolvedUser(res.user as NavbarUser);
         } else {
@@ -518,13 +543,6 @@ export default function Navbar() {
     }
 
     setNotifOpen(false);
-
-    if (item.booking_public_id) {
-      router.push("/account");
-      return;
-    }
-
-    router.push("/account");
   }
 
   return (
@@ -592,129 +610,130 @@ export default function Navbar() {
                 Sign in
               </Link>
             ) : null}
-
-            {!loading && isAuthed ? (
-              <>
-                <div className="relative" ref={notifRef}>
-                  <button
-                    type="button"
-                    onClick={() => void onOpenNotifications()}
-                    className="relative rounded-xl border p-2 shadow-sm hover:opacity-90"
-                    style={{
-                      borderColor: "rgb(var(--border))",
-                      background: "rgb(var(--card))",
-                    }}
-                    aria-label="Notifications"
-                    aria-haspopup="menu"
-                    aria-expanded={notifOpen}
-                  >
-                    <Bell className="h-5 w-5" />
-                    {unreadCount > 0 ? (
-                      <span
-                        className="absolute -right-1 -top-1 min-w-[18px] rounded-full px-1 text-center text-[10px] font-bold"
-                        style={{
-                          background: "rgb(239 68 68)",
-                          color: "white",
-                        }}
-                      >
-                        {unreadCount > 99 ? "99+" : unreadCount}
-                      </span>
-                    ) : null}
-                  </button>
-
-                  <NotificationDropdown
-                    open={notifOpen}
-                    loading={notifLoading}
-                    notifications={notifications}
-                    unreadCount={unreadCount}
-                    onMarkAllRead={onMarkAllRead}
-                    onNotificationClick={onNotificationClick}
-                    browserNotifEnabled={browserNotifEnabled}
-                    browserNotifPermission={browserNotifPermission}
-                    onToggleBrowserNotifications={onToggleBrowserNotifications}
-                  />
-                </div>
-
-                <div className="relative" ref={accountRef}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAccountOpen((v) => !v);
-                      setNotifOpen(false);
-                    }}
-                    className="flex items-center gap-2 rounded-xl border px-2.5 py-2 text-sm font-semibold shadow-sm hover:opacity-90"
-                    style={{
-                      borderColor: "rgb(var(--border))",
-                      background: "rgb(var(--card))",
-                    }}
-                    aria-haspopup="menu"
-                    aria-expanded={accountOpen}
-                  >
-                    <span
-                      className="grid h-8 w-8 place-items-center rounded-full text-xs font-bold"
-                      style={{ background: "rgba(255,255,255,0.08)" }}
-                      aria-hidden="true"
-                      title={name}
-                    >
-                      {initials}
-                    </span>
-                    <ChevronDown
-                      className="h-4 w-4"
-                      style={{ color: "rgb(var(--muted))" }}
-                    />
-                  </button>
-
-                  {accountOpen ? (
-                    <div
-                      className="absolute right-0 mt-2 w-56 overflow-hidden rounded-2xl border shadow-sm"
-                      style={{
-                        borderColor: "rgb(var(--border))",
-                        background: "rgb(var(--card))",
-                      }}
-                      role="menu"
-                    >
-                      <div
-                        className="px-4 py-3"
-                        style={{ borderBottom: "1px solid rgb(var(--border))" }}
-                      >
-                        <div className="truncate text-sm font-semibold">{name}</div>
-                        <div
-                          className="mt-1 text-xs"
-                          style={{ color: "rgb(var(--muted))" }}
-                        >
-                          Signed in
-                        </div>
-                      </div>
-
-                      <button
-                        className="w-full px-4 py-3 text-left text-sm font-semibold hover:opacity-90"
-                        style={{ color: "rgb(var(--fg))" }}
-                        onClick={() => {
-                          setAccountOpen(false);
-                          router.push("/account");
-                        }}
-                        role="menuitem"
-                      >
-                        Account
-                      </button>
-
-                      <button
-                        className="w-full px-4 py-3 text-left text-sm font-semibold hover:opacity-90"
-                        style={{
-                          color: "rgb(var(--fg))",
-                          borderTop: "1px solid rgb(var(--border))",
-                        }}
-                        onClick={() => void onLogout()}
-                        role="menuitem"
-                      >
-                        Logout
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-              </>
-            ) : null}
           </div>
+
+          {!loading && isAuthed ? (
+            <div className="relative" ref={notifRef}>
+              <button
+                type="button"
+                onClick={() => void onOpenNotifications()}
+                className="relative rounded-xl border p-2 shadow-sm hover:opacity-90"
+                style={{
+                  borderColor: "rgb(var(--border))",
+                  background: "rgb(var(--card))",
+                }}
+                aria-label="Notifications"
+                aria-haspopup="menu"
+                aria-expanded={notifOpen}
+              >
+                <Bell className="h-5 w-5" />
+                {unreadCount > 0 ? (
+                  <span
+                    className="absolute -right-1 -top-1 min-w-[18px] rounded-full px-1 text-center text-[10px] font-bold"
+                    style={{
+                      background: "rgb(239 68 68)",
+                      color: "white",
+                    }}
+                  >
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                ) : null}
+              </button>
+
+              <NotificationDropdown
+                open={notifOpen}
+                loading={notifLoading}
+                notifications={notifications}
+                unreadCount={unreadCount}
+                viewerRole={viewerRole}
+                onMarkAllRead={onMarkAllRead}
+                onNotificationClick={onNotificationClick}
+                browserNotifEnabled={browserNotifEnabled}
+                browserNotifPermission={browserNotifPermission}
+                onToggleBrowserNotifications={onToggleBrowserNotifications}
+              />
+            </div>
+          ) : null}
+
+          {!loading && isAuthed ? (
+            <div className="relative hidden md:block" ref={accountRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  setAccountOpen((v) => !v);
+                  setNotifOpen(false);
+                }}
+                className="flex items-center gap-2 rounded-xl border px-2.5 py-2 text-sm font-semibold shadow-sm hover:opacity-90"
+                style={{
+                  borderColor: "rgb(var(--border))",
+                  background: "rgb(var(--card))",
+                }}
+                aria-haspopup="menu"
+                aria-expanded={accountOpen}
+              >
+                <span
+                  className="grid h-8 w-8 place-items-center rounded-full text-xs font-bold"
+                  style={{ background: "rgba(255,255,255,0.08)" }}
+                  aria-hidden="true"
+                  title={name}
+                >
+                  {initials}
+                </span>
+                <ChevronDown
+                  className="h-4 w-4"
+                  style={{ color: "rgb(var(--muted))" }}
+                />
+              </button>
+
+              {accountOpen ? (
+                <div
+                  className="absolute right-0 mt-2 w-56 overflow-hidden rounded-2xl border shadow-sm"
+                  style={{
+                    borderColor: "rgb(var(--border))",
+                    background: "rgb(var(--card))",
+                  }}
+                  role="menu"
+                >
+                  <div
+                    className="px-4 py-3"
+                    style={{ borderBottom: "1px solid rgb(var(--border))" }}
+                  >
+                    <div className="truncate text-sm font-semibold">{name}</div>
+                    <div
+                      className="mt-1 text-xs"
+                      style={{ color: "rgb(var(--muted))" }}
+                    >
+                      Signed in
+                    </div>
+                  </div>
+
+                  <button
+                    className="w-full px-4 py-3 text-left text-sm font-semibold hover:opacity-90"
+                    style={{ color: "rgb(var(--fg))" }}
+                    onClick={() => {
+                      setAccountOpen(false);
+                      router.push("/account");
+                    }}
+                    role="menuitem"
+                  >
+                    Account
+                  </button>
+
+                  <button
+                    className="w-full px-4 py-3 text-left text-sm font-semibold hover:opacity-90"
+                    style={{
+                      color: "rgb(var(--fg))",
+                      borderTop: "1px solid rgb(var(--border))",
+                    }}
+                    onClick={() => void onLogout()}
+                    role="menuitem"
+                  >
+                    Logout
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           <button
             ref={hamburgerRef}
@@ -866,20 +885,6 @@ export default function Navbar() {
                   }}
                 >
                   Account
-                </button>
-
-                <button
-                  className="rounded-xl border px-3 py-3 text-sm font-semibold hover:opacity-90"
-                  style={{
-                    borderColor: "rgb(var(--border))",
-                    background: "rgb(var(--card))",
-                  }}
-                  onClick={() => {
-                    setMenuOpen(false);
-                    void onOpenNotifications();
-                  }}
-                >
-                  Notifications {unreadCount > 0 ? `(${unreadCount})` : ""}
                 </button>
 
                 <button

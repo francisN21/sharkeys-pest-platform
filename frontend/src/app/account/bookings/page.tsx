@@ -1,8 +1,9 @@
 // frontend/src/app/account/bookings/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import {
   cancelBooking,
@@ -152,7 +153,7 @@ function PersonRow({
   title: string;
   person: PersonLite | null;
   showEvenIfEmpty?: boolean;
-  footer?: React.ReactNode;
+  footer?: ReactNode;
 }) {
   if (!person && !showEvenIfEmpty && !footer) return null;
 
@@ -275,7 +276,6 @@ function ConfirmCancelModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* overlay */}
       <button
         type="button"
         aria-label="Close"
@@ -285,7 +285,6 @@ function ConfirmCancelModal({
         disabled={busy}
       />
 
-      {/* modal */}
       <div
         className="relative w-full max-w-md rounded-2xl border p-4 shadow-lg"
         style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
@@ -356,7 +355,14 @@ function ConfirmCancelModal({
 
 /** ---------------- Me typing + safe number ---------------- */
 
-type MeShape = { id: number; first_name?: string | null; last_name?: string | null };
+type UserRole = "customer" | "technician" | "worker" | "admin" | "superadmin" | "superuser" | string;
+
+type MeShape = {
+  id: number;
+  first_name?: string | null;
+  last_name?: string | null;
+  role?: UserRole | null;
+};
 
 function safeToNumber(v: unknown): number | null {
   const n = typeof v === "string" ? Number(v) : typeof v === "number" ? v : NaN;
@@ -557,7 +563,6 @@ function BookingCardUI({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Details always available */}
           <button
             type="button"
             className="rounded-lg border px-3 py-1 text-xs font-semibold hover:opacity-90 disabled:opacity-60"
@@ -629,7 +634,11 @@ function BookingCardUI({
 /** ---------------- Page ---------------- */
 
 export default function BookingsPage() {
+  const router = useRouter();
+
   const [loading, setLoading] = useState(true);
+  const [authResolved, setAuthResolved] = useState(false);
+  const [forbidden, setForbidden] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const [pending, setPending] = useState<BookingCard[]>([]);
@@ -638,21 +647,17 @@ export default function BookingsPage() {
 
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
-  // view state
   const [view, setView] = useState<"list" | "detail">("list");
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [selectedBooking, setSelectedBooking] = useState<BookingCard | null>(null);
 
-  // me (for messenger optimistic UI)
   const [me, setMe] = useState<MeShape | null>(null);
 
-  // messages
   const [messages, setMessages] = useState<MessengerMessage[]>([]);
   const [msgLoading, setMsgLoading] = useState(false);
   const [msgErr, setMsgErr] = useState<string | null>(null);
   const [msgSending, setMsgSending] = useState(false);
 
-  // Modal state
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
   const [confirmCancelTitle, setConfirmCancelTitle] = useState<string | null>(null);
 
@@ -702,11 +707,9 @@ export default function BookingsPage() {
       await cancelBooking(confirmCancelId);
       await refresh();
 
-      // close modal after successful cancel
       setConfirmCancelId(null);
       setConfirmCancelTitle(null);
 
-      // if user is looking at the same booking, return to list
       if (selectedBookingId === confirmCancelId) {
         backToList();
       }
@@ -762,7 +765,6 @@ export default function BookingsPage() {
     const found = findBooking(publicId);
     setSelectedBooking(found);
 
-    // load messages
     loadMessages(publicId);
   }
 
@@ -847,7 +849,6 @@ export default function BookingsPage() {
 
     setMsgErr(null);
 
-    // optimistic update
     const before = messages;
     setMessages((prev) =>
       prev.map((m) => (m.id === messageId ? { ...m, body: trimmed, updated_at: new Date().toISOString() } : m))
@@ -870,7 +871,7 @@ export default function BookingsPage() {
       );
     } catch (e: unknown) {
       setMsgErr(e instanceof Error ? e.message : "Failed to edit message");
-      setMessages(before); // rollback
+      setMessages(before);
     }
   }
 
@@ -882,6 +883,37 @@ export default function BookingsPage() {
         setLoading(true);
         setErr(null);
 
+        const meRes = await apiMe();
+        if (!alive) return;
+
+        const user = meRes.user ?? null;
+        const idNum = safeToNumber((user as { id?: unknown } | null)?.id);
+        const role = String((user as { role?: unknown } | null)?.role ?? "").trim().toLowerCase();
+
+        if (user && idNum) {
+          setMe({
+            id: idNum,
+            first_name: (user as { first_name?: string | null }).first_name ?? null,
+            last_name: (user as { last_name?: string | null }).last_name ?? null,
+            role: role || null,
+          });
+        } else {
+          setMe(null);
+        }
+
+        const isCustomerOnly = role === "customer";
+
+        if (!isCustomerOnly) {
+          setForbidden(true);
+          setAuthResolved(true);
+          setLoading(false);
+          router.replace("/account");
+          return;
+        }
+
+        setForbidden(false);
+        setAuthResolved(true);
+
         const res = await getMyBookings();
         if (!alive) return;
 
@@ -889,23 +921,6 @@ export default function BookingsPage() {
         setPending(split.p);
         setUpcoming(split.u);
         setHistory(res.history || []);
-
-        // me for messenger
-        const meRes = await apiMe();
-        if (!alive) return;
-
-        const user = meRes.user ?? null;
-        const idNum = safeToNumber((user as unknown as { id?: unknown } | null)?.id);
-
-        if (user && idNum) {
-          setMe({
-            id: idNum,
-            first_name: (user as unknown as { first_name?: string | null }).first_name ?? null,
-            last_name: (user as unknown as { last_name?: string | null }).last_name ?? null,
-          });
-        } else {
-          setMe(null);
-        }
       } catch (e: unknown) {
         if (!alive) return;
         setErr(e instanceof Error ? e.message : "Failed to load bookings");
@@ -917,9 +932,43 @@ export default function BookingsPage() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [router]);
 
   const cancelBusy = !!confirmCancelId && cancellingId === confirmCancelId;
+
+  if (!authResolved || (loading && forbidden)) {
+    return (
+      <div className="space-y-5">
+        <div className="rounded-2xl border p-4 text-sm" style={{ borderColor: "rgb(var(--border))" }}>
+          Loading…
+        </div>
+      </div>
+    );
+  }
+
+  if (forbidden) {
+    return (
+      <div className="space-y-5">
+        <div className="rounded-2xl border p-6 text-sm space-y-3" style={{ borderColor: "rgb(var(--border))" }}>
+          <div className="text-base font-semibold">Customers only</div>
+          <div style={{ color: "rgb(var(--muted))" }}>
+            This bookings page is only available for customer accounts. Staff and admin accounts are redirected to the
+            main account area.
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Link
+              href="/account"
+              className="inline-flex items-center justify-center rounded-xl border px-4 py-2 text-sm font-semibold hover:opacity-90"
+              style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+            >
+              Go to Account
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   /** ---------------- Detail View ---------------- */
   if (view === "detail") {
