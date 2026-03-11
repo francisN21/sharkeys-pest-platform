@@ -76,7 +76,7 @@ function getNotificationTargetTab(role: AppRole, evt: RealtimeEvent): TabKey | n
       case "booking.cancelled":
       case "booking.edited":
       case "message.new":
-        return "admin_jobs";
+        return "admin_dispatch";
 
       case "booking.assigned":
       case "booking.reassigned":

@@ -218,7 +218,7 @@ function ConfirmAdminActionModal({
 
 /** ---------- Page ---------- */
 
-export default function AdminJobsPage() {
+export default function AdminDispatchPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
@@ -416,7 +416,7 @@ export default function AdminJobsPage() {
 
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold">Jobs</h2>
+          <h2 className="text-xl font-bold">Dispatch</h2>
           <p className="text-sm" style={{ color: "rgb(var(--muted))" }}>
             Pending customer bookings. Accept or cancel. Accepted bookings can be assigned to a technician.
           </p>
