@@ -63,7 +63,7 @@ export default function RootLayout({
         />
       </head>
 
-      <body>
+      <body className="min-h-screen bg-gradient-to-b from-background via-background to-muted/20 text-foreground antialiased">
         <AuthProvider>
           <ThemeProvider>
             <RealtimeBootstrap>
