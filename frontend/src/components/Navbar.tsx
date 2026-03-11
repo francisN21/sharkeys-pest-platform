@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, ChevronDown } from "lucide-react";
-import ThemeToggle from "../components/ThemeToggle";
 import { useAuth } from "./AuthProvider";
 import { me as apiMe } from "../lib/api/auth";
 import {
@@ -533,7 +532,7 @@ export default function Navbar() {
       className="sticky top-0 z-50 border-b backdrop-blur"
       style={{
         borderColor: "rgb(var(--border))",
-        background: "rgba(var(--bg), 0.85)",
+        background: "rgba(var(--bg), 0.88)",
       }}
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
@@ -575,10 +574,10 @@ export default function Navbar() {
           <div className="hidden items-center gap-3 md:flex">
             <Link
               href="/sharkeys-pest-control-booking"
-              className="rounded-xl px-4 py-2 text-sm font-semibold hover:opacity-90"
+              className="rounded-xl px-4 py-2 text-sm font-semibold shadow-sm hover:opacity-90"
               style={{
-                background: "rgb(var(--primary))",
-                color: "rgb(var(--primary-fg))",
+                background: "rgb(59 130 246)",
+                color: "white",
               }}
             >
               Book a Service
@@ -600,7 +599,7 @@ export default function Navbar() {
                   <button
                     type="button"
                     onClick={() => void onOpenNotifications()}
-                    className="relative rounded-xl border p-2 hover:opacity-90"
+                    className="relative rounded-xl border p-2 shadow-sm hover:opacity-90"
                     style={{
                       borderColor: "rgb(var(--border))",
                       background: "rgb(var(--card))",
@@ -643,7 +642,7 @@ export default function Navbar() {
                       setAccountOpen((v) => !v);
                       setNotifOpen(false);
                     }}
-                    className="flex items-center gap-2 rounded-xl border px-2.5 py-2 text-sm font-semibold hover:opacity-90"
+                    className="flex items-center gap-2 rounded-xl border px-2.5 py-2 text-sm font-semibold shadow-sm hover:opacity-90"
                     style={{
                       borderColor: "rgb(var(--border))",
                       background: "rgb(var(--card))",
@@ -653,7 +652,7 @@ export default function Navbar() {
                   >
                     <span
                       className="grid h-8 w-8 place-items-center rounded-full text-xs font-bold"
-                      style={{ background: "rgba(var(--fg), 0.12)" }}
+                      style={{ background: "rgba(255,255,255,0.08)" }}
                       aria-hidden="true"
                       title={name}
                     >
@@ -699,20 +698,6 @@ export default function Navbar() {
                         Account
                       </button>
 
-                      <div
-                        className="flex items-center justify-between px-4 py-3 text-sm"
-                        style={{ borderTop: "1px solid rgb(var(--border))" }}
-                        role="menuitem"
-                      >
-                        <div
-                          className="font-semibold"
-                          style={{ color: "rgb(var(--fg))" }}
-                        >
-                          Theme
-                        </div>
-                        <ThemeToggle />
-                      </div>
-
                       <button
                         className="w-full px-4 py-3 text-left text-sm font-semibold hover:opacity-90"
                         style={{
@@ -734,7 +719,7 @@ export default function Navbar() {
           <button
             ref={hamburgerRef}
             type="button"
-            className="md:hidden rounded-xl border p-2 hover:opacity-90"
+            className="rounded-xl border p-2 shadow-sm hover:opacity-90 md:hidden"
             style={{
               borderColor: "rgb(var(--border))",
               background: "rgb(var(--card))",
@@ -773,10 +758,10 @@ export default function Navbar() {
 
       {menuOpen ? (
         <div
-          className="md:hidden border-t"
+          className="border-t md:hidden"
           style={{
             borderColor: "rgb(var(--border))",
-            background: "rgba(var(--bg), 0.95)",
+            background: "rgba(var(--bg), 0.96)",
           }}
         >
           <div ref={menuRef} className="mx-auto max-w-6xl space-y-4 px-4 py-4">
@@ -802,10 +787,10 @@ export default function Navbar() {
 
             <Link
               href="/sharkeys-pest-control-booking"
-              className="block rounded-xl px-3 py-3 text-center text-sm font-semibold hover:opacity-90"
+              className="block rounded-xl px-3 py-3 text-center text-sm font-semibold shadow-sm hover:opacity-90"
               style={{
-                background: "rgb(var(--primary))",
-                color: "rgb(var(--primary-fg))",
+                background: "rgb(59 130 246)",
+                color: "white",
               }}
               onClick={() => setMenuOpen(false)}
             >
@@ -862,7 +847,7 @@ export default function Navbar() {
 
                     <div
                       className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold"
-                      style={{ background: "rgba(var(--fg), 0.12)" }}
+                      style={{ background: "rgba(255,255,255,0.08)" }}
                     >
                       {initials}
                     </div>
@@ -911,17 +896,6 @@ export default function Navbar() {
                 >
                   Browser Alerts {browserNotifEnabled ? "On" : "Off"}
                 </button>
-
-                <div
-                  className="flex items-center justify-between rounded-xl border px-3 py-3"
-                  style={{
-                    borderColor: "rgb(var(--border))",
-                    background: "rgb(var(--card))",
-                  }}
-                >
-                  <div className="text-sm font-semibold">Theme</div>
-                  <ThemeToggle />
-                </div>
 
                 <button
                   className="rounded-xl border px-3 py-3 text-sm font-semibold hover:opacity-90"
