@@ -33,37 +33,25 @@ function formatNotes(notes: string | null) {
   return n.length ? n : null;
 }
 
-function formatElapsedSince(ts: string) {
-  const t = new Date(ts).getTime();
-  if (Number.isNaN(t)) return "—";
-
-  const diffMs = Date.now() - t;
-  if (diffMs < 0) return "—";
-
-  const totalMinutes = Math.floor(diffMs / 60000);
-  const days = Math.floor(totalMinutes / (60 * 24));
-  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
-  const mins = totalMinutes % 60;
-
-  if (days > 0) return `${days}d ${hours}h ${mins}m`;
-  if (hours > 0) return `${hours}h ${mins}m`;
-  return `${mins}m`;
-}
-
-/** ---------- Lead/Registered helpers ---------- */
-
 type PersonKind = "lead" | "registered";
 
 function getKind(b: AdminBookingRow): PersonKind {
-  // Your backend sends lead_public_id when lead-backed
   return b.lead_public_id ? "lead" : "registered";
+}
+
+function formatAccountTypeLabel(v?: string | null) {
+  if (!v) return "—";
+  const s = v.trim().toLowerCase();
+  if (s === "residential") return "Residential";
+  if (s === "business") return "Business";
+  return v;
 }
 
 function KindPill({ kind }: { kind: PersonKind }) {
   const isLead = kind === "lead";
   return (
     <span
-      className="rounded-full border px-2 py-1 text-xs font-semibold"
+      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold sm:text-xs"
       style={{
         borderColor: "rgb(var(--border))",
         background: isLead ? "rgba(245, 158, 11, 0.18)" : "rgba(var(--bg), 0.20)",
@@ -75,19 +63,71 @@ function KindPill({ kind }: { kind: PersonKind }) {
   );
 }
 
+function StatusPill({ label }: { label: string }) {
+  return (
+    <span
+      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold capitalize sm:text-xs"
+      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function SectionCard({
+  title,
+  subtitle,
+  actions,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      className="rounded-2xl border p-3 sm:p-4"
+      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
+    >
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h3 className="text-base font-semibold">{title}</h3>
+          {subtitle ? (
+            <p className="mt-1 text-xs sm:text-sm" style={{ color: "rgb(var(--muted))" }}>
+              {subtitle}
+            </p>
+          ) : null}
+        </div>
+
+        {actions ? <div className="shrink-0">{actions}</div> : null}
+      </div>
+
+      {children}
+    </section>
+  );
+}
+
+function DetailRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div
+      className="rounded-xl border px-3 py-2.5"
+      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
+    >
+      <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgb(var(--muted))" }}>
+        {label}
+      </div>
+      <div className={`mt-1 break-words text-sm ${mono ? "font-mono text-[13px]" : ""}`}>{value}</div>
+    </div>
+  );
+}
+
 function getBookee(b: AdminBookingRow) {
-  // Prefer unified fields from backend:
   const first = b.bookee_first_name ?? b.customer_first_name ?? b.lead_first_name ?? null;
-
   const last = b.bookee_last_name ?? b.customer_last_name ?? b.lead_last_name ?? null;
-
   const email = b.bookee_email ?? b.customer_email ?? b.lead_email ?? "";
-
   const phone = b.bookee_phone ?? b.customer_phone ?? b.lead_phone ?? null;
-
   const accountType = b.bookee_account_type ?? b.customer_account_type ?? b.lead_account_type ?? null;
-
-  // In your AdminBookingRow, customer_address exists; lead address is not on this type.
   const customerAddress = b.customer_address ?? null;
 
   const name = [first, last].filter(Boolean).join(" ").trim();
@@ -103,7 +143,97 @@ function getBookee(b: AdminBookingRow) {
   };
 }
 
-/** ---------- Modal ---------- */
+function BookingDispatchCard({
+  booking,
+  busy,
+  kind,
+  bookee,
+  notes,
+  rightPills,
+  footer,
+}: {
+  booking: AdminBookingRow;
+  busy: boolean;
+  kind: PersonKind;
+  bookee: ReturnType<typeof getBookee>;
+  notes: string | null;
+  rightPills: ReactNode;
+  footer: ReactNode;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div
+      className="rounded-2xl border p-3 text-left sm:p-4"
+      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.10)" }}
+    >
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="min-w-0 break-words text-sm font-semibold sm:text-base">{booking.service_title}</div>
+
+            <div className="mt-2 break-words text-sm" style={{ color: "rgb(var(--muted))" }}>
+              {formatRange(booking.starts_at, booking.ends_at)}
+            </div>
+
+            <div className="mt-2 break-words text-sm" style={{ color: "rgb(var(--muted))" }}>
+              {bookee.displayName}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <KindPill kind={kind} />
+            {rightPills}
+          </div>
+        </div>
+
+        {expanded ? (
+          <>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <DetailRow label="Account type" value={formatAccountTypeLabel(bookee.accountType)} />
+              <DetailRow label="Phone" value={bookee.phone || "—"} />
+              <DetailRow label="Email" value={bookee.email || "—"} />
+              <div className="sm:col-span-2">
+                <DetailRow label="Location" value={booking.address || bookee.customerAddress || "—"} />
+              </div>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <DetailRow label="Booking ID" value={booking.public_id} mono />
+              <DetailRow label="Created" value={formatCreated(booking.created_at)} />
+            </div>
+
+            {notes ? (
+              <div
+                className="rounded-xl border p-3 text-sm"
+                style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.22)" }}
+              >
+                <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgb(var(--muted))" }}>
+                  Customer Notes
+                </div>
+                <div className="mt-1 whitespace-pre-wrap break-words">{notes}</div>
+              </div>
+            ) : null}
+          </>
+        ) : null}
+
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <button
+            type="button"
+            onClick={() => setExpanded((prev) => !prev)}
+            className="w-full rounded-xl border px-3 py-2 text-sm font-semibold transition hover:opacity-90 sm:w-auto"
+            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
+            aria-expanded={expanded}
+          >
+            {expanded ? "Show less" : "Show more"}
+          </button>
+
+          <div className={`${busy ? "opacity-90" : ""}`}>{footer}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ConfirmAdminActionModal({
   open,
@@ -141,7 +271,6 @@ function ConfirmAdminActionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* overlay */}
       <button
         type="button"
         aria-label="Close"
@@ -151,7 +280,6 @@ function ConfirmAdminActionModal({
         disabled={busy}
       />
 
-      {/* modal */}
       <div
         className="relative w-full max-w-md rounded-2xl border p-4 shadow-lg"
         style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
@@ -188,7 +316,7 @@ function ConfirmAdminActionModal({
           </div>
         ) : null}
 
-        <div className="mt-4 flex items-center justify-end gap-2">
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
           <button
             type="button"
             className="rounded-lg border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
@@ -216,26 +344,19 @@ function ConfirmAdminActionModal({
   );
 }
 
-/** ---------- Page ---------- */
-
 export default function AdminDispatchPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
-  // Pending + Accepted sections
   const [pendingRows, setPendingRows] = useState<AdminBookingRow[]>([]);
   const [acceptedRows, setAcceptedRows] = useState<AdminBookingRow[]>([]);
 
   const [busyId, setBusyId] = useState<string | null>(null);
-
-  // sort toggle: created vs scheduled
   const [sortBy, setSortBy] = useState<"created" | "scheduled">("created");
 
-  // technicians for dropdown
   const [techs, setTechs] = useState<TechnicianRow[]>([]);
   const [selectedTech, setSelectedTech] = useState<Record<string, number | "">>({});
 
-  // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [modalKind, setModalKind] = useState<"accept" | "cancel">("accept");
   const [modalBookingId, setModalBookingId] = useState<string | null>(null);
@@ -391,7 +512,7 @@ export default function AdminDispatchPage() {
   const modalConfirmLabel = modalKind === "accept" ? "Accept" : "Cancel";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <ConfirmAdminActionModal
         open={modalOpen}
         title={modalTitle}
@@ -403,10 +524,10 @@ export default function AdminDispatchPage() {
         onClose={closeModal}
         details={
           <div className="space-y-1">
-            <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+            <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgb(var(--muted))" }}>
               Booking
             </div>
-            <div className="font-semibold truncate">{modalBookingTitle ?? "—"}</div>
+            <div className="truncate font-semibold">{modalBookingTitle ?? "—"}</div>
             <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
               Booking ID: <span className="font-mono">{modalBookingId ?? "—"}</span>
             </div>
@@ -414,7 +535,7 @@ export default function AdminDispatchPage() {
         }
       />
 
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-xl font-bold">Dispatch</h2>
           <p className="text-sm" style={{ color: "rgb(var(--muted))" }}>
@@ -422,23 +543,25 @@ export default function AdminDispatchPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <label className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-            Sort by
-          </label>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2">
+            <label className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+              Sort by
+            </label>
 
-          <select
-            value={sortBy}
-            onChange={(e) => {
-              const v = e.target.value;
-              setSortBy(v === "scheduled" ? "scheduled" : "created");
-            }}
-            className="rounded-lg border px-2 py-1 text-sm"
-            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-          >
-            <option value="created">Created</option>
-            <option value="scheduled">Scheduled</option>
-          </select>
+            <select
+              value={sortBy}
+              onChange={(e) => {
+                const v = e.target.value;
+                setSortBy(v === "scheduled" ? "scheduled" : "created");
+              }}
+              className="rounded-xl border px-3 py-2 text-sm"
+              style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+            >
+              <option value="created">Created</option>
+              <option value="scheduled">Scheduled</option>
+            </select>
+          </div>
 
           <button
             type="button"
@@ -453,140 +576,104 @@ export default function AdminDispatchPage() {
       </div>
 
       {err ? (
-        <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(239 68 68)" }}>
+        <div
+          className="rounded-xl border p-3 text-sm"
+          style={{ borderColor: "rgb(239 68 68 / 0.75)", background: "rgb(127 29 29 / 0.16)" }}
+        >
           {err}
         </div>
       ) : null}
 
       {loading ? (
-        <div className="rounded-2xl border p-4 text-sm" style={{ borderColor: "rgb(var(--border))" }}>
+        <div
+          className="rounded-2xl border p-4 text-sm"
+          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
+        >
           Loading…
         </div>
       ) : null}
 
-      {/* ======================
-          Pending section
-         ====================== */}
-      {!loading && sortedPending.length === 0 ? (
-        <div className="rounded-2xl border p-6 text-sm space-y-2" style={{ borderColor: "rgb(var(--border))" }}>
-          <div className="font-semibold">No pending bookings</div>
-          <div style={{ color: "rgb(var(--muted))" }}>When customers book services, they’ll appear here.</div>
-        </div>
-      ) : null}
-
-      {!loading && sortedPending.length > 0 ? (
-        <section className="space-y-3">
-          <h3 className="text-base font-semibold">Pending</h3>
-
-          <div className="grid gap-3">
-            {sortedPending.map((b) => {
-              const busy = busyId === b.public_id;
-              const notes = formatNotes(b.notes);
-
-              const kind = getKind(b);
-              const bookee = getBookee(b);
-
-              return (
-                <div
-                  key={b.public_id}
-                  className="rounded-2xl border p-4 space-y-3"
-                  style={{ borderColor: "rgb(var(--border))" }}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold truncate">{b.service_title}</div>
-                      <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
-                        {formatRange(b.starts_at, b.ends_at)}
-                      </div>
-
-                      <div className="mt-2 text-sm">
-                        <div className="font-semibold flex items-center gap-2">
-                          <span className="truncate">{bookee.displayName}</span>
-                          <span className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                            ({bookee.accountType || "—"})
-                          </span>
-                        </div>
-
-                        <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                          Phone: {bookee.phone || "—"} • Email: {bookee.email || "—"}
-                        </div>
-
-                        <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                          Location: {b.address || bookee.customerAddress || "—"}
-                        </div>
-                      </div>
-
-                      <div className="mt-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                        Booking ID: <span className="font-mono">{b.public_id}</span>
-                      </div>
-                      <div className="mt-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                        Created: {formatCreated(b.created_at)} • SLA:{" "}
-                        <span className="font-semibold">{formatElapsedSince(b.created_at)}</span>
-                      </div>
-
-                      {notes ? (
-                        <div
-                          className="mt-2 rounded-xl border p-3 text-sm"
-                          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-                        >
-                          <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-                            Customer Notes:
-                          </div>
-                          <div className="mt-1 whitespace-pre-wrap break-words">{notes}</div>
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <KindPill kind={kind} />
-                      <span
-                        className="rounded-full border px-2 py-1 text-xs"
-                        style={{ borderColor: "rgb(var(--border))" }}
-                      >
-                        Pending
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => openCancelModal(b.public_id)}
-                      disabled={busy}
-                      className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-                      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-                      title="Cancel booking"
-                    >
-                      {busy ? "Working…" : "Delete"}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => openAcceptModal(b.public_id)}
-                      disabled={busy}
-                      className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-                      style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                      title="Accept booking"
-                    >
-                      {busy ? "Working…" : "Accept"}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      ) : null}
-
-      {/* ======================
-          Accepted section
-         ====================== */}
       {!loading ? (
-        <section className="space-y-3">
-          <h3 className="text-base font-semibold">Accepted (Assign technician)</h3>
+        <SectionCard
+          title="Pending"
+          subtitle="New bookings waiting for review before dispatch."
+          actions={
+            <StatusPill label={`${sortedPending.length} ${sortedPending.length === 1 ? "booking" : "bookings"}`} />
+          }
+        >
+          {sortedPending.length === 0 ? (
+            <div
+              className="rounded-2xl border p-4 text-sm"
+              style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.10)" }}
+            >
+              <div className="font-semibold">No pending bookings</div>
+              <div className="mt-1" style={{ color: "rgb(var(--muted))" }}>
+                When customers book services, they’ll appear here.
+              </div>
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              {sortedPending.map((b) => {
+                const busy = busyId === b.public_id;
+                const notes = formatNotes(b.notes);
+                const kind = getKind(b);
+                const bookee = getBookee(b);
 
+                return (
+                  <BookingDispatchCard
+                    key={b.public_id}
+                    booking={b}
+                    busy={busy}
+                    kind={kind}
+                    bookee={bookee}
+                    notes={notes}
+                    rightPills={<StatusPill label="Pending" />}
+                    footer={
+                      <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                        <button
+                          type="button"
+                          onClick={() => openCancelModal(b.public_id)}
+                          disabled={busy}
+                          className="w-full rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60 sm:w-auto"
+                          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                          title="Cancel booking"
+                        >
+                          {busy ? "Working…" : "Delete"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => openAcceptModal(b.public_id)}
+                          disabled={busy}
+                          className="w-full rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60 sm:w-auto"
+                          style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                          title="Accept booking"
+                        >
+                          {busy ? "Working…" : "Accept"}
+                        </button>
+                      </div>
+                    }
+                  />
+                );
+              })}
+            </div>
+          )}
+        </SectionCard>
+      ) : null}
+
+      {!loading ? (
+        <SectionCard
+          title="Accepted"
+          subtitle="Bookings ready to assign to a technician."
+          actions={
+            <StatusPill label={`${sortedAccepted.length} ${sortedAccepted.length === 1 ? "booking" : "bookings"}`} />
+          }
+        >
           {sortedAccepted.length === 0 ? (
-            <div className="rounded-2xl border p-6 text-sm" style={{ borderColor: "rgb(var(--border))" }}>
+            <div
+              className="rounded-2xl border p-4 text-sm"
+              style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.10)" }}
+            >
               <div className="font-semibold">No accepted bookings</div>
               <div className="mt-1" style={{ color: "rgb(var(--muted))" }}>
                 Accepted bookings will appear here until assigned to a technician.
@@ -597,120 +684,68 @@ export default function AdminDispatchPage() {
               {sortedAccepted.map((b) => {
                 const busy = busyId === b.public_id;
                 const notes = formatNotes(b.notes);
-
                 const kind = getKind(b);
                 const bookee = getBookee(b);
 
                 return (
-                  <div
+                  <BookingDispatchCard
                     key={b.public_id}
-                    className="rounded-2xl border p-4 space-y-3"
-                    style={{ borderColor: "rgb(var(--border))" }}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold truncate">{b.service_title}</div>
-                        <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
-                          {formatRange(b.starts_at, b.ends_at)}
-                        </div>
-
-                        <div className="mt-2 text-sm">
-                          <div className="font-semibold flex items-center gap-2">
-                            <span className="truncate">{bookee.displayName}</span>
-                            <span className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                              ({bookee.accountType || "—"})
-                            </span>
-                          </div>
-
-                          <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                            Phone: {bookee.phone || "—"} • Email: {bookee.email || "—"}
-                          </div>
-
-                          <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                            Location: {b.address || bookee.customerAddress || "—"}
-                          </div>
-                        </div>
-
-                        <div className="mt-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                          Booking ID: <span className="font-mono">{b.public_id}</span>
-                        </div>
-                        <div className="mt-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                          Created: {formatCreated(b.created_at)} • SLA:{" "}
-                          <span className="font-semibold">{formatElapsedSince(b.created_at)}</span>
-                        </div>
-
-                        {notes ? (
-                          <div
-                            className="mt-2 rounded-xl border p-3 text-sm"
-                            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-                          >
-                            <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-                              Customer Notes:
-                            </div>
-                            <div className="mt-1 whitespace-pre-wrap break-words">{notes}</div>
-                          </div>
-                        ) : null}
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <KindPill kind={kind} />
-                        <span
-                          className="rounded-full border px-2 py-1 text-xs"
-                          style={{ borderColor: "rgb(var(--border))" }}
+                    booking={b}
+                    busy={busy}
+                    kind={kind}
+                    bookee={bookee}
+                    notes={notes}
+                    rightPills={<StatusPill label="Accepted" />}
+                    footer={
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                        <select
+                          className="w-full rounded-xl border px-3 py-2 text-sm sm:max-w-xs"
+                          style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                          value={selectedTech[b.public_id] ?? ""}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setSelectedTech((prev) => ({ ...prev, [b.public_id]: v ? Number(v) : "" }));
+                          }}
+                          disabled={busy}
                         >
-                          Accepted
-                        </span>
+                          <option value="">Select technician…</option>
+                          {techs.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.last_name}, {t.first_name}
+                              {t.phone ? ` • ${t.phone}` : ""}
+                            </option>
+                          ))}
+                        </select>
+
+                        <button
+                          type="button"
+                          onClick={() => onAssign(b.public_id)}
+                          disabled={busy}
+                          className="w-full rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60 sm:w-auto"
+                          style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                          title="Assign selected technician"
+                        >
+                          {busy ? "Working…" : "Assign"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => openCancelModal(b.public_id)}
+                          disabled={busy}
+                          className="w-full rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60 sm:w-auto"
+                          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                          title="Cancel booking"
+                        >
+                          {busy ? "Working…" : "Cancel"}
+                        </button>
                       </div>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                      <select
-                        className="rounded-lg border px-3 py-2 text-sm"
-                        style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                        value={selectedTech[b.public_id] ?? ""}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setSelectedTech((prev) => ({ ...prev, [b.public_id]: v ? Number(v) : "" }));
-                        }}
-                        disabled={busy}
-                      >
-                        <option value="">Select technician…</option>
-                        {techs.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.last_name}, {t.first_name}
-                            {t.phone ? ` • ${t.phone}` : ""}
-                          </option>
-                        ))}
-                      </select>
-
-                      <button
-                        type="button"
-                        onClick={() => onAssign(b.public_id)}
-                        disabled={busy}
-                        className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-                        style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                        title="Assign selected technician"
-                      >
-                        {busy ? "Working…" : "Assign"}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => openCancelModal(b.public_id)}
-                        disabled={busy}
-                        className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-                        style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-                        title="Cancel booking"
-                      >
-                        {busy ? "Working…" : "Cancel"}
-                      </button>
-                    </div>
-                  </div>
+                    }
+                  />
                 );
               })}
             </div>
           )}
-        </section>
+        </SectionCard>
       ) : null}
     </div>
   );
