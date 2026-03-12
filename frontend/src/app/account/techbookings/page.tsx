@@ -336,8 +336,6 @@ export default function TechBookingsPage() {
               >
                 ← Back to Tech Bookings
               </button>
-
-              <h2 className="text-xl font-bold">{b ? `Booking ${b.public_id}` : "Booking"}</h2>
               <p className="text-sm" style={{ color: "rgb(var(--muted))" }}>
                 Booking details and message thread.
               </p>
