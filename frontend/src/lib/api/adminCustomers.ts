@@ -93,6 +93,7 @@ export type AdminCustomerBookingRow = {
   completed_at: string | null;
   cancelled_at: string | null;
   service_title: string;
+    effective_price_cents?: number | null;
 };
 
 export type AdminCustomerDetailResponse = {
@@ -169,6 +170,20 @@ export async function adminGetCustomerDetail(kind: AdminCustomerKind, publicId: 
         completed: Number(res.summary?.counts?.completed) || 0,
         cancelled: Number(res.summary?.counts?.cancelled) || 0,
       },
+    },
+    bookings: {
+      in_progress: (res.bookings?.in_progress || []).map((b) => ({
+        ...b,
+        effective_price_cents: Number(b.effective_price_cents) || 0,
+      })),
+      completed: (res.bookings?.completed || []).map((b) => ({
+        ...b,
+        effective_price_cents: Number(b.effective_price_cents) || 0,
+      })),
+      cancelled: (res.bookings?.cancelled || []).map((b) => ({
+        ...b,
+        effective_price_cents: Number(b.effective_price_cents) || 0,
+      })),
     },
   } satisfies AdminCustomerDetailResponse;
 }

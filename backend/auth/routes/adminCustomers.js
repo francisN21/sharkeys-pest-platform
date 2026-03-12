@@ -477,15 +477,9 @@ router.get("/:kind/:publicId", requireAuth, requireRole("admin"), async (req, re
         counts,
       },
       bookings: {
-        in_progress: bookings
-          .filter((b) => groupStatus(b.status) === "in_progress")
-          .map(({ effective_price_cents, ...rest }) => rest),
-        completed: bookings
-          .filter((b) => groupStatus(b.status) === "completed")
-          .map(({ effective_price_cents, ...rest }) => rest),
-        cancelled: bookings
-          .filter((b) => groupStatus(b.status) === "cancelled")
-          .map(({ effective_price_cents, ...rest }) => rest),
+        in_progress: bookings.filter((b) => groupStatus(b.status) === "in_progress"),
+        completed: bookings.filter((b) => groupStatus(b.status) === "completed"),
+        cancelled: bookings.filter((b) => groupStatus(b.status) === "cancelled"),
       },
       generated_at: new Date().toISOString(),
     });
