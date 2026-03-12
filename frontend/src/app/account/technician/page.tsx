@@ -74,7 +74,28 @@ type BookingPrice = {
 
 type BookingPriceResponse = { ok: boolean; price: BookingPrice };
 
+type GroupKey =
+  | "needs_attention"
+  | "starting_soon"
+  | "today"
+  | "tomorrow"
+  | "this_week"
+  | "later";
+
+type GroupedAssigned = {
+  key: GroupKey;
+  title: string;
+  subtitle: string;
+  rows: WorkerBookingRow[];
+  tone?: "danger" | "normal";
+  defaultExpanded: boolean;
+};
+
 const API_BASE = process.env.NEXT_PUBLIC_AUTH_API_BASE;
+
+/** ---------------------------
+ * Basic fetch helpers
+ ---------------------------- */
 
 function resolveUrl(path: string) {
   if (!API_BASE && !path.startsWith("http")) {
@@ -189,6 +210,36 @@ function formatNotes(notes: string | null) {
   return n.length ? n : null;
 }
 
+function formatRelativeToNow(startsAt: string) {
+  const t = new Date(startsAt).getTime();
+  if (Number.isNaN(t)) return "—";
+
+  const diffMs = t - Date.now();
+  const absMinutes = Math.floor(Math.abs(diffMs) / 60000);
+  const hours = Math.floor(absMinutes / 60);
+  const mins = absMinutes % 60;
+
+  const human =
+    hours > 0
+      ? `${hours}h ${mins}m`
+      : `${mins}m`;
+
+  if (diffMs < 0) return `Started ${human} ago`;
+  return `Starts in ${human}`;
+}
+
+function startOfDay(d: Date) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+function endOfDay(d: Date) {
+  const x = new Date(d);
+  x.setHours(23, 59, 59, 999);
+  return x;
+}
+
 /** ---------------------------
  * Lead / Registered helpers
  ---------------------------- */
@@ -243,6 +294,10 @@ function pickDisplayName(b: WorkerBookingRow) {
   };
 }
 
+/** ---------------------------
+ * Shared UI helpers
+ ---------------------------- */
+
 function SectionCard({
   title,
   subtitle,
@@ -273,6 +328,341 @@ function SectionCard({
       {children}
     </section>
   );
+}
+
+function GroupCountPill({ count, tone = "normal" }: { count: number; tone?: "normal" | "danger" }) {
+  return (
+    <span
+      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold sm:text-xs"
+      style={{
+        borderColor: tone === "danger" ? "rgb(239 68 68 / 0.55)" : "rgb(var(--border))",
+        background: tone === "danger" ? "rgb(127 29 29 / 0.18)" : "rgba(var(--bg), 0.18)",
+        color: tone === "danger" ? "rgb(254 202 202)" : "rgb(var(--muted))",
+      }}
+    >
+      {count} {count === 1 ? "job" : "jobs"}
+    </span>
+  );
+}
+
+function JobGroupSection({
+  group,
+  expanded,
+  onToggle,
+  busyId,
+  onOpenDetail,
+  onOpenComplete,
+}: {
+  group: GroupedAssigned;
+  expanded: boolean;
+  busyId: string | null;
+  onToggle: () => void;
+  onOpenDetail: (publicId: string) => void;
+  onOpenComplete: (publicId: string) => void;
+}) {
+  return (
+    <SectionCard
+      title={group.title}
+      subtitle={group.subtitle}
+      actions={
+        <div className="flex items-center gap-2">
+          <GroupCountPill count={group.rows.length} tone={group.tone === "danger" ? "danger" : "normal"} />
+          {group.rows.length > 0 ? (
+            <button
+              type="button"
+              onClick={onToggle}
+              className="rounded-xl border px-3 py-2 text-sm font-semibold transition hover:opacity-90"
+              style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
+            >
+              {expanded ? "Hide jobs" : "Show jobs"}
+            </button>
+          ) : null}
+        </div>
+      }
+    >
+      {group.rows.length === 0 ? (
+        <div
+          className="rounded-xl border p-3 text-sm"
+          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.14)" }}
+        >
+          <span style={{ color: "rgb(var(--muted))" }}>No jobs in this section.</span>
+        </div>
+      ) : !expanded ? (
+        <div
+          className="rounded-xl border p-3 text-sm"
+          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.14)" }}
+        >
+          <span style={{ color: "rgb(var(--muted))" }}>
+            {group.rows.length} {group.rows.length === 1 ? "job" : "jobs"} hidden.
+          </span>
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          {group.rows.map((b) => {
+            const busy = busyId === b.public_id;
+            const notes = formatNotes(b.notes);
+            const bookee = pickDisplayName(b);
+
+            return (
+              <div
+                key={b.public_id}
+                className="rounded-2xl border p-3 sm:p-4"
+                style={{
+                  borderColor: group.tone === "danger" ? "rgb(239 68 68 / 0.35)" : "rgb(var(--border))",
+                  background: group.tone === "danger" ? "rgb(127 29 29 / 0.12)" : "rgba(var(--bg), 0.10)",
+                }}
+              >
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="min-w-0 truncate text-sm font-semibold sm:text-base">{b.service_title}</div>
+                        <BookeePill kind={bookee.kind} />
+                        <span
+                          className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold sm:text-xs"
+                          style={{
+                            borderColor: group.tone === "danger" ? "rgb(239 68 68 / 0.45)" : "rgb(var(--border))",
+                            background: group.tone === "danger" ? "rgb(127 29 29 / 0.18)" : "rgba(var(--bg), 0.18)",
+                          }}
+                        >
+                          Assigned
+                        </span>
+                      </div>
+
+                      <div className="mt-2 text-sm break-words" style={{ color: "rgb(var(--muted))" }}>
+                        {formatRange(b.starts_at, b.ends_at)}
+                      </div>
+
+                      <div
+                        className="mt-1 text-xs font-semibold"
+                        style={{ color: group.tone === "danger" ? "rgb(254 202 202)" : "rgb(var(--muted))" }}
+                      >
+                        {formatRelativeToNow(b.starts_at)}
+                      </div>
+
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        <div
+                          className="rounded-xl border px-3 py-2.5"
+                          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
+                        >
+                          <div
+                            className="text-[11px] font-semibold uppercase tracking-wide"
+                            style={{ color: "rgb(var(--muted))" }}
+                          >
+                            Customer
+                          </div>
+                          <div className="mt-1 text-sm font-medium break-words">
+                            {bookee.displayName}
+                            <span className="ml-2 text-xs font-normal" style={{ color: "rgb(var(--muted))" }}>
+                              ({bookee.accountType})
+                            </span>
+                          </div>
+                        </div>
+
+                        <div
+                          className="rounded-xl border px-3 py-2.5"
+                          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
+                        >
+                          <div
+                            className="text-[11px] font-semibold uppercase tracking-wide"
+                            style={{ color: "rgb(var(--muted))" }}
+                          >
+                            Contact
+                          </div>
+                          <div className="mt-1 text-sm break-words">
+                            Phone: {bookee.phone}
+                            <br />
+                            Email: {bookee.email}
+                          </div>
+                        </div>
+
+                        <div className="sm:col-span-2">
+                          <div
+                            className="rounded-xl border px-3 py-2.5"
+                            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
+                          >
+                            <div
+                              className="text-[11px] font-semibold uppercase tracking-wide"
+                              style={{ color: "rgb(var(--muted))" }}
+                            >
+                              Location
+                            </div>
+                            <div className="mt-1 text-sm break-words">{b.address || bookee.customerAddress || "—"}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        <div className="text-xs break-words" style={{ color: "rgb(var(--muted))" }}>
+                          Booking ID: <span className="font-mono">{b.public_id}</span>
+                        </div>
+                        <div className="text-xs break-words sm:text-right" style={{ color: "rgb(var(--muted))" }}>
+                          Created: {formatCreated(b.created_at)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {notes ? (
+                    <div
+                      className="rounded-xl border p-3 text-sm"
+                      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.22)" }}
+                    >
+                      <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgb(var(--muted))" }}>
+                        Customer Notes
+                      </div>
+                      <div className="mt-1 whitespace-pre-wrap break-words">{notes}</div>
+                    </div>
+                  ) : null}
+
+                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    <button
+                      type="button"
+                      onClick={() => onOpenDetail(b.public_id)}
+                      className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+                      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                      disabled={!!busyId}
+                    >
+                      Details
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => onOpenComplete(b.public_id)}
+                      disabled={busy}
+                      className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+                      style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                    >
+                      {busy ? "Working…" : "Complete Job"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+/** ---------------------------
+ * Grouping logic
+ ---------------------------- */
+
+function buildAssignedGroups(rows: WorkerBookingRow[]): GroupedAssigned[] {
+  const now = new Date();
+  const nowMs = now.getTime();
+  const twoHoursMs = 2 * 60 * 60 * 1000;
+
+  const todayStart = startOfDay(now).getTime();
+  const todayEnd = endOfDay(now).getTime();
+
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+  const tomorrowStart = startOfDay(tomorrow).getTime();
+  const tomorrowEnd = endOfDay(tomorrow).getTime();
+
+  const weekEnd = endOfDay(new Date(now));
+  weekEnd.setDate(now.getDate() + (7 - now.getDay()));
+
+  const buckets: Record<GroupKey, WorkerBookingRow[]> = {
+    needs_attention: [],
+    starting_soon: [],
+    today: [],
+    tomorrow: [],
+    this_week: [],
+    later: [],
+  };
+
+  for (const row of rows) {
+    const startMs = new Date(row.starts_at).getTime();
+
+    if (Number.isNaN(startMs)) {
+      buckets.later.push(row);
+      continue;
+    }
+
+    if (startMs < nowMs) {
+      buckets.needs_attention.push(row);
+      continue;
+    }
+
+    if (startMs <= nowMs + twoHoursMs) {
+      buckets.starting_soon.push(row);
+      continue;
+    }
+
+    if (startMs >= todayStart && startMs <= todayEnd) {
+      buckets.today.push(row);
+      continue;
+    }
+
+    if (startMs >= tomorrowStart && startMs <= tomorrowEnd) {
+      buckets.tomorrow.push(row);
+      continue;
+    }
+
+    if (startMs <= weekEnd.getTime()) {
+      buckets.this_week.push(row);
+      continue;
+    }
+
+    buckets.later.push(row);
+  }
+
+  const sortSoonest = (a: WorkerBookingRow, b: WorkerBookingRow) =>
+    new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime();
+
+  for (const key of Object.keys(buckets) as GroupKey[]) {
+    buckets[key].sort(sortSoonest);
+  }
+
+  return [
+    {
+      key: "needs_attention",
+      title: "Needs Attention",
+      subtitle: "Jobs whose start time already passed and still need action.",
+      rows: buckets.needs_attention,
+      tone: "danger",
+      defaultExpanded: true,
+    },
+    {
+      key: "starting_soon",
+      title: "Starting Soon",
+      subtitle: "Jobs starting within the next 2 hours.",
+      rows: buckets.starting_soon,
+      defaultExpanded: true,
+    },
+    {
+      key: "today",
+      title: "Today",
+      subtitle: "Remaining jobs scheduled for today.",
+      rows: buckets.today,
+      defaultExpanded: true,
+    },
+    {
+      key: "tomorrow",
+      title: "Tomorrow",
+      subtitle: "Your jobs for tomorrow.",
+      rows: buckets.tomorrow,
+      defaultExpanded: buckets.tomorrow.length > 0 && buckets.tomorrow.length <= 3,
+    },
+    {
+      key: "this_week",
+      title: "Later This Week",
+      subtitle: "Upcoming jobs scheduled later this week.",
+      rows: buckets.this_week,
+      defaultExpanded: false,
+    },
+    {
+      key: "later",
+      title: "Later",
+      subtitle: "Future jobs beyond this week.",
+      rows: buckets.later,
+      defaultExpanded: false,
+    },
+  ];
 }
 
 /** ---------------------------
@@ -313,10 +703,19 @@ export default function WorkerJobsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalBookingId, setModalBookingId] = useState<string | null>(null);
   const [modalBookingTitle, setModalBookingTitle] = useState<string | null>(null);
-  const [modalInitialPriceCents, setModalInitialPriceCents] = useState<number | null>(null);
+  const [, setModalInitialPriceCents] = useState<number | null>(null);
   const [modalPriceLoading, setModalPriceLoading] = useState(false);
   const [modalPriceInput, setModalPriceInput] = useState("");
   const [modalPriceTouched, setModalPriceTouched] = useState(false);
+
+  const [assignedExpanded, setAssignedExpanded] = useState<Record<GroupKey, boolean>>({
+    needs_attention: true,
+    starting_soon: true,
+    today: true,
+    tomorrow: false,
+    this_week: false,
+    later: false,
+  });
 
   async function refresh(opts?: { historyPage?: number }) {
     const pageToLoad = opts?.historyPage ?? historyPage;
@@ -435,9 +834,7 @@ export default function WorkerJobsPage() {
       const res = (await sendBookingMessage(publicId, trimmed)) as BookingMessageMutationResponse;
       const saved = toMessengerMessage(res.message);
 
-      if (!saved) {
-        throw new Error("Invalid message response");
-      }
+      if (!saved) throw new Error("Invalid message response");
 
       setMessages((prev) => prev.map((m) => (m.id === tempId ? saved : m)));
     } catch (error: unknown) {
@@ -474,11 +871,7 @@ export default function WorkerJobsPage() {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === messageId
-            ? {
-                ...m,
-                body: saved.body,
-                updated_at: saved.updated_at ?? m.updated_at,
-              }
+            ? { ...m, body: saved.body, updated_at: saved.updated_at ?? m.updated_at }
             : m
         )
       );
@@ -631,29 +1024,31 @@ export default function WorkerJobsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
-  const sortedAssigned = useMemo(() => {
-    const copy = [...assignedRows];
-    copy.sort((a, b) => {
-      const aKey = sortBy === "created" ? a.created_at : a.starts_at;
-      const bKey = sortBy === "created" ? b.created_at : b.starts_at;
-      const at = new Date(aKey).getTime();
-      const bt = new Date(bKey).getTime();
-      return sortBy === "scheduled" ? at - bt : bt - at;
+  const assignedGroups = useMemo(() => buildAssignedGroups(assignedRows), [assignedRows]);
+
+  useEffect(() => {
+    setAssignedExpanded((prev) => {
+      const next = { ...prev };
+      for (const g of assignedGroups) {
+        if (!(g.key in next)) next[g.key] = g.defaultExpanded;
+      }
+      return next;
     });
-    return copy;
-  }, [assignedRows, sortBy]);
+  }, [assignedGroups]);
 
   const sortedHistory = useMemo(() => {
     const copy = [...historyRows];
     copy.sort((a, b) => {
       const at = new Date(a.created_at).getTime();
       const bt = new Date(b.created_at).getTime();
-      return bt - at;
+      return sortBy === "scheduled"
+        ? new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime()
+        : bt - at;
     });
     return copy;
-  }, [historyRows]);
+  }, [historyRows, sortBy]);
 
-  const rows = tab === "assigned" ? sortedAssigned : sortedHistory;
+  const rows = sortedHistory;
 
   const canPrev = historyPage > 1;
   const canNext = historyPage < historyTotalPages;
@@ -874,89 +1269,83 @@ export default function WorkerJobsPage() {
         </div>
       ) : null}
 
-      {!loading && rows.length === 0 ? (
-        <div
-          className="rounded-2xl border p-6 text-sm space-y-2"
-          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
-        >
-          <div className="font-semibold">{tab === "assigned" ? "No assigned jobs" : "No job history"}</div>
-          <div style={{ color: "rgb(var(--muted))" }}>
-            {tab === "assigned"
-              ? "When an admin assigns you a booking, it will appear here."
-              : "Completed jobs will appear here after you complete them."}
+      {!loading && tab === "assigned" ? (
+        assignedGroups.every((g) => g.rows.length === 0) ? (
+          <div
+            className="rounded-2xl border p-6 text-sm space-y-2"
+            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
+          >
+            <div className="font-semibold">No assigned jobs</div>
+            <div style={{ color: "rgb(var(--muted))" }}>
+              When an admin assigns you a booking, it will appear here.
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="space-y-3">
+            {assignedGroups.map((group) => (
+              <JobGroupSection
+                key={group.key}
+                group={group}
+                expanded={assignedExpanded[group.key] ?? group.defaultExpanded}
+                busyId={busyId}
+                onToggle={() =>
+                  setAssignedExpanded((prev) => ({
+                    ...prev,
+                    [group.key]: !(prev[group.key] ?? group.defaultExpanded),
+                  }))
+                }
+                onOpenDetail={openDetail}
+                onOpenComplete={openCompleteModal}
+              />
+            ))}
+          </div>
+        )
       ) : null}
 
-      {!loading && rows.length > 0 ? (
-        <section className="space-y-3">
-          <div className="grid gap-3">
-            {rows.map((b) => {
-              const busy = busyId === b.public_id;
-              const notes = formatNotes(b.notes);
-              const bookee = pickDisplayName(b);
+      {!loading && tab === "history" ? (
+        rows.length === 0 ? (
+          <div
+            className="rounded-2xl border p-6 text-sm space-y-2"
+            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
+          >
+            <div className="font-semibold">No job history</div>
+            <div style={{ color: "rgb(var(--muted))" }}>
+              Completed jobs will appear here after you complete them.
+            </div>
+          </div>
+        ) : (
+          <section className="space-y-3">
+            <div className="grid gap-3">
+              {rows.map((b) => {
+                const busy = busyId === b.public_id;
+                const notes = formatNotes(b.notes);
+                const bookee = pickDisplayName(b);
 
-              return (
-                <div
-                  key={b.public_id}
-                  className="rounded-2xl border p-3 sm:p-4"
-                  style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.10)" }}
-                >
-                  <div className="flex flex-col gap-3">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <div className="min-w-0 truncate text-sm font-semibold sm:text-base">{b.service_title}</div>
-                          <BookeePill kind={bookee.kind} />
-                          <span
-                            className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold sm:text-xs"
-                            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
-                          >
-                            {tab === "assigned" ? "Assigned" : "Completed"}
-                          </span>
-                        </div>
-
-                        <div className="mt-2 text-sm break-words" style={{ color: "rgb(var(--muted))" }}>
-                          {formatRange(b.starts_at, b.ends_at)}
-                        </div>
-
-                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                          <div
-                            className="rounded-xl border px-3 py-2.5"
-                            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
-                          >
-                            <div
-                              className="text-[11px] font-semibold uppercase tracking-wide"
-                              style={{ color: "rgb(var(--muted))" }}
+                return (
+                  <div
+                    key={b.public_id}
+                    className="rounded-2xl border p-3 sm:p-4"
+                    style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.10)" }}
+                  >
+                    <div className="flex flex-col gap-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="min-w-0 truncate text-sm font-semibold sm:text-base">{b.service_title}</div>
+                            <BookeePill kind={bookee.kind} />
+                            <span
+                              className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold sm:text-xs"
+                              style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
                             >
-                              Customer
-                            </div>
-                            <div className="mt-1 text-sm font-medium break-words">
-                              {bookee.displayName}
-                              <span className="ml-2 text-xs font-normal" style={{ color: "rgb(var(--muted))" }}>
-                                ({bookee.accountType})
-                              </span>
-                            </div>
+                              Completed
+                            </span>
                           </div>
 
-                          <div
-                            className="rounded-xl border px-3 py-2.5"
-                            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
-                          >
-                            <div
-                              className="text-[11px] font-semibold uppercase tracking-wide"
-                              style={{ color: "rgb(var(--muted))" }}
-                            >
-                              Contact
-                            </div>
-                            <div className="mt-1 text-sm break-words">
-                              Phone: {bookee.phone}
-                              <br />
-                              Email: {bookee.email}
-                            </div>
+                          <div className="mt-2 text-sm break-words" style={{ color: "rgb(var(--muted))" }}>
+                            {formatRange(b.starts_at, b.ends_at)}
                           </div>
 
-                          <div className="sm:col-span-2">
+                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
                             <div
                               className="rounded-xl border px-3 py-2.5"
                               style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
@@ -965,105 +1354,128 @@ export default function WorkerJobsPage() {
                                 className="text-[11px] font-semibold uppercase tracking-wide"
                                 style={{ color: "rgb(var(--muted))" }}
                               >
-                                Location
+                                Customer
                               </div>
-                              <div className="mt-1 text-sm break-words">{b.address || bookee.customerAddress || "—"}</div>
+                              <div className="mt-1 text-sm font-medium break-words">
+                                {bookee.displayName}
+                                <span className="ml-2 text-xs font-normal" style={{ color: "rgb(var(--muted))" }}>
+                                  ({bookee.accountType})
+                                </span>
+                              </div>
+                            </div>
+
+                            <div
+                              className="rounded-xl border px-3 py-2.5"
+                              style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
+                            >
+                              <div
+                                className="text-[11px] font-semibold uppercase tracking-wide"
+                                style={{ color: "rgb(var(--muted))" }}
+                              >
+                                Contact
+                              </div>
+                              <div className="mt-1 text-sm break-words">
+                                Phone: {bookee.phone}
+                                <br />
+                                Email: {bookee.email}
+                              </div>
+                            </div>
+
+                            <div className="sm:col-span-2">
+                              <div
+                                className="rounded-xl border px-3 py-2.5"
+                                style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
+                              >
+                                <div
+                                  className="text-[11px] font-semibold uppercase tracking-wide"
+                                  style={{ color: "rgb(var(--muted))" }}
+                                >
+                                  Location
+                                </div>
+                                <div className="mt-1 text-sm break-words">{b.address || bookee.customerAddress || "—"}</div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                            <div className="text-xs break-words" style={{ color: "rgb(var(--muted))" }}>
+                              Booking ID: <span className="font-mono">{b.public_id}</span>
+                            </div>
+                            <div className="text-xs break-words sm:text-right" style={{ color: "rgb(var(--muted))" }}>
+                              Created: {formatCreated(b.created_at)}
                             </div>
                           </div>
                         </div>
-
-                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                          <div className="text-xs break-words" style={{ color: "rgb(var(--muted))" }}>
-                            Booking ID: <span className="font-mono">{b.public_id}</span>
-                          </div>
-                          <div className="text-xs break-words sm:text-right" style={{ color: "rgb(var(--muted))" }}>
-                            Created: {formatCreated(b.created_at)}
-                          </div>
-                        </div>
                       </div>
-                    </div>
 
-                    {notes ? (
-                      <div
-                        className="rounded-xl border p-3 text-sm"
-                        style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.22)" }}
-                      >
-                        <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgb(var(--muted))" }}>
-                          Customer Notes
+                      {notes ? (
+                        <div
+                          className="rounded-xl border p-3 text-sm"
+                          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.22)" }}
+                        >
+                          <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgb(var(--muted))" }}>
+                            Customer Notes
+                          </div>
+                          <div className="mt-1 whitespace-pre-wrap break-words">{notes}</div>
                         </div>
-                        <div className="mt-1 whitespace-pre-wrap break-words">{notes}</div>
-                      </div>
-                    ) : null}
+                      ) : null}
 
-                    <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-                      <button
-                        type="button"
-                        onClick={() => openDetail(b.public_id)}
-                        className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-                        style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-                        disabled={!!busyId}
-                        title="View details"
-                      >
-                        Details
-                      </button>
-
-                      {tab === "assigned" ? (
+                      <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
                         <button
                           type="button"
-                          onClick={() => openCompleteModal(b.public_id)}
-                          disabled={busy}
+                          onClick={() => openDetail(b.public_id)}
                           className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-                          style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                          title="Complete (requires final price)"
+                          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                          disabled={!!busyId || busy}
                         >
-                          {busy ? "Working…" : "Complete Job"}
+                          Details
                         </button>
-                      ) : null}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {tab === "history" && historyTotalPages > 1 ? (
-            <div className="flex items-center justify-between gap-2 pt-2">
-              <button
-                type="button"
-                onClick={async () => {
-                  if (historyPage <= 1) return;
-                  const nextPage = historyPage - 1;
-                  setHistoryPage(nextPage);
-                  await refresh({ historyPage: nextPage });
-                }}
-                disabled={!canPrev || !!busyId}
-                className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-                style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-              >
-                Prev
-              </button>
-
-              <div className="text-center text-xs" style={{ color: "rgb(var(--muted))" }}>
-                Page {historyPage} of {historyTotalPages} • {fmtNum(historyTotal)} total
-              </div>
-
-              <button
-                type="button"
-                onClick={async () => {
-                  if (historyPage >= historyTotalPages) return;
-                  const nextPage = historyPage + 1;
-                  setHistoryPage(nextPage);
-                  await refresh({ historyPage: nextPage });
-                }}
-                disabled={!canNext || !!busyId}
-                className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-                style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-              >
-                Next
-              </button>
+                );
+              })}
             </div>
-          ) : null}
-        </section>
+
+            {historyTotalPages > 1 ? (
+              <div className="flex items-center justify-between gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (historyPage <= 1) return;
+                    const nextPage = historyPage - 1;
+                    setHistoryPage(nextPage);
+                    await refresh({ historyPage: nextPage });
+                  }}
+                  disabled={!canPrev || !!busyId}
+                  className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+                  style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                >
+                  Prev
+                </button>
+
+                <div className="text-center text-xs" style={{ color: "rgb(var(--muted))" }}>
+                  Page {historyPage} of {historyTotalPages} • {fmtNum(historyTotal)} total
+                </div>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (historyPage >= historyTotalPages) return;
+                    const nextPage = historyPage + 1;
+                    setHistoryPage(nextPage);
+                    await refresh({ historyPage: nextPage });
+                  }}
+                  disabled={!canNext || !!busyId}
+                  className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+                  style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                >
+                  Next
+                </button>
+              </div>
+            ) : null}
+          </section>
+        )
       ) : null}
     </div>
   );
