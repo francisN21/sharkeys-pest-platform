@@ -184,23 +184,6 @@ function formatCreated(ts: string) {
   return d.toLocaleString();
 }
 
-function formatElapsedSince(ts: string) {
-  const t = new Date(ts).getTime();
-  if (Number.isNaN(t)) return "—";
-
-  const diffMs = Date.now() - t;
-  if (diffMs < 0) return "—";
-
-  const totalMinutes = Math.floor(diffMs / 60000);
-  const days = Math.floor(totalMinutes / (60 * 24));
-  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
-  const mins = totalMinutes % 60;
-
-  if (days > 0) return `${days}d ${hours}h ${mins}m`;
-  if (hours > 0) return `${hours}h ${mins}m`;
-  return `${mins}m`;
-}
-
 function formatNotes(notes: string | null) {
   const n = (notes ?? "").trim();
   return n.length ? n : null;
@@ -220,7 +203,7 @@ function BookeePill({ kind }: { kind: BookeeKind }) {
   const isLead = kind === "lead";
   return (
     <span
-      className="rounded-full border px-2 py-1 text-xs font-semibold"
+      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold sm:text-xs"
       style={{
         borderColor: "rgb(var(--border))",
         background: isLead ? "rgba(245, 158, 11, 0.18)" : "rgba(var(--bg), 0.20)",
@@ -258,6 +241,38 @@ function pickDisplayName(b: WorkerBookingRow) {
     accountType: accountType ?? "—",
     customerAddress: b.customer_address ?? null,
   };
+}
+
+function SectionCard({
+  title,
+  subtitle,
+  actions,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section
+      className="rounded-2xl border p-3 sm:p-4"
+      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
+    >
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h3 className="text-base font-semibold">{title}</h3>
+          {subtitle ? (
+            <p className="mt-1 text-xs sm:text-sm" style={{ color: "rgb(var(--muted))" }}>
+              {subtitle}
+            </p>
+          ) : null}
+        </div>
+        {actions ? <div className="shrink-0">{actions}</div> : null}
+      </div>
+      {children}
+    </section>
+  );
 }
 
 /** ---------------------------
@@ -662,26 +677,21 @@ export default function WorkerJobsPage() {
     const b = detail;
 
     return (
-      <main className="space-y-6">
-        <section className="space-y-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1">
+      <main className="space-y-4 sm:space-y-6">
+        <SectionCard
+          title={b?.service_title ?? "Booking Details"}
+          subtitle="Details, pricing, and message thread."
+          actions={
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={backToList}
                 className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
                 style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
               >
-                ← Back to Jobs
+                ← Back
               </button>
 
-              <h2 className="text-xl font-bold">{b ? `Booking ${b.public_id}` : "Booking"}</h2>
-              <p className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                Booking details and message thread.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => selectedBookingId && openDetail(selectedBookingId)}
@@ -706,26 +716,35 @@ export default function WorkerJobsPage() {
                 </button>
               ) : null}
             </div>
-          </div>
-
+          }
+        >
           {detailErr ? (
-            <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(239 68 68)" }}>
+            <div
+              className="rounded-xl border p-3 text-sm"
+              style={{ borderColor: "rgb(239 68 68 / 0.75)", background: "rgb(127 29 29 / 0.16)" }}
+            >
               {detailErr}
             </div>
           ) : null}
 
           {detailLoading ? (
-            <div className="rounded-2xl border p-4 text-sm" style={{ borderColor: "rgb(var(--border))" }}>
+            <div
+              className="rounded-2xl border p-4 text-sm"
+              style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
+            >
               Loading…
             </div>
           ) : null}
 
           {!detailLoading && b ? <BookingInfoCard booking={b} /> : null}
-        </section>
+        </SectionCard>
 
-        <section className="space-y-3">
+        <SectionCard title="Messages" subtitle="Message thread for this booking.">
           {msgErr ? (
-            <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(239 68 68)" }}>
+            <div
+              className="rounded-xl border p-3 text-sm"
+              style={{ borderColor: "rgb(239 68 68 / 0.75)", background: "rgb(127 29 29 / 0.16)" }}
+            >
               {msgErr}
             </div>
           ) : null}
@@ -743,7 +762,7 @@ export default function WorkerJobsPage() {
               msgLocked ? "You’re no longer part of this booking chat (it may have been reassigned)." : undefined
             }
           />
-        </section>
+        </SectionCard>
 
         <CompleteWithPriceModal
           open={modalOpen}
@@ -763,7 +782,7 @@ export default function WorkerJobsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <CompleteWithPriceModal
         open={modalOpen}
         busy={modalBusy}
@@ -778,7 +797,7 @@ export default function WorkerJobsPage() {
         onConfirm={confirmCompleteWithPrice}
       />
 
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-xl font-bold">Jobs</h2>
           <p className="text-sm" style={{ color: "rgb(var(--muted))" }}>
@@ -786,23 +805,25 @@ export default function WorkerJobsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <label className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-            Sort by
-          </label>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2">
+            <label className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+              Sort by
+            </label>
 
-          <select
-            value={sortBy}
-            onChange={(e) => {
-              const v = e.target.value;
-              setSortBy(v === "created" ? "created" : "scheduled");
-            }}
-            className="rounded-lg border px-2 py-1 text-sm"
-            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-          >
-            <option value="scheduled">Scheduled</option>
-            <option value="created">Created</option>
-          </select>
+            <select
+              value={sortBy}
+              onChange={(e) => {
+                const v = e.target.value;
+                setSortBy(v === "created" ? "created" : "scheduled");
+              }}
+              className="rounded-xl border px-3 py-2 text-sm"
+              style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+            >
+              <option value="scheduled">Scheduled</option>
+              <option value="created">Created</option>
+            </select>
+          </div>
 
           <button
             type="button"
@@ -836,19 +857,28 @@ export default function WorkerJobsPage() {
       </div>
 
       {err ? (
-        <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(239 68 68)" }}>
+        <div
+          className="rounded-xl border p-3 text-sm"
+          style={{ borderColor: "rgb(239 68 68 / 0.75)", background: "rgb(127 29 29 / 0.16)" }}
+        >
           {err}
         </div>
       ) : null}
 
       {loading ? (
-        <div className="rounded-2xl border p-4 text-sm" style={{ borderColor: "rgb(var(--border))" }}>
+        <div
+          className="rounded-2xl border p-4 text-sm"
+          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
+        >
           Loading…
         </div>
       ) : null}
 
       {!loading && rows.length === 0 ? (
-        <div className="rounded-2xl border p-6 text-sm space-y-2" style={{ borderColor: "rgb(var(--border))" }}>
+        <div
+          className="rounded-2xl border p-6 text-sm space-y-2"
+          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
+        >
           <div className="font-semibold">{tab === "assigned" ? "No assigned jobs" : "No job history"}</div>
           <div style={{ color: "rgb(var(--muted))" }}>
             {tab === "assigned"
@@ -869,87 +899,127 @@ export default function WorkerJobsPage() {
               return (
                 <div
                   key={b.public_id}
-                  className="rounded-2xl border p-4 space-y-3"
-                  style={{ borderColor: "rgb(var(--border))" }}
+                  className="rounded-2xl border p-3 sm:p-4"
+                  style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.10)" }}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <div className="text-sm font-semibold truncate">{b.service_title}</div>
-                        <BookeePill kind={bookee.kind} />
-                      </div>
-
-                      <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
-                        {formatRange(b.starts_at, b.ends_at)}
-                      </div>
-
-                      <div className="mt-2 text-sm">
-                        <div className="font-semibold">
-                          {bookee.displayName}
-                          <span className="ml-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                            ({bookee.accountType})
+                  <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="min-w-0 truncate text-sm font-semibold sm:text-base">{b.service_title}</div>
+                          <BookeePill kind={bookee.kind} />
+                          <span
+                            className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold sm:text-xs"
+                            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
+                          >
+                            {tab === "assigned" ? "Assigned" : "Completed"}
                           </span>
                         </div>
 
-                        <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                          Phone: {bookee.phone} • Email: {bookee.email}
+                        <div className="mt-2 text-sm break-words" style={{ color: "rgb(var(--muted))" }}>
+                          {formatRange(b.starts_at, b.ends_at)}
                         </div>
 
-                        <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                          Location: {b.address || bookee.customerAddress || "—"}
-                        </div>
-                      </div>
-
-                      <div className="mt-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                        Booking ID: <span className="font-mono">{b.public_id}</span>
-                      </div>
-                      <div className="mt-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                        Created: {formatCreated(b.created_at)} • SLA:{" "}
-                        <span className="font-semibold">{formatElapsedSince(b.created_at)}</span>
-                      </div>
-
-                      {notes ? (
-                        <div
-                          className="mt-2 rounded-xl border p-3 text-sm"
-                          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-                        >
-                          <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-                            Customer Notes:
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          <div
+                            className="rounded-xl border px-3 py-2.5"
+                            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
+                          >
+                            <div
+                              className="text-[11px] font-semibold uppercase tracking-wide"
+                              style={{ color: "rgb(var(--muted))" }}
+                            >
+                              Customer
+                            </div>
+                            <div className="mt-1 text-sm font-medium break-words">
+                              {bookee.displayName}
+                              <span className="ml-2 text-xs font-normal" style={{ color: "rgb(var(--muted))" }}>
+                                ({bookee.accountType})
+                              </span>
+                            </div>
                           </div>
-                          <div className="mt-1 whitespace-pre-wrap break-words">{notes}</div>
+
+                          <div
+                            className="rounded-xl border px-3 py-2.5"
+                            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
+                          >
+                            <div
+                              className="text-[11px] font-semibold uppercase tracking-wide"
+                              style={{ color: "rgb(var(--muted))" }}
+                            >
+                              Contact
+                            </div>
+                            <div className="mt-1 text-sm break-words">
+                              Phone: {bookee.phone}
+                              <br />
+                              Email: {bookee.email}
+                            </div>
+                          </div>
+
+                          <div className="sm:col-span-2">
+                            <div
+                              className="rounded-xl border px-3 py-2.5"
+                              style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
+                            >
+                              <div
+                                className="text-[11px] font-semibold uppercase tracking-wide"
+                                style={{ color: "rgb(var(--muted))" }}
+                              >
+                                Location
+                              </div>
+                              <div className="mt-1 text-sm break-words">{b.address || bookee.customerAddress || "—"}</div>
+                            </div>
+                          </div>
                         </div>
-                      ) : null}
+
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                          <div className="text-xs break-words" style={{ color: "rgb(var(--muted))" }}>
+                            Booking ID: <span className="font-mono">{b.public_id}</span>
+                          </div>
+                          <div className="text-xs break-words sm:text-right" style={{ color: "rgb(var(--muted))" }}>
+                            Created: {formatCreated(b.created_at)}
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
-                    <span className="rounded-full border px-2 py-1 text-xs" style={{ borderColor: "rgb(var(--border))" }}>
-                      {tab === "assigned" ? "Assigned" : "Completed"}
-                    </span>
-                  </div>
+                    {notes ? (
+                      <div
+                        className="rounded-xl border p-3 text-sm"
+                        style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.22)" }}
+                      >
+                        <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgb(var(--muted))" }}>
+                          Customer Notes
+                        </div>
+                        <div className="mt-1 whitespace-pre-wrap break-words">{notes}</div>
+                      </div>
+                    ) : null}
 
-                  <div className="flex items-center justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => openDetail(b.public_id)}
-                      className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-                      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-                      disabled={!!busyId}
-                      title="View details"
-                    >
-                      Details
-                    </button>
-
-                    {tab === "assigned" ? (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
                       <button
                         type="button"
-                        onClick={() => openCompleteModal(b.public_id)}
-                        disabled={busy}
+                        onClick={() => openDetail(b.public_id)}
                         className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-                        style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                        title="Complete (requires final price)"
+                        style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                        disabled={!!busyId}
+                        title="View details"
                       >
-                        {busy ? "Working…" : "Complete Job"}
+                        Details
                       </button>
-                    ) : null}
+
+                      {tab === "assigned" ? (
+                        <button
+                          type="button"
+                          onClick={() => openCompleteModal(b.public_id)}
+                          disabled={busy}
+                          className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+                          style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                          title="Complete (requires final price)"
+                        >
+                          {busy ? "Working…" : "Complete Job"}
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               );
@@ -957,7 +1027,7 @@ export default function WorkerJobsPage() {
           </div>
 
           {tab === "history" && historyTotalPages > 1 ? (
-            <div className="flex items-center justify-between pt-2">
+            <div className="flex items-center justify-between gap-2 pt-2">
               <button
                 type="button"
                 onClick={async () => {
@@ -973,7 +1043,7 @@ export default function WorkerJobsPage() {
                 Prev
               </button>
 
-              <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+              <div className="text-center text-xs" style={{ color: "rgb(var(--muted))" }}>
                 Page {historyPage} of {historyTotalPages} • {fmtNum(historyTotal)} total
               </div>
 
