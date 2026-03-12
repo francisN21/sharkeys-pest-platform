@@ -15,11 +15,6 @@ type FormState = {
   account_type: AccountType;
 };
 
-/**
- * ✅ Local augmentation type (no `any`)
- * Keeps your existing MeResponse "as-is" and just describes the optional fields
- * we know the backend can send (roles/user_role).
- */
 type MeUserWithRoles = AccountUser & {
   roles?: string[] | null;
   user_role?: string | null;
@@ -45,7 +40,11 @@ function formatDate(iso?: string | null) {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  return d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function formatDateTime(iso?: string | null) {
@@ -94,7 +93,6 @@ function buildDiffPayload(form: FormState, user: AccountUser): UpdateMePayload {
   if (fAddr !== uAddr) payload.address = fAddr || undefined;
   if (fType !== uType) payload.account_type = fType || undefined;
 
-  // Remove undefined keys
   (Object.keys(payload) as (keyof UpdateMePayload)[]).forEach((k) => {
     if (payload[k] === undefined) delete payload[k];
   });
@@ -102,17 +100,41 @@ function buildDiffPayload(form: FormState, user: AccountUser): UpdateMePayload {
   return payload;
 }
 
-/** ✅ superuser-only Owner Dashboard button gate (no `any`) */
 function isSuperUser(res: MeResponse | null) {
   if (!res) return false;
 
-  // "as-is" approach: treat incoming response as possibly containing roles
   const withRoles = res as MeResponseWithRoles;
-
   const rolesRaw = withRoles.user?.roles ?? null;
   if (!rolesRaw || !Array.isArray(rolesRaw)) return false;
 
   return rolesRaw.map((r) => String(r).trim().toLowerCase()).includes("superuser");
+}
+
+function SectionCard({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className="rounded-2xl border p-3 sm:p-4"
+      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.14)" }}
+    >
+      <div className="mb-3">
+        <div className="text-sm font-semibold sm:text-base">{title}</div>
+        {subtitle ? (
+          <div className="mt-1 text-xs sm:text-sm" style={{ color: "rgb(var(--muted))" }}>
+            {subtitle}
+          </div>
+        ) : null}
+      </div>
+      {children}
+    </div>
+  );
 }
 
 export default function AccountViewPage() {
@@ -124,11 +146,9 @@ export default function AccountViewPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
   const [editing, setEditing] = useState(false);
 
   const user = data?.user ?? null;
-
   const isSU = useMemo(() => isSuperUser(data), [data]);
 
   const [form, setForm] = useState<FormState>({
@@ -212,10 +232,12 @@ export default function AccountViewPage() {
       const res = await updateMe(payload);
       if (!res?.ok || !res.user) throw new Error("Failed to update profile");
 
-      // ✅ keep any extra fields on data.user (roles/user_role) if present
       setData((prev) => {
         if (!prev) return prev;
-        return { ...prev, user: { ...(prev.user as AccountUser), ...(res.user as AccountUser) } };
+        return {
+          ...prev,
+          user: { ...(prev.user as AccountUser), ...(res.user as AccountUser) },
+        };
       });
 
       setOkMsg("Profile updated.");
@@ -236,255 +258,287 @@ export default function AccountViewPage() {
   }
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-10 space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Account</h1>
-          <p className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
-            View your profile details and manage your account.
-          </p>
-        </div>
+    <main className="mx-auto w-full max-w-5xl px-2 py-3 sm:px-4 sm:py-6">
+      <section className="space-y-4 sm:space-y-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-xl font-bold">Account</h1>
+            <p className="text-sm" style={{ color: "rgb(var(--muted))" }}>
+              Manage your profile, contact details, and account information.
+            </p>
+          </div>
 
-        {/* ✅ Owner Dashboard (superuser only) + Edit toggle */}
-        <div className="flex items-center gap-2">
-          {isSU ? (
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            {isSU ? (
+              <button
+                type="button"
+                onClick={() => router.push("/owner-dashboard")}
+                className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+                style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                disabled={loading || !user || saving}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M4 19V5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M4 19H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M8 16V11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M12 16V7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M16 16V9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                  Owner Dashboard
+                </span>
+              </button>
+            ) : null}
+
             <button
               type="button"
-              onClick={() => router.push("/owner-dashboard")}
+              onClick={() => {
+                if (!editing) {
+                  setErr(null);
+                  setOkMsg(null);
+                  setEditing(true);
+                } else {
+                  onCancelEdit();
+                }
+              }}
               className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
               style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
               disabled={loading || !user || saving}
-              title="Open Owner Dashboard"
             >
               <span className="inline-flex items-center gap-2">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M4 19V5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  <path d="M4 19H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  <path d="M8 16V11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  <path d="M12 16V7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  <path d="M16 16V9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M12 20h9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  <path
+                    d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinejoin="round"
+                  />
                 </svg>
-                Owner Dashboard
+                {editing ? "Cancel" : "Edit"}
               </span>
             </button>
-          ) : null}
-
-          <button
-            type="button"
-            onClick={() => {
-              if (!editing) {
-                setErr(null);
-                setOkMsg(null);
-                setEditing(true);
-              } else {
-                onCancelEdit();
-              }
-            }}
-            className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-            disabled={loading || !user || saving}
-            title={editing ? "Cancel editing" : "Edit profile"}
-          >
-            <span className="inline-flex items-center gap-2">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M12 20h9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                <path
-                  d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              {editing ? "Cancel" : "Edit"}
-            </span>
-          </button>
-        </div>
-      </div>
-
-      {err ? (
-        <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(239 68 68)" }}>
-          {err}
-        </div>
-      ) : null}
-
-      {okMsg ? (
-        <div
-          className="rounded-xl border p-3 text-sm"
-          style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-        >
-          {okMsg}
-        </div>
-      ) : null}
-
-      {loading ? (
-        <div className="rounded-2xl border p-4 text-sm" style={{ borderColor: "rgb(var(--border))" }}>
-          Loading…
-        </div>
-      ) : user ? (
-        <section className="space-y-4">
-          <div
-            className="rounded-2xl border p-5 sm:p-6"
-            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-          >
-            <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-              Hi,{" "}
-              <span className="font-semibold" style={{ color: "rgb(var(--text))" }}>
-                {firstNameOrFallback(user)}
-              </span>{" "}
-              👋
-            </div>
-
-            <div className="mt-1 text-lg font-semibold truncate">{displayName(user)}</div>
-            <div className="mt-1 text-sm truncate" style={{ color: "rgb(var(--muted))" }}>
-              {user.email}
-            </div>
-
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Pill label={user.email_verified_at ? "Verified" : "Not verified"} />
-              <Pill label={`Joined ${formatDate(user.created_at)}`} />
-              {user.account_type ? <Pill label={formatAccountType(user.account_type)} /> : null}
-              {isSU ? <Pill label="Superuser" /> : null}
-            </div>
           </div>
+        </div>
 
+        {err ? (
           <div
-            className="rounded-2xl border p-5 sm:p-6 space-y-4"
-            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+            className="rounded-xl border p-3 text-sm"
+            style={{ borderColor: "rgb(239 68 68 / 0.75)", background: "rgb(127 29 29 / 0.16)" }}
           >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-base font-semibold">Profile details</div>
-                <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                  Update your contact details for scheduling and service notifications.
-                </div>
-              </div>
+            {err}
+          </div>
+        ) : null}
 
-              {editing ? (
-                <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                  {hasChanges ? "Unsaved changes" : "No changes yet"}
-                </div>
-              ) : null}
-            </div>
+        {okMsg ? (
+          <div
+            className="rounded-xl border p-3 text-sm"
+            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
+          >
+            {okMsg}
+          </div>
+        ) : null}
 
-            {!editing ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Info label="First name" value={user.first_name ?? "—"} />
-                <Info label="Last name" value={user.last_name ?? "—"} />
-                <Info label="Phone" value={user.phone ?? "—"} />
-                <Info label="Account type" value={formatAccountType(user.account_type)} />
-                <div className="sm:col-span-2">
-                  <Info label="Address" value={user.address ?? "—"} />
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="First name">
-                    <input
-                      value={form.first_name}
-                      onChange={(e) => setForm((p) => ({ ...p, first_name: e.target.value }))}
-                      className="w-full rounded-lg border px-3 py-2 text-sm"
-                      style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                      placeholder="First name"
-                    />
-                  </Field>
+        {loading ? (
+          <div
+            className="rounded-2xl border p-4 text-sm"
+            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
+          >
+            Loading…
+          </div>
+        ) : user ? (
+          <div className="grid gap-3 sm:gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+            <div className="space-y-3 sm:space-y-4">
+              <div
+                className="rounded-2xl border p-3 sm:p-4"
+                style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.10)" }}
+              >
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
+                        Hi,{" "}
+                        <span className="font-semibold" style={{ color: "rgb(var(--text))" }}>
+                          {firstNameOrFallback(user)}
+                        </span>{" "}
+                        👋
+                      </div>
 
-                  <Field label="Last name">
-                    <input
-                      value={form.last_name}
-                      onChange={(e) => setForm((p) => ({ ...p, last_name: e.target.value }))}
-                      className="w-full rounded-lg border px-3 py-2 text-sm"
-                      style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                      placeholder="Last name"
-                    />
-                  </Field>
+                      <div className="mt-1 break-words text-lg font-semibold sm:text-xl">
+                        {displayName(user)}
+                      </div>
 
-                  <Field label="Phone number">
-                    <input
-                      value={form.phone}
-                      onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
-                      className="w-full rounded-lg border px-3 py-2 text-sm"
-                      style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                      placeholder="e.g., 707-555-1234"
-                    />
-                  </Field>
+                      <div className="mt-1 break-words text-sm" style={{ color: "rgb(var(--muted))" }}>
+                        {user.email}
+                      </div>
+                    </div>
 
-                  <Field label="Account type">
-                    <select
-                      value={form.account_type}
-                      onChange={(e) =>
-                        setForm((p) => ({ ...p, account_type: (e.target.value as AccountType) ?? "" }))
-                      }
-                      className="w-full rounded-lg border px-3 py-2 text-sm"
-                      style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                    >
-                      <option value="">Select…</option>
-                      <option value="residential">Residential</option>
-                      <option value="business">Business</option>
-                    </select>
-                  </Field>
+                    {editing ? (
+                      <div
+                        className="rounded-full border px-2.5 py-1 text-[11px] font-medium"
+                        style={{ borderColor: "rgb(var(--border))", color: "rgb(var(--muted))" }}
+                      >
+                        {hasChanges ? "Unsaved changes" : "No changes yet"}
+                      </div>
+                    ) : null}
+                  </div>
 
-                  <div className="sm:col-span-2">
-                    <Field label="Address">
-                      <input
-                        value={form.address}
-                        onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))}
-                        className="w-full rounded-lg border px-3 py-2 text-sm"
-                        style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                        placeholder="Street, City, State"
-                      />
-                    </Field>
+                  <div className="flex flex-wrap gap-2">
+                    <Pill label={user.email_verified_at ? "Verified" : "Not verified"} />
+                    <Pill label={formatAccountType(user.account_type)} />
+                    <Pill label={`Joined ${formatDate(user.created_at)}`} />
+                    {isSU ? <Pill label="Superuser" /> : null}
                   </div>
                 </div>
+              </div>
 
-                <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={onCancelEdit}
-                    className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-                    style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-                    disabled={saving}
-                  >
-                    Cancel
-                  </button>
+              <SectionCard
+                title="Profile details"
+                subtitle="Keep your contact details up to date for scheduling and notifications."
+              >
+                {!editing ? (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Info label="First name" value={user.first_name ?? "—"} />
+                    <Info label="Last name" value={user.last_name ?? "—"} />
+                    <Info label="Phone" value={user.phone ?? "—"} />
+                    <Info label="Account type" value={formatAccountType(user.account_type)} />
+                    <div className="sm:col-span-2">
+                      <Info label="Address" value={user.address ?? "—"} />
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field label="First name">
+                        <input
+                          value={form.first_name}
+                          onChange={(e) => setForm((p) => ({ ...p, first_name: e.target.value }))}
+                          className="w-full rounded-xl border px-3 py-2.5 text-sm"
+                          style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                          placeholder="First name"
+                        />
+                      </Field>
 
-                  <button
-                    type="button"
-                    onClick={onSave}
-                    className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-                    style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                    disabled={saving || !hasChanges}
-                    title={!hasChanges ? "No changes to save" : "Save changes"}
-                  >
-                    {saving ? "Saving…" : "Save changes"}
-                  </button>
+                      <Field label="Last name">
+                        <input
+                          value={form.last_name}
+                          onChange={(e) => setForm((p) => ({ ...p, last_name: e.target.value }))}
+                          className="w-full rounded-xl border px-3 py-2.5 text-sm"
+                          style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                          placeholder="Last name"
+                        />
+                      </Field>
+
+                      <Field label="Phone number">
+                        <input
+                          value={form.phone}
+                          onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
+                          className="w-full rounded-xl border px-3 py-2.5 text-sm"
+                          style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                          placeholder="e.g. 707-555-1234"
+                        />
+                      </Field>
+
+                      <Field label="Account type">
+                        <select
+                          value={form.account_type}
+                          onChange={(e) =>
+                            setForm((p) => ({
+                              ...p,
+                              account_type: (e.target.value as AccountType) ?? "",
+                            }))
+                          }
+                          className="w-full rounded-xl border px-3 py-2.5 text-sm"
+                          style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                        >
+                          <option value="">Select…</option>
+                          <option value="residential">Residential</option>
+                          <option value="business">Business</option>
+                        </select>
+                      </Field>
+
+                      <div className="sm:col-span-2">
+                        <Field label="Address">
+                          <input
+                            value={form.address}
+                            onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))}
+                            className="w-full rounded-xl border px-3 py-2.5 text-sm"
+                            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                            placeholder="Street, City, State"
+                          />
+                        </Field>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                      <button
+                        type="button"
+                        onClick={onCancelEdit}
+                        className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+                        style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                        disabled={saving}
+                      >
+                        Cancel
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={onSave}
+                        className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+                        style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                        disabled={saving || !hasChanges}
+                        title={!hasChanges ? "No changes to save" : "Save changes"}
+                      >
+                        {saving ? "Saving…" : "Save changes"}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </SectionCard>
+            </div>
+
+            <div className="space-y-3 sm:space-y-4">
+              <SectionCard title="Account info" subtitle="Read-only account metadata.">
+                <div className="grid gap-2">
+                  <Info label="Email" value={user.email} />
+                  <Info label="Email verified" value={user.email_verified_at ? "Yes" : "No"} />
+                  <Info label="Joined" value={formatDateTime(user.created_at)} />
+                  <Info label="Public ID" value={user.public_id ?? "—"} mono />
                 </div>
-              </>
-            )}
-          </div>
+              </SectionCard>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Info label="Email" value={user.email} />
-            <Info label="Email verified" value={user.email_verified_at ? "Yes" : "No"} />
-            <Info label="Joined" value={formatDateTime(user.created_at)} />
-            <Info label="Public ID" value={user.public_id ?? "—"} mono />
+              <SectionCard title="Quick summary" subtitle="Fast account overview.">
+                <div className="grid grid-cols-2 gap-2">
+                  <MiniStat label="Name" value={displayName(user)} />
+                  <MiniStat label="Type" value={formatAccountType(user.account_type)} />
+                  <MiniStat label="Phone" value={user.phone || "—"} />
+                  <MiniStat label="Status" value={user.email_verified_at ? "Verified" : "Pending"} />
+                </div>
+              </SectionCard>
+            </div>
           </div>
-        </section>
-      ) : (
-        <div
-          className="rounded-xl border p-3 text-sm"
-          style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-        >
-          No user data.
-        </div>
-      )}
+        ) : (
+          <div
+            className="rounded-xl border p-3 text-sm"
+            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+          >
+            No user data.
+          </div>
+        )}
+      </section>
     </main>
   );
 }
 
 function Pill({ label }: { label: string }) {
   return (
-    <span className="rounded-full border px-2 py-1 text-xs" style={{ borderColor: "rgb(var(--border))" }}>
+    <span
+      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold sm:text-xs"
+      style={{
+        borderColor: "rgb(var(--border))",
+        background: "rgba(var(--bg), 0.20)",
+      }}
+    >
       {label}
     </span>
   );
@@ -492,25 +546,56 @@ function Pill({ label }: { label: string }) {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-1">
-      <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+    <label className="block space-y-1.5">
+      <div
+        className="text-[11px] font-semibold uppercase tracking-wide"
+        style={{ color: "rgb(var(--muted))" }}
+      >
         {label}
       </div>
       {children}
-    </div>
+    </label>
   );
 }
 
 function Info({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div
-      className="rounded-xl border p-3"
-      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.35)" }}
+      className="rounded-xl border px-3 py-2.5"
+      style={{
+        borderColor: "rgb(var(--border))",
+        background: "rgba(var(--bg), 0.18)",
+      }}
     >
-      <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+      <div
+        className="text-[11px] font-semibold uppercase tracking-wide"
+        style={{ color: "rgb(var(--muted))" }}
+      >
         {label}
       </div>
-      <div className={`mt-1 text-sm ${mono ? "font-mono" : ""}`}>{value}</div>
+      <div className={`mt-1 break-words text-sm ${mono ? "font-mono text-[13px]" : ""}`}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div
+      className="rounded-xl border px-3 py-2.5"
+      style={{
+        borderColor: "rgb(var(--border))",
+        background: "rgba(var(--bg), 0.22)",
+      }}
+    >
+      <div
+        className="text-[11px] font-semibold uppercase tracking-wide"
+        style={{ color: "rgb(var(--muted))" }}
+      >
+        {label}
+      </div>
+      <div className="mt-1 truncate text-sm font-medium">{value}</div>
     </div>
   );
 }

@@ -588,7 +588,7 @@ export default function Navbar() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <div className="hidden items-center gap-3 md:flex">
             <Link
               href="/sharkeys-pest-control-booking"
@@ -613,11 +613,11 @@ export default function Navbar() {
           </div>
 
           {!loading && isAuthed ? (
-            <div className="relative" ref={notifRef}>
+            <div className="relative shrink-0" ref={notifRef}>
               <button
                 type="button"
                 onClick={() => void onOpenNotifications()}
-                className="relative rounded-xl border p-2 shadow-sm hover:opacity-90"
+                className="relative rounded-xl border p-2.5 shadow-sm hover:opacity-90"
                 style={{
                   borderColor: "rgb(var(--border))",
                   background: "rgb(var(--card))",
@@ -738,7 +738,7 @@ export default function Navbar() {
           <button
             ref={hamburgerRef}
             type="button"
-            className="rounded-xl border p-2 shadow-sm hover:opacity-90 md:hidden"
+            className="shrink-0 rounded-xl border p-2.5 shadow-sm hover:opacity-90 md:hidden"
             style={{
               borderColor: "rgb(var(--border))",
               background: "rgb(var(--card))",
