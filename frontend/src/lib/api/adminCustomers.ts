@@ -30,6 +30,7 @@ export type AdminCustomerRow = {
   open_bookings: number;
   completed_bookings: number;
   cancelled_bookings: number;
+  lifetime_value_cents: number;
 
   // from backend LEFT JOIN customer_tags
   crm_tag?: CrmTag;
@@ -50,6 +51,7 @@ export type AdminListCustomersResponse = {
 
 type RawAdminCustomerRow = Omit<AdminCustomerRow, "crm_tag"> & {
   crm_tag?: unknown;
+  lifetime_value_cents?: number | string | null;
 };
 
 type RawAdminListCustomersResponse = Omit<AdminListCustomersResponse, "customers"> & {
@@ -68,7 +70,11 @@ export async function adminListCustomers(opts: { page?: number; pageSize?: numbe
     ...res,
     customers: (res.customers || []).map((c) => ({
       ...c,
-      crm_tag: normalizeCrmTag((c as RawAdminCustomerRow).crm_tag),
+      open_bookings: Number(c.open_bookings) || 0,
+      completed_bookings: Number(c.completed_bookings) || 0,
+      cancelled_bookings: Number(c.cancelled_bookings) || 0,
+      lifetime_value_cents: Number(c.lifetime_value_cents) || 0,
+      crm_tag: normalizeCrmTag(c.crm_tag),
     })) as AdminCustomerRow[],
   } satisfies AdminListCustomersResponse;
 }
@@ -111,6 +117,7 @@ export type AdminCustomerDetailResponse = {
   };
   summary: {
     lifetime_value: number;
+    lifetime_value_cents: number;
     counts: {
       in_progress: number;
       completed: number;
@@ -125,12 +132,21 @@ export type AdminCustomerDetailResponse = {
   generated_at?: string;
 };
 
-type RawAdminCustomerDetailResponse = Omit<AdminCustomerDetailResponse, "tag"> & {
+type RawAdminCustomerDetailResponse = Omit<AdminCustomerDetailResponse, "tag" | "summary"> & {
   tag: {
     tag: unknown;
     note: string | null;
     updated_at: string | null;
     updated_by_user_id: number | null;
+  };
+  summary: {
+    lifetime_value: number | string | null;
+    lifetime_value_cents?: number | string | null;
+    counts: {
+      in_progress: number | string | null;
+      completed: number | string | null;
+      cancelled: number | string | null;
+    };
   };
 };
 
@@ -145,9 +161,17 @@ export async function adminGetCustomerDetail(kind: AdminCustomerKind, publicId: 
       ...res.tag,
       tag: normalizeCrmTag(res.tag?.tag),
     },
+    summary: {
+      lifetime_value: Number(res.summary?.lifetime_value) || 0,
+      lifetime_value_cents: Number(res.summary?.lifetime_value_cents) || 0,
+      counts: {
+        in_progress: Number(res.summary?.counts?.in_progress) || 0,
+        completed: Number(res.summary?.counts?.completed) || 0,
+        cancelled: Number(res.summary?.counts?.cancelled) || 0,
+      },
+    },
   } satisfies AdminCustomerDetailResponse;
 }
-
 
 export type SearchPersonKind = "registered" | "lead";
 
@@ -195,7 +219,6 @@ export async function adminSearchCustomersAndLeads(args?: { q?: string; limit?: 
     })) as AdminSearchRow[],
   } satisfies AdminSearchCustomersAndLeadsResponse;
 }
-
 
 export function adminSetCustomerTag(
   kind: AdminCustomerKind,

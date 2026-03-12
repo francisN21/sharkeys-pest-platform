@@ -117,7 +117,14 @@ router.get("/", requireAuth, requireRole("admin"), async (req, res, next) => {
           d.entity_id,
           COALESCE(SUM(CASE WHEN b.status IN ('pending','accepted','assigned') THEN 1 ELSE 0 END), 0)::int AS open_bookings,
           COALESCE(SUM(CASE WHEN b.status = 'completed' THEN 1 ELSE 0 END), 0)::int AS completed_bookings,
-          COALESCE(SUM(CASE WHEN b.status = 'cancelled' THEN 1 ELSE 0 END), 0)::int AS cancelled_bookings
+          COALESCE(SUM(CASE WHEN b.status = 'cancelled' THEN 1 ELSE 0 END), 0)::int AS cancelled_bookings,
+          COALESCE(SUM(
+            CASE
+              WHEN b.status = 'completed'
+                THEN COALESCE(bp.final_price_cents, bp.initial_price_cents, s.base_price_cents, 0)
+              ELSE 0
+            END
+          ), 0)::bigint AS lifetime_value_cents
         FROM directory d
         LEFT JOIN bookings b
           ON (
@@ -125,6 +132,10 @@ router.get("/", requireAuth, requireRole("admin"), async (req, res, next) => {
             OR
             (d.kind = 'lead' AND b.lead_id = d.entity_id)
           )
+        LEFT JOIN services s
+          ON s.id = b.service_id
+        LEFT JOIN booking_prices bp
+          ON bp.booking_id = b.id
         GROUP BY d.kind, d.entity_id
       ),
       tags AS (
@@ -151,8 +162,8 @@ router.get("/", requireAuth, requireRole("admin"), async (req, res, next) => {
         COALESCE(s.open_bookings, 0) AS open_bookings,
         COALESCE(s.completed_bookings, 0) AS completed_bookings,
         COALESCE(s.cancelled_bookings, 0) AS cancelled_bookings,
+        COALESCE(s.lifetime_value_cents, 0) AS lifetime_value_cents,
 
-        -- ✅ include tag fields so main list can show pills
         t.tag AS crm_tag,
         t.note AS crm_tag_note,
         t.updated_at AS crm_tag_updated_at,
@@ -181,7 +192,13 @@ router.get("/", requireAuth, requireRole("admin"), async (req, res, next) => {
 
     res.json({
       ok: true,
-      customers: dataRes.rows,
+      customers: dataRes.rows.map((r) => ({
+        ...r,
+        open_bookings: Number(r.open_bookings) || 0,
+        completed_bookings: Number(r.completed_bookings) || 0,
+        cancelled_bookings: Number(r.cancelled_bookings) || 0,
+        lifetime_value_cents: Number(r.lifetime_value_cents) || 0,
+      })),
       page,
       pageSize,
       total,
@@ -306,7 +323,6 @@ router.get("/search", requireAuth, requireRole("admin"), async (req, res, next) 
     const params = q.length > 0 ? [like, limit] : [limit];
     const { rows } = await pool.query(sql, params);
 
-    // Normalize tag fields for frontend convenience
     const results = rows.map((r) => ({
       public_id: r.public_id,
       kind: r.kind,
@@ -363,7 +379,7 @@ async function resolveEntity(kind, publicId) {
 function groupStatus(status) {
   if (status === "completed") return "completed";
   if (status === "cancelled") return "cancelled";
-  return "in_progress"; // pending/accepted/assigned
+  return "in_progress";
 }
 
 /**
@@ -377,7 +393,6 @@ router.get("/:kind/:publicId", requireAuth, requireRole("admin"), async (req, re
     const entity = await resolveEntity(kind, publicId);
     if (!entity) return res.status(404).json({ ok: false, message: "Customer not found" });
 
-    // Tag row (optional)
     const tagRes = await pool.query(
       `
       SELECT tag, note, updated_at, updated_by_user_id
@@ -390,8 +405,6 @@ router.get("/:kind/:publicId", requireAuth, requireRole("admin"), async (req, re
 
     const tagRow = tagRes.rows[0] || null;
 
-    // Pull all bookings for this entity
-    // NOTE: lifetime_value uses 0 as default. Plug your amount column here when you add pricing.
     const bookingsRes = await pool.query(
       `
       SELECT
@@ -405,9 +418,11 @@ router.get("/:kind/:publicId", requireAuth, requireRole("admin"), async (req, re
         b.accepted_at,
         b.completed_at,
         b.cancelled_at,
-        s.title AS service_title
+        s.title AS service_title,
+        COALESCE(bp.final_price_cents, bp.initial_price_cents, s.base_price_cents, 0)::bigint AS effective_price_cents
       FROM bookings b
       JOIN services s ON s.id = b.service_id
+      LEFT JOIN booking_prices bp ON bp.booking_id = b.id
       WHERE
         (
           ($1 = 'registered' AND b.customer_user_id = $2)
@@ -420,12 +435,20 @@ router.get("/:kind/:publicId", requireAuth, requireRole("admin"), async (req, re
       [kind, entity.entity_id]
     );
 
-    const bookings = bookingsRes.rows;
+    const bookings = bookingsRes.rows.map((b) => ({
+      ...b,
+      effective_price_cents: Number(b.effective_price_cents) || 0,
+    }));
 
     const counts = { in_progress: 0, completed: 0, cancelled: 0 };
     for (const b of bookings) counts[groupStatus(b.status)]++;
 
-    const lifetime_value = 0;
+    const lifetime_value_cents = bookings.reduce((sum, b) => {
+      if (b.status !== "completed") return sum;
+      return sum + (Number(b.effective_price_cents) || 0);
+    }, 0);
+
+    const lifetime_value = lifetime_value_cents / 100;
 
     res.json({
       ok: true,
@@ -450,12 +473,19 @@ router.get("/:kind/:publicId", requireAuth, requireRole("admin"), async (req, re
         : { tag: null, note: null, updated_at: null, updated_by_user_id: null },
       summary: {
         lifetime_value,
+        lifetime_value_cents,
         counts,
       },
       bookings: {
-        in_progress: bookings.filter((b) => groupStatus(b.status) === "in_progress"),
-        completed: bookings.filter((b) => groupStatus(b.status) === "completed"),
-        cancelled: bookings.filter((b) => groupStatus(b.status) === "cancelled"),
+        in_progress: bookings
+          .filter((b) => groupStatus(b.status) === "in_progress")
+          .map(({ effective_price_cents, ...rest }) => rest),
+        completed: bookings
+          .filter((b) => groupStatus(b.status) === "completed")
+          .map(({ effective_price_cents, ...rest }) => rest),
+        cancelled: bookings
+          .filter((b) => groupStatus(b.status) === "cancelled")
+          .map(({ effective_price_cents, ...rest }) => rest),
       },
       generated_at: new Date().toISOString(),
     });
