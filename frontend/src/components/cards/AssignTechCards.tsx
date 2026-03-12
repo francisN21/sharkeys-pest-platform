@@ -1,4 +1,3 @@
-// frontend/src/components/cards/AssignTechCards.tsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -52,7 +51,7 @@ function KindPill({ kind }: { kind: PersonKind }) {
   const isLead = kind === "lead";
   return (
     <span
-      className="rounded-full border px-2 py-1 text-xs font-semibold"
+      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold sm:text-xs"
       style={{
         borderColor: "rgb(var(--border))",
         background: isLead ? "rgba(245, 158, 11, 0.18)" : "rgba(var(--bg), 0.20)",
@@ -73,16 +72,16 @@ function TagPill({ tag }: { tag: string | null | undefined }) {
     key === "vip"
       ? "rgba(34, 197, 94, 0.16)"
       : key === "hot"
-      ? "rgba(239, 68, 68, 0.16)"
-      : key === "warm"
-      ? "rgba(245, 158, 11, 0.16)"
-      : key === "cold"
-      ? "rgba(59, 130, 246, 0.14)"
-      : "rgba(59, 130, 246, 0.14)";
+        ? "rgba(239, 68, 68, 0.16)"
+        : key === "warm"
+          ? "rgba(245, 158, 11, 0.16)"
+          : key === "cold"
+            ? "rgba(59, 130, 246, 0.14)"
+            : "rgba(59, 130, 246, 0.14)";
 
   return (
     <span
-      className="rounded-full border px-2 py-1 text-xs font-semibold"
+      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold sm:text-xs"
       style={{ borderColor: "rgb(var(--border))", background: bg }}
       title={`CRM Tag: ${t}`}
     >
@@ -108,6 +107,14 @@ function getBookee(b: TechBookingWithLead) {
   };
 }
 
+function formatAccountTypeLabel(v: string | null | undefined) {
+  const s = String(v ?? "").trim().toLowerCase();
+  if (!s) return "—";
+  if (s === "residential") return "Residential";
+  if (s === "business") return "Business";
+  return String(v);
+}
+
 /** ---------- Component ---------- */
 
 export default function AssignTechCards({
@@ -128,6 +135,15 @@ export default function AssignTechCards({
   const [targetTechId, setTargetTechId] = useState<string>("");
   const [reassignErr, setReassignErr] = useState<string | null>(null);
   const [reassigning, setReassigning] = useState(false);
+
+  const [expandedTechs, setExpandedTechs] = useState<Record<number, boolean>>(() => {
+    const init: Record<number, boolean> = {};
+    for (const t of technicians) {
+      const count = t.bookings?.length ?? 0;
+      init[Number(t.user_id)] = count > 0 && count <= 2;
+    }
+    return init;
+  });
 
   function openReassignModal(bookingPublicId: string, currentTechId: number) {
     setReassignErr(null);
@@ -173,15 +189,22 @@ export default function AssignTechCards({
     return technicians.reduce((acc, t) => acc + (t.bookings?.length ?? 0), 0);
   }, [technicians]);
 
+  function toggleTech(userId: number) {
+    setExpandedTechs((prev) => ({
+      ...prev,
+      [userId]: !prev[userId],
+    }));
+  }
+
   return (
-    <div className="space-y-5">
-      <div className="flex items-start justify-between gap-3">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-xl font-bold">Technician Bookings</h2>
           <p className="text-sm" style={{ color: "rgb(var(--muted))" }}>
             View each technician’s assigned appointments and re-assign when needed.
           </p>
-          <p className="text-xs mt-1" style={{ color: "rgb(var(--muted))" }}>
+          <p className="mt-1 text-xs" style={{ color: "rgb(var(--muted))" }}>
             Total assigned: {totalBookings}
           </p>
         </div>
@@ -197,120 +220,199 @@ export default function AssignTechCards({
         </button>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-3">
         {technicians.map((t) => {
           const list: TechBookingWithLead[] = (t.bookings ?? []) as TechBookingWithLead[];
+          const techId = Number(t.user_id);
+          const expanded = !!expandedTechs[techId];
 
           return (
             <section
               key={t.user_id}
-              className="rounded-2xl border p-4 space-y-3"
-              style={{ borderColor: "rgb(var(--border))" }}
+              className="rounded-2xl border p-3 sm:p-4"
+              style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.10)" }}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-base font-semibold truncate">{techLabel(t)}</div>
-                  <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                    {normalizeText(t.phone)} • {normalizeText(t.email ?? null)}
-                  </div>
-                </div>
-
-                <span className="rounded-full border px-2 py-1 text-xs" style={{ borderColor: "rgb(var(--border))" }}>
-                  {list.length} assigned
-                </span>
-              </div>
-
-              {list.length === 0 ? (
-                <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                  No assigned bookings.
-                </div>
-              ) : (
-                <div className="grid gap-3">
-                  {list.map((b) => {
-                    const kind = getKind(b);
-                    const bookee = getBookee(b);
-
-                    return (
-                      <div
-                        key={b.public_id}
-                        className="rounded-2xl border p-4 space-y-2"
-                        style={{ borderColor: "rgb(var(--border))" }}
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="truncate text-sm font-semibold sm:text-base">{techLabel(t)}</div>
+                      <span
+                        className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold sm:text-xs"
+                        style={{
+                          borderColor: "rgb(var(--border))",
+                          background: "rgba(var(--bg), 0.18)",
+                          color: "rgb(var(--muted))",
+                        }}
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <div className="text-sm font-semibold truncate">{b.service_title}</div>
-                              <div className="flex items-center gap-2">
-                                <KindPill kind={kind} />
-                                <TagPill tag={b.crm_tag} />
-                              </div>
-                            </div>
+                        {list.length} assigned
+                      </span>
+                    </div>
 
-                            <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
-                              {formatRange(b.starts_at, b.ends_at)}
-                            </div>
-
-                            <div className="mt-1 text-sm truncate" style={{ color: "rgb(var(--muted))" }}>
-                              {b.address}
-                            </div>
-
-                            <div className="mt-2 text-sm">
-                              <div className="font-semibold truncate">{bookee.displayName}</div>
-                              <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                                Phone: {bookee.phone ?? "—"} • Email: {bookee.email ?? "—"}
-                                {bookee.accountType ? ` • ${bookee.accountType}` : ""}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-col gap-2 items-end">
-                            <button
-                              type="button"
-                              className="rounded-xl border px-3 py-2 text-xs font-semibold hover:opacity-90 disabled:opacity-60"
-                              style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-                              onClick={() => openReassignModal(b.public_id, Number(t.user_id))}
-                              disabled={reassigning}
-                              title="Re-assign this booking"
-                            >
-                              Re-assign
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => onExpand(b.public_id)}
-                              className="rounded-xl border px-3 py-2 text-xs font-semibold hover:opacity-90"
-                              style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                              title="Expand booking details"
-                            >
-                              Expand
-                            </button>
-                          </div>
-                        </div>
-
-                        <div
-                          className="rounded-xl border p-3 text-sm"
-                          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-                        >
-                          <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-                            Notes:
-                          </div>
-                          <div className="mt-1 whitespace-pre-wrap break-words">{normalizeText(b.notes ?? null)}</div>
-                        </div>
-
-                        <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                          Booking ID: <span className="font-mono">{b.public_id}</span>
-                        </div>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      <div className="text-sm break-words" style={{ color: "rgb(var(--muted))" }}>
+                        <span className="font-medium">Phone:</span> {normalizeText(t.phone)}
                       </div>
-                    );
-                  })}
+                      <div className="text-sm break-words" style={{ color: "rgb(var(--muted))" }}>
+                        <span className="font-medium">Email:</span> {normalizeText(t.email ?? null)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => toggleTech(techId)}
+                    className="rounded-xl border px-3 py-2 text-sm font-semibold transition hover:opacity-90"
+                    style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
+                    aria-expanded={expanded}
+                  >
+                    {expanded ? "Hide bookings" : "Show bookings"}
+                  </button>
                 </div>
-              )}
+
+                {!expanded ? (
+                  <div
+                    className="rounded-xl border p-3 text-sm"
+                    style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.14)" }}
+                  >
+                    <span style={{ color: "rgb(var(--muted))" }}>
+                      {list.length === 0
+                        ? "No assigned bookings."
+                        : `${list.length} assigned ${list.length === 1 ? "booking" : "bookings"} hidden.`}
+                    </span>
+                  </div>
+                ) : list.length === 0 ? (
+                  <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
+                    No assigned bookings.
+                  </div>
+                ) : (
+                  <div className="grid gap-3">
+                    {list.map((b) => {
+                      const kind = getKind(b);
+                      const bookee = getBookee(b);
+
+                      return (
+                        <div
+                          key={b.public_id}
+                          className="rounded-2xl border p-3 sm:p-4"
+                          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.08)" }}
+                        >
+                          <div className="flex flex-col gap-3">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <div className="min-w-0 truncate text-sm font-semibold sm:text-base">
+                                    {b.service_title}
+                                  </div>
+                                  <KindPill kind={kind} />
+                                  <TagPill tag={b.crm_tag} />
+                                </div>
+
+                                <div className="mt-2 text-sm break-words" style={{ color: "rgb(var(--muted))" }}>
+                                  {formatRange(b.starts_at, b.ends_at)}
+                                </div>
+
+                                <div className="mt-2 text-sm break-words" style={{ color: "rgb(var(--muted))" }}>
+                                  {b.address}
+                                </div>
+
+                                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                  <div
+                                    className="rounded-xl border px-3 py-2.5"
+                                    style={{
+                                      borderColor: "rgb(var(--border))",
+                                      background: "rgba(var(--bg), 0.18)",
+                                    }}
+                                  >
+                                    <div
+                                      className="text-[11px] font-semibold uppercase tracking-wide"
+                                      style={{ color: "rgb(var(--muted))" }}
+                                    >
+                                      Customer
+                                    </div>
+                                    <div className="mt-1 break-words text-sm font-medium">{bookee.displayName}</div>
+                                  </div>
+
+                                  <div
+                                    className="rounded-xl border px-3 py-2.5"
+                                    style={{
+                                      borderColor: "rgb(var(--border))",
+                                      background: "rgba(var(--bg), 0.18)",
+                                    }}
+                                  >
+                                    <div
+                                      className="text-[11px] font-semibold uppercase tracking-wide"
+                                      style={{ color: "rgb(var(--muted))" }}
+                                    >
+                                      Contact
+                                    </div>
+                                    <div className="mt-1 break-words text-sm">
+                                      Phone: {bookee.phone ?? "—"}
+                                      <br />
+                                      Email: {bookee.email ?? "—"}
+                                      {bookee.accountType ? (
+                                        <>
+                                          <br />
+                                          {formatAccountTypeLabel(bookee.accountType)}
+                                        </>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-col gap-2 sm:items-end">
+                                <button
+                                  type="button"
+                                  className="rounded-xl border px-3 py-2 text-xs font-semibold hover:opacity-90 disabled:opacity-60"
+                                  style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                                  onClick={() => openReassignModal(b.public_id, techId)}
+                                  disabled={reassigning}
+                                  title="Re-assign this booking"
+                                >
+                                  Re-assign
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => onExpand(b.public_id)}
+                                  className="rounded-xl border px-3 py-2 text-xs font-semibold hover:opacity-90"
+                                  style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                                  title="Expand booking details"
+                                >
+                                  Expand
+                                </button>
+                              </div>
+                            </div>
+
+                            <div
+                              className="rounded-xl border p-3 text-sm"
+                              style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.22)" }}
+                            >
+                              <div
+                                className="text-[11px] font-semibold uppercase tracking-wide"
+                                style={{ color: "rgb(var(--muted))" }}
+                              >
+                                Notes
+                              </div>
+                              <div className="mt-1 whitespace-pre-wrap break-words">{normalizeText(b.notes ?? null)}</div>
+                            </div>
+
+                            <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                              Booking ID: <span className="font-mono">{b.public_id}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </section>
           );
         })}
       </div>
 
-      {/* Reassign modal */}
       {reassignOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40" onClick={closeReassignModal} />
@@ -339,13 +441,16 @@ export default function AssignTechCards({
             </div>
 
             {reassignErr ? (
-              <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(239 68 68)" }}>
+              <div
+                className="rounded-xl border p-3 text-sm"
+                style={{ borderColor: "rgb(239 68 68 / 0.75)", background: "rgb(127 29 29 / 0.16)" }}
+              >
                 {reassignErr}
               </div>
             ) : null}
 
             <div className="space-y-2">
-              <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+              <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgb(var(--muted))" }}>
                 Assign to
               </div>
 
@@ -365,7 +470,7 @@ export default function AssignTechCards({
               </select>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-1">
+            <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 className="rounded-xl border px-4 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
