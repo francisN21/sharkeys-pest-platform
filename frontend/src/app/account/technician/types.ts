@@ -1,4 +1,4 @@
-import type { MessengerMessage } from "../../../components/messenger/Messenger";
+import type { WorkerBookingRow } from "../../../lib/api/workerBookings";
 
 export type MeShape = {
   id: number;
@@ -65,15 +65,13 @@ export type GroupKey =
   | "this_week"
   | "later";
 
-export type GroupedAssigned<TBooking> = {
+export type GroupedAssigned = {
   key: GroupKey;
   title: string;
   subtitle: string;
-  rows: TBooking[];
+  rows: WorkerBookingRow[];
   tone?: "danger" | "normal";
   defaultExpanded: boolean;
 };
 
 export type BookeeKind = "lead" | "registered";
-
-export type SafeMessengerMessage = MessengerMessage;

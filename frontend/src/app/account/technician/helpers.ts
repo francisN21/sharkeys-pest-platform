@@ -149,7 +149,7 @@ export function userToMe(user: MeApiUser | null | undefined) {
   };
 }
 
-export function buildAssignedGroups(rows: WorkerBookingRow[]): GroupedAssigned<WorkerBookingRow>[] {
+export function buildAssignedGroups(rows: WorkerBookingRow[]): GroupedAssigned[] {
   const now = new Date();
   const nowMs = now.getTime();
   const twoHoursMs = 2 * 60 * 60 * 1000;
