@@ -32,7 +32,8 @@ export default function JobGroupSection({
       className="rounded-2xl border p-3 sm:p-4"
       style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
     >
-      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      {/* Header */}
+      <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-base font-semibold">{group.title}</h3>
           <p className="mt-1 text-xs sm:text-sm" style={{ color: "rgb(var(--muted))" }}>
@@ -42,19 +43,31 @@ export default function JobGroupSection({
 
         <div className="flex items-center gap-2">
           <GroupCountPill count={group.rows.length} tone={group.tone === "danger" ? "danger" : "normal"} />
-          {group.rows.length > 0 ? (
+
+          {group.rows.length > 0 && (
             <button
               type="button"
               onClick={onToggle}
-              className="rounded-xl border px-3 py-2 text-sm font-semibold transition hover:opacity-90"
-              style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border transition-all duration-200 hover:opacity-90"
+              style={{
+                borderColor: "rgb(var(--border))",
+                background: "rgba(var(--bg), 0.18)",
+              }}
+              aria-label={expanded ? "Collapse section" : "Expand section"}
             >
-              {expanded ? "Hide jobs" : "Show jobs"}
+              <span
+                className={`text-lg font-bold leading-none transition-transform duration-200 ${
+                  expanded ? "rotate-0" : "rotate-180"
+                }`}
+              >
+                {expanded ? "−" : "+"}
+              </span>
             </button>
-          ) : null}
+          )}
         </div>
       </div>
 
+      {/* Empty */}
       {group.rows.length === 0 ? (
         <div
           className="rounded-xl border p-3 text-sm"
@@ -68,7 +81,7 @@ export default function JobGroupSection({
           style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.14)" }}
         >
           <span style={{ color: "rgb(var(--muted))" }}>
-            {group.rows.length} {group.rows.length === 1 ? "job" : "jobs"} hidden.
+            {group.rows.length} {group.rows.length === 1 ? "job" : "jobs"} hidden
           </span>
         </div>
       ) : (
@@ -91,13 +104,21 @@ export default function JobGroupSection({
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <div className="min-w-0 truncate text-sm font-semibold sm:text-base">{b.service_title}</div>
+                        <div className="min-w-0 truncate text-sm font-semibold sm:text-base">
+                          {b.service_title}
+                        </div>
+
                         <BookeePill kind={bookee.kind} />
+
                         <span
                           className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold sm:text-xs"
                           style={{
-                            borderColor: group.tone === "danger" ? "rgb(239 68 68 / 0.45)" : "rgb(var(--border))",
-                            background: group.tone === "danger" ? "rgb(127 29 29 / 0.18)" : "rgba(var(--bg), 0.18)",
+                            borderColor:
+                              group.tone === "danger" ? "rgb(239 68 68 / 0.45)" : "rgb(var(--border))",
+                            background:
+                              group.tone === "danger"
+                                ? "rgb(127 29 29 / 0.18)"
+                                : "rgba(var(--bg), 0.18)",
                           }}
                         >
                           Assigned
@@ -110,98 +131,67 @@ export default function JobGroupSection({
 
                       <div
                         className="mt-1 text-xs font-semibold"
-                        style={{ color: group.tone === "danger" ? "rgb(254 202 202)" : "rgb(var(--muted))" }}
+                        style={{
+                          color:
+                            group.tone === "danger"
+                              ? "rgb(254 202 202)"
+                              : "rgb(var(--muted))",
+                        }}
                       >
                         {formatRelativeToNow(b.starts_at)}
                       </div>
 
-                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                        <div
-                          className="rounded-xl border px-3 py-2.5"
-                          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
-                        >
-                          <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgb(var(--muted))" }}>
-                            Customer
-                          </div>
-                          <div className="mt-1 text-sm font-medium break-words">
-                            {bookee.displayName}
-                            <span className="ml-2 text-xs font-normal" style={{ color: "rgb(var(--muted))" }}>
-                              ({bookee.accountType})
-                            </span>
-                          </div>
-                        </div>
-
-                        <div
-                          className="rounded-xl border px-3 py-2.5"
-                          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
-                        >
-                          <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgb(var(--muted))" }}>
-                            Contact
-                          </div>
-                          <div className="mt-1 text-sm break-words">
-                            Phone: {bookee.phone}
-                            <br />
-                            Email: {bookee.email}
-                          </div>
-                        </div>
-
-                        <div className="sm:col-span-2">
-                          <div
-                            className="rounded-xl border px-3 py-2.5"
-                            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
-                          >
-                            <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgb(var(--muted))" }}>
-                              Location
-                            </div>
-                            <div className="mt-1 text-sm break-words">{b.address || bookee.customerAddress || "—"}</div>
-                          </div>
-                        </div>
+                      <div className="mt-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                        Booking ID: <span className="font-mono">{b.public_id}</span>
                       </div>
+                    </div>
 
-                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                        <div className="text-xs break-words" style={{ color: "rgb(var(--muted))" }}>
-                          Booking ID: <span className="font-mono">{b.public_id}</span>
-                        </div>
-                        <div className="text-xs break-words sm:text-right" style={{ color: "rgb(var(--muted))" }}>
-                          Created: {formatCreated(b.created_at)}
-                        </div>
-                      </div>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <button
+                        type="button"
+                        onClick={() => onOpenDetail(b.public_id)}
+                        className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
+                        style={{
+                          borderColor: "rgb(var(--border))",
+                          background: "rgba(var(--bg), 0.25)",
+                        }}
+                      >
+                        Details
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => onOpenComplete(b.public_id)}
+                        disabled={busy}
+                        className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+                        style={{
+                          borderColor: "rgb(var(--border))",
+                          background: "rgb(var(--card))",
+                        }}
+                      >
+                        {busy ? "Working…" : "Complete"}
+                      </button>
                     </div>
                   </div>
 
-                  {notes ? (
+                  {notes && (
                     <div
                       className="rounded-xl border p-3 text-sm"
-                      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.22)" }}
+                      style={{
+                        borderColor: "rgb(var(--border))",
+                        background: "rgba(var(--bg), 0.22)",
+                      }}
                     >
-                      <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "rgb(var(--muted))" }}>
-                        Customer Notes
+                      <div
+                        className="text-[11px] font-semibold uppercase tracking-wide"
+                        style={{ color: "rgb(var(--muted))" }}
+                      >
+                        Notes
                       </div>
+
                       <div className="mt-1 whitespace-pre-wrap break-words">{notes}</div>
                     </div>
-                  ) : null}
-
-                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-                    <button
-                      type="button"
-                      onClick={() => onOpenDetail(b.public_id)}
-                      className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-                      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-                      disabled={!!busyId}
-                    >
-                      Details
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => onOpenComplete(b.public_id)}
-                      disabled={busy}
-                      className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-                      style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                    >
-                      {busy ? "Working…" : "Complete Job"}
-                    </button>
-                  </div>
+                  )}
                 </div>
               </div>
             );
