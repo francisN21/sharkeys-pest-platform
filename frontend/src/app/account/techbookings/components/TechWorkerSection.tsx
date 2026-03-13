@@ -231,9 +231,6 @@ export default function TechWorkerSection({
                           <div className="text-xs break-words" style={{ color: "rgb(var(--muted))" }}>
                             Booking ID: <span className="font-mono">{b.public_id}</span>
                           </div>
-                          <div className="text-xs break-words sm:text-right" style={{ color: "rgb(var(--muted))" }}>
-                            Created: {formatCreated(b.created_at)}
-                          </div>
                         </div>
                       </div>
                     </div>
