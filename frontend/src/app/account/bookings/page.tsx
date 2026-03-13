@@ -22,7 +22,8 @@ type MeApiUser = {
   id?: unknown;
   first_name?: string | null;
   last_name?: string | null;
-  role?: unknown;
+  user_role?: string | null;
+  roles?: string[] | null;
 };
 
 type MeApiResponse = {
@@ -110,7 +111,7 @@ export default function BookingsPage() {
 
         const user = meRes.user ?? null;
         const idNum = safeToNumber(user?.id);
-        const role = String(user?.role ?? "").trim().toLowerCase();
+        const role = String(user?.user_role ?? (Array.isArray(user?.roles) ? user?.roles[0] : "")).trim().toLowerCase();
 
         if (user && idNum) {
           setMe({
