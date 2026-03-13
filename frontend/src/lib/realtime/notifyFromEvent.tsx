@@ -1,5 +1,4 @@
 "use client";
-
 import React from "react";
 import { appNotify } from "../../lib/appNotify";
 import {
@@ -12,6 +11,30 @@ import {
 } from "lucide-react";
 import type { RealtimeEvent } from "./events";
 
+function bookingDisplayName(evt: RealtimeEvent) {
+  const serviceName =
+    "bookingName" in evt && typeof evt.bookingName === "string" && evt.bookingName.trim()
+      ? evt.bookingName.trim()
+      : null;
+
+  const customerName =
+    "customerName" in evt && typeof evt.customerName === "string" && evt.customerName.trim()
+      ? evt.customerName.trim()
+      : null;
+
+  if (serviceName && customerName) return `${serviceName} • ${customerName}`;
+  if (serviceName) return serviceName;
+  if ("bookingId" in evt && typeof evt.bookingId === "string" && evt.bookingId.trim()) {
+    return `Booking ${evt.bookingId}`;
+  }
+  return "Booking";
+}
+
+function fmtMoney(cents?: number | null) {
+  if (typeof cents !== "number" || !Number.isFinite(cents)) return null;
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
 /**
  * WS event -> decide toast content + decide browser notification behavior
  */
@@ -21,7 +44,7 @@ export function notifyFromEvent(evt: RealtimeEvent) {
       appNotify({
         level: "info",
         toastTitle: "New booking created",
-        toastDescription: evt.bookingName ?? `Booking ${evt.bookingId}`,
+        toastDescription: bookingDisplayName(evt),
         entity: "booking",
         entityId: evt.bookingId,
         at: evt.startsAt,
@@ -38,7 +61,7 @@ export function notifyFromEvent(evt: RealtimeEvent) {
           },
         ],
         browserTitle: "New booking",
-        browserBody: evt.bookingName ?? `Booking ${evt.bookingId}`,
+        browserBody: bookingDisplayName(evt),
         browser: true,
         browserOnlyWhenHidden: true,
       });
@@ -48,19 +71,19 @@ export function notifyFromEvent(evt: RealtimeEvent) {
       appNotify({
         level: "success",
         toastTitle: "Booking accepted",
-        toastDescription: `Booking ${evt.bookingId} has been accepted.`,
+        toastDescription: bookingDisplayName(evt),
         entity: "booking",
         entityId: evt.bookingId,
         at: evt.acceptedAt,
         details: [
           {
             label: "Booking",
-            value: evt.bookingId,
+            value: bookingDisplayName(evt),
             icon: <Tag className="h-4 w-4" />,
           },
         ],
         browserTitle: "Booking accepted",
-        browserBody: `Booking ${evt.bookingId} has been accepted.`,
+        browserBody: bookingDisplayName(evt),
         browser: true,
         browserOnlyWhenHidden: true,
       });
@@ -70,7 +93,7 @@ export function notifyFromEvent(evt: RealtimeEvent) {
       appNotify({
         level: "success",
         toastTitle: "Booking assigned",
-        toastDescription: evt.bookingName ?? `Booking ${evt.bookingId}`,
+        toastDescription: bookingDisplayName(evt),
         entity: "booking",
         entityId: evt.bookingId,
         at: evt.assignedAt,
@@ -83,7 +106,7 @@ export function notifyFromEvent(evt: RealtimeEvent) {
           },
         ],
         browserTitle: "New job assigned",
-        browserBody: `${evt.bookingName ?? evt.bookingId} → ${evt.technicianName ?? "Technician"}`,
+        browserBody: `${bookingDisplayName(evt)} → ${evt.technicianName ?? "Technician"}`,
         browser: true,
         browserOnlyWhenHidden: true,
       });
@@ -93,14 +116,14 @@ export function notifyFromEvent(evt: RealtimeEvent) {
       appNotify({
         level: "warning",
         toastTitle: "Booking reassigned",
-        toastDescription: evt.bookingName ?? `Booking ${evt.bookingId}`,
+        toastDescription: bookingDisplayName(evt),
         entity: "booking",
         entityId: evt.bookingId,
         at: evt.assignedAt,
         details: [
           {
             label: "Booking",
-            value: evt.bookingId,
+            value: bookingDisplayName(evt),
             icon: <Tag className="h-4 w-4" />,
           },
           {
@@ -110,7 +133,7 @@ export function notifyFromEvent(evt: RealtimeEvent) {
           },
         ],
         browserTitle: "Booking reassigned",
-        browserBody: `${evt.bookingName ?? evt.bookingId} has a new technician.`,
+        browserBody: `${bookingDisplayName(evt)} has a new technician.`,
         browser: true,
         browserOnlyWhenHidden: true,
       });
@@ -120,19 +143,19 @@ export function notifyFromEvent(evt: RealtimeEvent) {
       appNotify({
         level: "warning",
         toastTitle: "Booking cancelled",
-        toastDescription: `Booking ${evt.bookingId} has been cancelled.`,
+        toastDescription: bookingDisplayName(evt),
         entity: "booking",
         entityId: evt.bookingId,
         at: evt.cancelledAt,
         details: [
           {
             label: "Booking",
-            value: evt.bookingId,
+            value: bookingDisplayName(evt),
             icon: <Tag className="h-4 w-4" />,
           },
         ],
         browserTitle: "Booking cancelled",
-        browserBody: `Booking ${evt.bookingId} has been cancelled.`,
+        browserBody: bookingDisplayName(evt),
         browser: true,
         browserOnlyWhenHidden: true,
       });
@@ -142,7 +165,7 @@ export function notifyFromEvent(evt: RealtimeEvent) {
       appNotify({
         level: "info",
         toastTitle: "Booking updated",
-        toastDescription: `Booking ${evt.bookingId} was updated.`,
+        toastDescription: bookingDisplayName(evt),
         entity: "booking",
         entityId: evt.bookingId,
         at: evt.startsAt,
@@ -159,7 +182,7 @@ export function notifyFromEvent(evt: RealtimeEvent) {
           },
         ],
         browserTitle: "Booking updated",
-        browserBody: `Booking ${evt.bookingId} was updated.`,
+        browserBody: bookingDisplayName(evt),
         browser: true,
         browserOnlyWhenHidden: true,
       });
@@ -169,7 +192,7 @@ export function notifyFromEvent(evt: RealtimeEvent) {
       appNotify({
         level: "success",
         toastTitle: "Booking completed",
-        toastDescription: evt.bookingName ?? `Booking ${evt.bookingId}`,
+        toastDescription: bookingDisplayName(evt),
         entity: "booking",
         entityId: evt.bookingId,
         at: evt.completedAt,
@@ -183,16 +206,14 @@ export function notifyFromEvent(evt: RealtimeEvent) {
           },
           {
             label: "Booking",
-            value: evt.bookingId,
+            value: bookingDisplayName(evt),
             icon: <Tag className="h-4 w-4" />,
           },
         ],
         browserTitle: "Job completed",
         browserBody:
-          `${evt.bookingName ?? evt.bookingId}` +
-          (typeof evt.finalPriceCents === "number"
-            ? ` • $${(evt.finalPriceCents / 100).toFixed(2)}`
-            : ""),
+          `${bookingDisplayName(evt)}` +
+          (fmtMoney(evt.finalPriceCents) ? ` • ${fmtMoney(evt.finalPriceCents)}` : ""),
         browser: true,
         browserOnlyWhenHidden: true,
       });
@@ -202,7 +223,7 @@ export function notifyFromEvent(evt: RealtimeEvent) {
       appNotify({
         level: "info",
         toastTitle: "Final price updated",
-        toastDescription: `Booking ${evt.bookingId} now has a final price.`,
+        toastDescription: bookingDisplayName(evt),
         entity: "payment",
         entityId: evt.bookingId,
         at: evt.setAt,
@@ -215,16 +236,14 @@ export function notifyFromEvent(evt: RealtimeEvent) {
           },
           {
             label: "Booking",
-            value: evt.bookingId,
+            value: bookingDisplayName(evt),
             icon: <Tag className="h-4 w-4" />,
           },
         ],
         browserTitle: "Final price updated",
         browserBody:
-          `Booking ${evt.bookingId}` +
-          (typeof evt.finalPriceCents === "number"
-            ? ` • $${(evt.finalPriceCents / 100).toFixed(2)}`
-            : ""),
+          `${bookingDisplayName(evt)}` +
+          (fmtMoney(evt.finalPriceCents) ? ` • ${fmtMoney(evt.finalPriceCents)}` : ""),
         browser: true,
         browserOnlyWhenHidden: true,
       });

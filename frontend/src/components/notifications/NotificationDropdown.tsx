@@ -314,7 +314,7 @@ function NotificationCard({
     <button
       type="button"
       onClick={() => onClick(item)}
-      className="w-full rounded-2xl border p-3 text-left transition hover:scale-[0.995] hover:opacity-95 sm:p-3"
+      className="w-full rounded-2xl border p-3 text-left transition hover:scale-[0.995] hover:opacity-95"
       style={{
         borderColor: unread ? accent.border : "rgb(var(--border))",
         background: unread ? accent.bg : "rgb(var(--bg))",
@@ -413,14 +413,14 @@ export default function NotificationDropdown({
   return (
     <div
       className="
-        absolute z-[70] mt-2 overflow-hidden rounded-3xl border shadow-2xl
-        left-1/2 w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] -translate-x-1/2
-        sm:left-auto sm:right-0 sm:w-[380px] sm:max-w-[380px] sm:translate-x-0
+        fixed inset-x-2 top-[76px] z-[70] overflow-hidden rounded-3xl border shadow-2xl
+        sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[380px]
       "
       style={{
         borderColor: "rgb(var(--border))",
         background: "rgb(var(--card))",
         boxShadow: "0 18px 45px rgba(0,0,0,0.28)",
+        maxHeight: "calc(100svh - 92px)",
       }}
       role="menu"
       data-viewer-role={resolvedViewerRole}
@@ -489,7 +489,10 @@ export default function NotificationDropdown({
         </button>
       </div>
 
-      <div className="max-h-[60svh] overflow-y-auto p-3 sm:max-h-[430px]">
+      <div
+        className="overflow-y-auto p-3"
+        style={{ maxHeight: "calc(100svh - 220px)" }}
+      >
         {loading ? (
           <div className="px-2 py-6 text-sm" style={{ color: "rgb(var(--muted))" }}>
             Loading…
