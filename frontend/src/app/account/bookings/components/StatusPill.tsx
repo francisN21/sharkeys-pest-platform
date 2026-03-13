@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import type { BookingCard } from "../../../lib/api/bookings";
+import type { BookingCard } from "../../../../lib/api/bookings";
 
 export default function StatusPill({ status }: { status: BookingCard["status"] }) {
   const label =
