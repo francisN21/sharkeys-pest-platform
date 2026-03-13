@@ -289,7 +289,6 @@ export default function TechBookingsPage() {
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const techOptions = useMemo(() => technicians, [technicians]);
