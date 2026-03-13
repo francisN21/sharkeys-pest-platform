@@ -174,12 +174,55 @@ function getBrowserAlertButtonLabel(
   return "Turn on";
 }
 
+function readString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const s = value.trim();
+  return s.length ? s : null;
+}
+
+function getNotificationBookingId(item: AppNotification): string | null {
+  const obj = item as Record<string, unknown>;
+
+  const directKeys = [
+    "booking_public_id",
+    "bookingPublicId",
+    "booking_id",
+    "bookingId",
+    "public_id",
+    "publicId",
+    "entity_public_id",
+    "entityPublicId",
+  ] as const;
+
+  for (const key of directKeys) {
+    const v = readString(obj[key]);
+    if (v) return v;
+  }
+
+  const data = obj.data;
+  if (data && typeof data === "object") {
+    const dataObj = data as Record<string, unknown>;
+    for (const key of directKeys) {
+      const v = readString(dataObj[key]);
+      if (v) return v;
+    }
+  }
+
+  return null;
+}
+
 function getNotificationHref(
-  kind: string,
+  item: AppNotification,
   viewerRole: NormalizedViewerRole
 ): string {
+  const bookingId = getNotificationBookingId(item);
+
   if (viewerRole === "admin") {
-    switch (kind) {
+    if (bookingId) {
+      return `/account/techbookings/bookings/${bookingId}`;
+    }
+
+    switch (item.kind) {
       case "booking.created":
       case "booking.accepted":
       case "booking.cancelled":
@@ -201,7 +244,11 @@ function getNotificationHref(
   }
 
   if (viewerRole === "technician") {
-    switch (kind) {
+    if (bookingId) {
+      return `/account/technician/bookings/${bookingId}`;
+    }
+
+    switch (item.kind) {
       case "booking.assigned":
       case "booking.reassigned":
       case "booking.cancelled":
@@ -218,7 +265,11 @@ function getNotificationHref(
     }
   }
 
-  switch (kind) {
+  if (bookingId) {
+    return `/account/bookings/${bookingId}`;
+  }
+
+  switch (item.kind) {
     case "message.new":
     case "booking.accepted":
     case "booking.assigned":
@@ -350,7 +401,7 @@ export default function NotificationDropdown({
   const resolvedViewerRole = resolveViewerRole(pathname, viewerRole);
 
   async function handleNotificationClick(item: AppNotification) {
-    const href = getNotificationHref(item.kind, resolvedViewerRole);
+    const href = getNotificationHref(item, resolvedViewerRole);
 
     try {
       await onNotificationClick(item);
