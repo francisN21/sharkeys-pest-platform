@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, ChevronDown } from "lucide-react";
 import { useAuth } from "./AuthProvider";
 import {
   type AppNotification,
@@ -15,231 +14,17 @@ import {
 } from "../lib/api/notifications";
 import { subscribeRealtimeEvent } from "../lib/realtime/realtimeBus";
 import type { RealtimeEvent } from "../lib/realtime/events";
-import NotificationDropdown from "./notifications/NotificationDropdown";
-import {
-  notifyBrowser,
-  requestBrowserNotificationPermission,
-} from "../lib/notify";
-
-type NavItem = { label: string; href: string };
-
-const NAV: NavItem[] = [
-  { label: "Home", href: "#home" },
-  { label: "Booking", href: "#booking" },
-  { label: "Services", href: "#services" },
-  { label: "About", href: "#about" },
-  { label: "Blog", href: "/blog" },
-  { label: "Service Area", href: "/service-area" },
-];
-
-type NavbarApiRole = "customer" | "worker" | "admin";
-type NotificationViewerRole = "customer" | "technician" | "worker" | "admin";
-
-type NavbarUser = {
-  email: string;
-  first_name?: string | null;
-  last_name?: string | null;
-  user_role?: NavbarApiRole | null;
-  roles?: NavbarApiRole[] | null;
-};
-
-const BROWSER_NOTIFY_PREF_KEY = "spc_browser_notifications_enabled";
-
-function getInitials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  const a = parts[0]?.[0] ?? "";
-  const b = parts[1]?.[0] ?? "";
-  return (a + b).toUpperCase() || "U";
-}
-
-function displayName(user: {
-  first_name?: string | null;
-  last_name?: string | null;
-  email: string;
-}) {
-  const first = (user.first_name || "").trim();
-  const last = (user.last_name || "").trim();
-  const full = `${first} ${last}`.trim();
-  return full || user.email;
-}
-
-function normalizeViewerRole(user: NavbarUser | null): NotificationViewerRole | null {
-  if (!user) return null;
-
-  if (user.user_role === "admin") return "admin";
-  if (user.user_role === "worker") return "worker";
-  if (user.user_role === "customer") return "customer";
-
-  const roles = user.roles ?? [];
-  if (roles.includes("admin")) return "admin";
-  if (roles.includes("worker")) return "worker";
-  if (roles.includes("customer")) return "customer";
-
-  return null;
-}
-
-function mapRealtimeEventToPreview(evt: RealtimeEvent): AppNotification | null {
-  const now = new Date().toISOString();
-
-  switch (evt.type) {
-    case "booking.created":
-      return {
-        id: Date.now(),
-        kind: evt.type,
-        title: "New booking created",
-        body: evt.bookingName ?? `Booking ${evt.bookingId}`,
-        booking_id: null,
-        booking_public_id: evt.bookingId,
-        message_id: null,
-        metadata: {},
-        read_at: null,
-        created_at: evt.startsAt ?? now,
-      };
-
-    case "booking.accepted":
-      return {
-        id: Date.now(),
-        kind: evt.type,
-        title: "Booking accepted",
-        body: `Booking ${evt.bookingId} has been accepted.`,
-        booking_id: null,
-        booking_public_id: evt.bookingId,
-        message_id: null,
-        metadata: {},
-        read_at: null,
-        created_at: evt.acceptedAt ?? now,
-      };
-
-    case "booking.assigned":
-      return {
-        id: Date.now(),
-        kind: evt.type,
-        title: "Booking assigned",
-        body: `Booking ${evt.bookingId} has been assigned.`,
-        booking_id: null,
-        booking_public_id: evt.bookingId,
-        message_id: null,
-        metadata: {},
-        read_at: null,
-        created_at: evt.assignedAt ?? now,
-      };
-
-    case "booking.reassigned":
-      return {
-        id: Date.now(),
-        kind: evt.type,
-        title: "Booking reassigned",
-        body: `Booking ${evt.bookingId} has a new technician.`,
-        booking_id: null,
-        booking_public_id: evt.bookingId,
-        message_id: null,
-        metadata: {},
-        read_at: null,
-        created_at: evt.assignedAt ?? now,
-      };
-
-    case "booking.cancelled":
-      return {
-        id: Date.now(),
-        kind: evt.type,
-        title: "Booking cancelled",
-        body: `Booking ${evt.bookingId} has been cancelled.`,
-        booking_id: null,
-        booking_public_id: evt.bookingId,
-        message_id: null,
-        metadata: {},
-        read_at: null,
-        created_at: evt.cancelledAt ?? now,
-      };
-
-    case "booking.edited":
-      return {
-        id: Date.now(),
-        kind: evt.type,
-        title: "Booking updated",
-        body: `Booking ${evt.bookingId} was updated.`,
-        booking_id: null,
-        booking_public_id: evt.bookingId,
-        message_id: null,
-        metadata: {},
-        read_at: null,
-        created_at: evt.startsAt ?? now,
-      };
-
-    case "booking.completed":
-      return {
-        id: Date.now(),
-        kind: evt.type,
-        title: "Booking completed",
-        body:
-          `Booking ${evt.bookingId}` +
-          (evt.technicianName ? ` by ${evt.technicianName}` : "") +
-          (typeof evt.finalPriceCents === "number"
-            ? ` • $${(evt.finalPriceCents / 100).toFixed(2)}`
-            : ""),
-        booking_id: null,
-        booking_public_id: evt.bookingId,
-        message_id: null,
-        metadata: {},
-        read_at: null,
-        created_at: evt.completedAt ?? now,
-      };
-
-    case "booking.price_set":
-      return {
-        id: Date.now(),
-        kind: evt.type,
-        title: "Final price updated",
-        body:
-          `Booking ${evt.bookingId}` +
-          (typeof evt.finalPriceCents === "number"
-            ? ` • $${(evt.finalPriceCents / 100).toFixed(2)}`
-            : ""),
-        booking_id: null,
-        booking_public_id: evt.bookingId,
-        message_id: null,
-        metadata: {},
-        read_at: null,
-        created_at: evt.setAt ?? now,
-      };
-
-    case "message.new":
-      return {
-        id: Date.now(),
-        kind: evt.type,
-        title: evt.fromName ? `New message from ${evt.fromName}` : "New message",
-        body: evt.snippet ?? "You received a new message.",
-        booking_id: null,
-        booking_public_id: evt.threadId,
-        message_id: null,
-        metadata: {},
-        read_at: null,
-        created_at: evt.at ?? now,
-      };
-
-    case "system.error":
-      return {
-        id: Date.now(),
-        kind: evt.type,
-        title: "System error",
-        body: evt.message,
-        booking_id: null,
-        booking_public_id: null,
-        message_id: null,
-        metadata: {},
-        read_at: null,
-        created_at: evt.at ?? now,
-      };
-
-    default:
-      return null;
-  }
-}
+import { notifyBrowser, requestBrowserNotificationPermission } from "../lib/notify";
+import NavbarNotifications from "./navbar/NavbarNotifications";
+import NavbarAccountMenu from "./navbar/NavbarAccountMenu";
+import NavbarMobileMenu from "./navbar/NavbarMobileMenu";
+import { BROWSER_NOTIFY_PREF_KEY, NAV_ITEMS } from "./navbar/navbar.constants";
+import { displayName, getInitials, mapRealtimeEventToPreview, normalizeViewerRole } from "./navbar/navbar.utils";
+import type { NavbarUser } from "./navbar/navbar.types";
 
 export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
-
   const { user, logout } = useAuth();
 
   const [menuOpen, setMenuOpen] = useState(false);
@@ -317,9 +102,11 @@ export default function Navbar() {
       if (menuOpen && menuRef.current && !menuRef.current.contains(t)) {
         setMenuOpen(false);
       }
+
       if (accountOpen && accountRef.current && !accountRef.current.contains(t)) {
         setAccountOpen(false);
       }
+
       if (notifOpen && notifRef.current && !notifRef.current.contains(t)) {
         setNotifOpen(false);
       }
@@ -514,6 +301,21 @@ export default function Navbar() {
     setNotifOpen(false);
   }
 
+  function onToggleAccountMenu() {
+    setAccountOpen((v) => !v);
+    setNotifOpen(false);
+  }
+
+  function onAccount() {
+    setAccountOpen(false);
+    setMenuOpen(false);
+    router.push("/account");
+  }
+
+  function onCloseMenu() {
+    setMenuOpen(false);
+  }
+
   return (
     <header
       className="sticky top-0 z-50 border-b backdrop-blur"
@@ -541,7 +343,7 @@ export default function Navbar() {
         </Link>
 
         <nav className="hidden items-center gap-6 md:flex">
-          {NAV.map((n) => (
+          {NAV_ITEMS.map((n) => (
             <a
               key={n.href}
               href={n.href}
@@ -581,128 +383,32 @@ export default function Navbar() {
             ) : null}
           </div>
 
-          {isAuthed ? (
-            <div className="relative shrink-0" ref={notifRef}>
-              <button
-                type="button"
-                onClick={() => void onOpenNotifications()}
-                className="relative rounded-xl border p-2.5 shadow-sm hover:opacity-90"
-                style={{
-                  borderColor: "rgb(var(--border))",
-                  background: "rgb(var(--card))",
-                }}
-                aria-label="Notifications"
-                aria-haspopup="menu"
-                aria-expanded={notifOpen}
-              >
-                <Bell className="h-5 w-5" />
-                {unreadCount > 0 ? (
-                  <span
-                    className="absolute -right-1 -top-1 min-w-[18px] rounded-full px-1 text-center text-[10px] font-bold"
-                    style={{
-                      background: "rgb(239 68 68)",
-                      color: "white",
-                    }}
-                  >
-                    {unreadCount > 99 ? "99+" : unreadCount}
-                  </span>
-                ) : null}
-              </button>
+          <NavbarNotifications
+            isAuthed={isAuthed}
+            notifOpen={notifOpen}
+            notifLoading={notifLoading}
+            unreadCount={unreadCount}
+            notifications={notifications}
+            viewerRole={viewerRole}
+            browserNotifEnabled={browserNotifEnabled}
+            browserNotifPermission={browserNotifPermission}
+            onOpenNotifications={onOpenNotifications}
+            onMarkAllRead={onMarkAllRead}
+            onNotificationClick={onNotificationClick}
+            onToggleBrowserNotifications={onToggleBrowserNotifications}
+            notifRef={notifRef}
+          />
 
-              <NotificationDropdown
-                open={notifOpen}
-                loading={notifLoading}
-                notifications={notifications}
-                unreadCount={unreadCount}
-                viewerRole={viewerRole}
-                onMarkAllRead={onMarkAllRead}
-                onNotificationClick={onNotificationClick}
-                browserNotifEnabled={browserNotifEnabled}
-                browserNotifPermission={browserNotifPermission}
-                onToggleBrowserNotifications={onToggleBrowserNotifications}
-              />
-            </div>
-          ) : null}
-
-          {isAuthed ? (
-            <div className="relative hidden md:block" ref={accountRef}>
-              <button
-                type="button"
-                onClick={() => {
-                  setAccountOpen((v) => !v);
-                  setNotifOpen(false);
-                }}
-                className="flex items-center gap-2 rounded-xl border px-2.5 py-2 text-sm font-semibold shadow-sm hover:opacity-90"
-                style={{
-                  borderColor: "rgb(var(--border))",
-                  background: "rgb(var(--card))",
-                }}
-                aria-haspopup="menu"
-                aria-expanded={accountOpen}
-              >
-                <span
-                  className="grid h-8 w-8 place-items-center rounded-full text-xs font-bold"
-                  style={{ background: "rgba(255,255,255,0.08)" }}
-                  aria-hidden="true"
-                  title={name}
-                >
-                  {initials}
-                </span>
-                <ChevronDown
-                  className="h-4 w-4"
-                  style={{ color: "rgb(var(--muted))" }}
-                />
-              </button>
-
-              {accountOpen ? (
-                <div
-                  className="absolute right-0 mt-2 w-56 overflow-hidden rounded-2xl border shadow-sm"
-                  style={{
-                    borderColor: "rgb(var(--border))",
-                    background: "rgb(var(--card))",
-                  }}
-                  role="menu"
-                >
-                  <div
-                    className="px-4 py-3"
-                    style={{ borderBottom: "1px solid rgb(var(--border))" }}
-                  >
-                    <div className="truncate text-sm font-semibold">{name}</div>
-                    <div
-                      className="mt-1 text-xs"
-                      style={{ color: "rgb(var(--muted))" }}
-                    >
-                      Signed in
-                    </div>
-                  </div>
-
-                  <button
-                    className="w-full px-4 py-3 text-left text-sm font-semibold hover:opacity-90"
-                    style={{ color: "rgb(var(--fg))" }}
-                    onClick={() => {
-                      setAccountOpen(false);
-                      router.push("/account");
-                    }}
-                    role="menuitem"
-                  >
-                    Account
-                  </button>
-
-                  <button
-                    className="w-full px-4 py-3 text-left text-sm font-semibold hover:opacity-90"
-                    style={{
-                      color: "rgb(var(--fg))",
-                      borderTop: "1px solid rgb(var(--border))",
-                    }}
-                    onClick={() => void onLogout()}
-                    role="menuitem"
-                  >
-                    Logout
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
+          <NavbarAccountMenu
+            isAuthed={isAuthed}
+            accountOpen={accountOpen}
+            name={name}
+            initials={initials}
+            onToggle={onToggleAccountMenu}
+            onAccount={onAccount}
+            onLogout={onLogout}
+            accountRef={accountRef}
+          />
 
           <button
             ref={hamburgerRef}
@@ -745,145 +451,21 @@ export default function Navbar() {
       </div>
 
       {menuOpen ? (
-        <div
-          className="border-t md:hidden"
-          style={{
-            borderColor: "rgb(var(--border))",
-            background: "rgba(var(--bg), 0.96)",
-          }}
-        >
-          <div ref={menuRef} className="mx-auto max-w-6xl space-y-4 px-4 py-4">
-            <div className="grid gap-2">
-              {NAV.map((n) => (
-                <a
-                  key={n.href}
-                  href={n.href}
-                  className="rounded-xl px-3 py-3 text-sm font-semibold hover:opacity-90"
-                  style={{
-                    background: "rgb(var(--card))",
-                    color: "rgb(var(--fg))",
-                  }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onNavClick(n.href);
-                  }}
-                >
-                  {n.label}
-                </a>
-              ))}
-            </div>
-
-            <Link
-              href="/sharkeys-pest-control-booking"
-              className="block rounded-xl px-3 py-3 text-center text-sm font-semibold shadow-sm hover:opacity-90"
-              style={{
-                background: "rgb(59 130 246)",
-                color: "white",
-              }}
-              onClick={() => setMenuOpen(false)}
-            >
-              Book a Service
-            </Link>
-
-            {!isAuthed ? (
-              <div className="grid gap-2">
-                <Link
-                  href="/login"
-                  className="rounded-xl border px-3 py-3 text-center text-sm font-semibold hover:opacity-90"
-                  style={{
-                    borderColor: "rgb(var(--border))",
-                    color: "rgb(var(--fg))",
-                  }}
-                  onClick={() => setMenuOpen(false)}
-                >
-                  Sign in
-                </Link>
-
-                <Link
-                  href="/signup"
-                  className="rounded-xl border px-3 py-3 text-center text-sm font-semibold hover:opacity-90"
-                  style={{
-                    borderColor: "rgb(var(--border))",
-                    color: "rgb(var(--fg))",
-                  }}
-                  onClick={() => setMenuOpen(false)}
-                >
-                  Sign up
-                </Link>
-              </div>
-            ) : null}
-
-            {isAuthed ? (
-              <div className="grid gap-2">
-                <div
-                  className="rounded-xl border p-3"
-                  style={{
-                    borderColor: "rgb(var(--border))",
-                    background: "rgb(var(--card))",
-                  }}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold">{name}</div>
-                      <div
-                        className="mt-1 text-xs"
-                        style={{ color: "rgb(var(--muted))" }}
-                      >
-                        Signed in
-                      </div>
-                    </div>
-
-                    <div
-                      className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold"
-                      style={{ background: "rgba(255,255,255,0.08)" }}
-                    >
-                      {initials}
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  className="rounded-xl border px-3 py-3 text-sm font-semibold hover:opacity-90"
-                  style={{
-                    borderColor: "rgb(var(--border))",
-                    background: "rgb(var(--card))",
-                  }}
-                  onClick={() => {
-                    setMenuOpen(false);
-                    router.push("/account");
-                  }}
-                >
-                  Account
-                </button>
-
-                <button
-                  className="rounded-xl border px-3 py-3 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-                  style={{
-                    borderColor: "rgb(var(--border))",
-                    background: "rgb(var(--card))",
-                  }}
-                  onClick={() => void onToggleBrowserNotifications()}
-                  disabled={
-                    browserNotifPermission === "unsupported" ||
-                    browserNotifPermission === "denied"
-                  }
-                >
-                  Browser Alerts {browserNotifEnabled ? "On" : "Off"}
-                </button>
-
-                <button
-                  className="rounded-xl border px-3 py-3 text-sm font-semibold hover:opacity-90"
-                  style={{
-                    borderColor: "rgb(var(--border))",
-                    background: "rgb(var(--card))",
-                  }}
-                  onClick={() => void onLogout()}
-                >
-                  Logout
-                </button>
-              </div>
-            ) : null}
-          </div>
+        <div ref={menuRef}>
+          <NavbarMobileMenu
+            menuOpen={menuOpen}
+            name={name}
+            initials={initials}
+            isAuthed={isAuthed}
+            navItems={NAV_ITEMS}
+            browserNotifEnabled={browserNotifEnabled}
+            browserNotifPermission={browserNotifPermission}
+            onNavClick={onNavClick}
+            onCloseMenu={onCloseMenu}
+            onAccount={onAccount}
+            onLogout={onLogout}
+            onToggleBrowserNotifications={onToggleBrowserNotifications}
+          />
         </div>
       ) : null}
     </header>
