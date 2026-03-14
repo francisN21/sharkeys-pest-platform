@@ -2,83 +2,370 @@ import Link from "next/link";
 import Navbar from "../../../components/Navbar";
 import PageTracker from "../../../components/PageTracker";
 
-export default function CommonPestsBeniciaPage() {
+function ImagePlaceholder({
+  label,
+  hint,
+  height = "h-[260px]",
+}: {
+  label: string;
+  hint: string;
+  height?: string;
+}) {
+  return (
+    <div
+      className={`group relative overflow-hidden rounded-3xl border ${height} transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl`}
+      style={{
+        borderColor: "rgb(var(--border))",
+        background:
+          "linear-gradient(135deg, rgba(59,130,246,0.10) 0%, rgba(99,102,241,0.12) 35%, rgba(15,23,42,0.95) 100%)",
+      }}
+    >
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(circle at top right, rgba(255,255,255,0.12), transparent 32%)",
+        }}
+      />
 
-    const description = "Homeowners in Benicia often experience seasonal pest activity due to the area's coastal climate and surrounding natural environments. Knowing which pests are common can help you identify problems early and prevent infestations."
+      <div
+        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        style={{
+          background:
+            "linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.08) 35%, transparent 70%)",
+        }}
+      />
+
+      <div className="relative flex h-full flex-col justify-between p-6">
+        <div>
+          <div className="inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/90">
+            Image Placeholder
+          </div>
+        </div>
+
+        <div>
+          <div className="text-lg font-semibold text-white">{label}</div>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/80">
+            {hint}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InfoCard({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className="rounded-2xl border p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+      style={{
+        borderColor: "rgb(var(--border))",
+        background: "rgb(var(--bg))",
+      }}
+    >
+      <h3 className="text-lg font-semibold">{title}</h3>
+      <p
+        className="mt-2 text-sm leading-7"
+        style={{ color: "rgb(var(--muted))" }}
+      >
+        {children}
+      </p>
+    </div>
+  );
+}
+
+export default function CommonPestsBeniciaPage() {
+  const description =
+    "Homeowners in Benicia often experience seasonal pest activity due to the area's coastal climate and surrounding natural environments. Knowing which pests are common can help you identify problems early and prevent infestations.";
 
   return (
     <main className="min-h-screen">
       <Navbar />
 
-      <article className="mx-auto max-w-4xl space-y-8 px-4 py-16">
-        <PageTracker
-          items={[
-            { label: "Home", href: "/" },
-            { label: "Blog", href: "/blog" },
-            { label: "Common Pests in Benicia, CA Homes" },
-          ]}
-        />
+      <article className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
+        <div className="space-y-8">
+          <PageTracker
+            items={[
+              { label: "Home", href: "/" },
+              { label: "Blog", href: "/blog" },
+              { label: "Common Pests in Benicia, CA Homes" },
+            ]}
+          />
 
-        <header>
-          <h1 className="text-3xl font-semibold">
-            Common Pests in Benicia, CA Homes
-          </h1>
-
-          <p className="mt-2 text-sm" style={{ color: "rgb(var(--muted))" }}>
-            {description}
-          </p>
-        </header>
-
-        <section className="space-y-6">
-          <h2 className="text-xl font-semibold">Ants</h2>
-          <p>
-            Ant infestations are one of the most frequent pest issues in Benicia
-            homes. They often enter through small cracks searching for food and
-            water. Kitchens, pantries, and outdoor patios are common entry
-            points.
-          </p>
-
-          <h2 className="text-xl font-semibold">Rodents</h2>
-          <p>
-            Mice and rats often enter homes through attic vents, crawlspaces, or
-            foundation gaps. Rodents can cause structural damage and contaminate
-            food supplies.
-          </p>
-
-          <h2 className="text-xl font-semibold">Spiders</h2>
-          <p>
-            Spiders thrive in quiet indoor spaces such as garages, storage areas,
-            and basements. While most are harmless, spider infestations usually
-            indicate the presence of other insects.
-          </p>
-
-          <h2 className="text-xl font-semibold">Wasps and Stinging Insects</h2>
-          <p>
-            Wasps often build nests under rooflines, patios, and outdoor
-            structures. These insects can become aggressive when nests are
-            disturbed.
-          </p>
-        </section>
-
-        <section className="space-y-4">
-          <h2 className="text-xl font-semibold">When to call a professional</h2>
-          <p>
-            If you notice recurring pest activity, unusual noises in walls or
-            attics, or visible pest damage, professional pest control may be
-            necessary to properly eliminate the problem.
-          </p>
-
-          <Link
-            href="/pest-control-bay-area"
-            className="inline-block rounded-xl px-5 py-3 text-sm font-semibold"
+          <header
+            className="overflow-hidden rounded-[2rem] border"
             style={{
-              background: "rgb(var(--primary))",
-              color: "rgb(var(--primary-fg))",
+              borderColor: "rgb(var(--border))",
+              background:
+                "linear-gradient(135deg, rgba(37,99,235,0.10) 0%, rgba(79,70,229,0.12) 40%, rgb(var(--card)) 100%)",
             }}
           >
-            Request Pest Control Service
-          </Link>
-        </section>
+            <div className="grid gap-8 p-6 md:grid-cols-[1.2fr_0.8fr] md:p-8 lg:p-10">
+              <div className="flex flex-col justify-center">
+                <div
+                  className="inline-flex w-fit rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]"
+                  style={{
+                    borderColor: "rgb(var(--border))",
+                    background: "rgba(59,130,246,0.08)",
+                    color: "rgb(var(--fg))",
+                  }}
+                >
+                  Benicia Pest Guide
+                </div>
+
+                <h1 className="mt-4 max-w-3xl text-4xl font-extrabold tracking-tight sm:text-5xl">
+                  Common Pests in Benicia, CA Homes
+                </h1>
+
+                <p
+                  className="mt-4 max-w-2xl text-base leading-7 sm:text-lg"
+                  style={{ color: "rgb(var(--muted))" }}
+                >
+                  {description}
+                </p>
+
+                <div className="mt-6 flex flex-wrap items-center gap-3 text-sm">
+                  <span
+                    className="rounded-full px-3 py-1 font-medium"
+                    style={{
+                      background: "rgb(var(--bg))",
+                      color: "rgb(var(--muted))",
+                      border: "1px solid rgb(var(--border))",
+                    }}
+                  >
+                    Local Pest Education
+                  </span>
+                  <span
+                    className="rounded-full px-3 py-1 font-medium"
+                    style={{
+                      background: "rgb(var(--bg))",
+                      color: "rgb(var(--muted))",
+                      border: "1px solid rgb(var(--border))",
+                    }}
+                  >
+                    Benicia Homeowners
+                  </span>
+                  <span
+                    className="rounded-full px-3 py-1 font-medium"
+                    style={{
+                      background: "rgb(var(--bg))",
+                      color: "rgb(var(--muted))",
+                      border: "1px solid rgb(var(--border))",
+                    }}
+                  >
+                    Seasonal Pest Activity
+                  </span>
+                </div>
+              </div>
+
+              <ImagePlaceholder
+                label="Hero image: common household pests around a Benicia home"
+                hint="Suggested image: residential exterior with visual cues for ants, rodents, spiders, or wasp-prone rooflines and outdoor structures."
+                height="h-[280px] md:h-full md:min-h-[360px]"
+              />
+            </div>
+          </header>
+
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="space-y-8">
+              <section
+                className="rounded-[2rem] border p-6 sm:p-8"
+                style={{
+                  borderColor: "rgb(var(--border))",
+                  background: "rgb(var(--card))",
+                }}
+              >
+                <div className="max-w-none space-y-6">
+                  <div>
+                    <h2 className="text-2xl font-bold tracking-tight">
+                      Why some pests show up more often in Benicia homes
+                    </h2>
+                    <p
+                      className="mt-3 text-base leading-7"
+                      style={{ color: "rgb(var(--muted))" }}
+                    >
+                      Benicia’s climate, landscaping, and residential structure
+                      types can all contribute to recurring pest activity.
+                      Recognizing which pests are most common can help homeowners
+                      act early and reduce the chance of larger infestations.
+                    </p>
+                  </div>
+
+                  <ImagePlaceholder
+                    label="Supporting image: pest entry points and activity zones"
+                    hint="Suggested image: exterior cracks, patio corners, garage edges, attic vents, or landscaping near a home's foundation."
+                    height="h-[220px]"
+                  />
+
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <InfoCard title="Ants">
+                      Ant infestations are one of the most frequent pest issues
+                      in Benicia homes. They often enter through small cracks
+                      while searching for food and water. Kitchens, pantries,
+                      patios, and sink areas are common activity points.
+                    </InfoCard>
+
+                    <InfoCard title="Rodents">
+                      Mice and rats often enter homes through attic vents,
+                      crawlspaces, roof gaps, or foundation openings. Rodents can
+                      cause structural damage and contaminate stored food.
+                    </InfoCard>
+
+                    <InfoCard title="Spiders">
+                      Spiders thrive in quiet indoor spaces such as garages,
+                      storage areas, utility corners, and basements. While most
+                      are harmless, spider activity often suggests the presence
+                      of other insects nearby.
+                    </InfoCard>
+
+                    <InfoCard title="Wasps and Stinging Insects">
+                      Wasps frequently build nests under eaves, patio covers,
+                      rooflines, and outdoor structures. These pests can become
+                      aggressive when nests are disturbed or when people get too
+                      close.
+                    </InfoCard>
+                  </div>
+                </div>
+              </section>
+
+              <section
+                className="rounded-[2rem] border p-6 sm:p-8"
+                style={{
+                  borderColor: "rgb(var(--border))",
+                  background: "rgb(var(--card))",
+                }}
+              >
+                <div className="grid gap-6 md:grid-cols-[0.95fr_1.05fr] md:items-start">
+                  <ImagePlaceholder
+                    label="Supporting image: garage, attic, patio, or roofline pest zones"
+                    hint="Suggested image: common nesting or hiding locations such as attic vents, patio beams, wall voids, or cluttered storage areas."
+                    height="h-[240px] md:h-full md:min-h-[320px]"
+                  />
+
+                  <div>
+                    <h2 className="text-2xl font-bold tracking-tight">
+                      Signs homeowners should watch for
+                    </h2>
+
+                    <p
+                      className="mt-3 text-base leading-7"
+                      style={{ color: "rgb(var(--muted))" }}
+                    >
+                      Many infestations begin with subtle warning signs. Spotting
+                      them early can help reduce repair costs and prevent pests
+                      from becoming established indoors.
+                    </p>
+
+                    <ul
+                      className="mt-5 space-y-3 text-sm leading-7"
+                      style={{ color: "rgb(var(--muted))" }}
+                    >
+                      <li>• Ant trails along counters, walls, or windows</li>
+                      <li>• Scratching sounds in ceilings, walls, or attics</li>
+                      <li>• Spider webs accumulating in quiet corners</li>
+                      <li>• Wasp nests forming under eaves or patio roofs</li>
+                      <li>• Droppings, gnaw marks, or damaged food packaging</li>
+                      <li>• Pest activity increasing during warmer months</li>
+                    </ul>
+                  </div>
+                </div>
+              </section>
+
+              <section
+                className="rounded-[2rem] border p-6 sm:p-8"
+                style={{
+                  borderColor: "rgb(var(--border))",
+                  background: "rgb(var(--card))",
+                }}
+              >
+                <h2 className="text-2xl font-bold tracking-tight">
+                  When to call a professional
+                </h2>
+
+                <p
+                  className="mt-3 max-w-3xl text-base leading-7"
+                  style={{ color: "rgb(var(--muted))" }}
+                >
+                  If you notice recurring pest activity, unusual noises in walls
+                  or attics, visible nests, or signs of pest damage, professional
+                  pest control may be necessary to correctly identify the issue
+                  and eliminate it more effectively.
+                </p>
+
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <Link
+                    href="/pest-control-bay-area"
+                    className="inline-flex items-center rounded-2xl px-5 py-3 text-sm font-semibold transition duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:opacity-95"
+                    style={{
+                      background: "rgb(var(--primary))",
+                      color: "rgb(var(--primary-fg))",
+                    }}
+                  >
+                    Request Pest Control Service
+                  </Link>
+
+                  <Link
+                    href="/contact"
+                    className="inline-flex items-center rounded-2xl border px-5 py-3 text-sm font-semibold transition duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:opacity-95"
+                    style={{
+                      borderColor: "rgb(var(--border))",
+                      background: "rgb(var(--bg))",
+                      color: "rgb(var(--fg))",
+                    }}
+                  >
+                    Contact Our Team
+                  </Link>
+                </div>
+              </section>
+            </div>
+
+            <aside className="space-y-6">
+              <div
+                className="rounded-[2rem] border p-6"
+                style={{
+                  borderColor: "rgb(var(--border))",
+                  background: "rgb(var(--card))",
+                }}
+              >
+                <div className="text-sm font-semibold">Quick Takeaways</div>
+                <ul
+                  className="mt-4 space-y-3 text-sm leading-7"
+                  style={{ color: "rgb(var(--muted))" }}
+                >
+                  <li>• Ants and rodents are frequent household pests</li>
+                  <li>• Spiders often indicate other insect activity</li>
+                  <li>• Wasps commonly nest on outdoor structures</li>
+                  <li>• Early identification helps prevent bigger issues</li>
+                </ul>
+              </div>
+
+              <div
+                className="rounded-[2rem] border p-6"
+                style={{
+                  borderColor: "rgb(var(--border))",
+                  background:
+                    "linear-gradient(135deg, rgba(59,130,246,0.08), rgba(79,70,229,0.10))",
+                }}
+              >
+                <div className="text-lg font-semibold">Suggested image list</div>
+                <div
+                  className="mt-3 space-y-3 text-sm leading-7"
+                  style={{ color: "rgb(var(--muted))" }}
+                >
+                  <p>Hero: home exterior with multiple pest risk zones</p>
+                  <p>Mid-article: entry points around foundation or patio</p>
+                  <p>Section image: attic vent, garage, patio roof, or nest area</p>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </div>
       </article>
     </main>
   );
