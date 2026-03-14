@@ -1,30 +1,36 @@
 "use client";
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState, useRef } from "react";
-import { me as apiMe, logout as apiLogout,type MeResponse } from "../lib/api/auth";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { me as apiMe, logout as apiLogout, type MeResponse } from "../lib/api/auth";
 
 export type AuthUser = NonNullable<MeResponse["user"]>;
 
 type AuthContextValue = {
   user: AuthUser | null;
   loading: boolean;
+  hydrated: boolean;
   refresh: () => Promise<void>;
   logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-// Global event name used to refresh auth state after login/signup
 const AUTH_CHANGED_EVENT = "auth:changed";
-
-// Cross-tab sync (optional but great UX)
 const AUTH_BROADCAST_CHANNEL = "auth";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hydrated, setHydrated] = useState(false);
 
-  // Prevent overlapping refreshes
   const refreshingRef = useRef<Promise<void> | null>(null);
 
   const refresh = useCallback(async () => {
@@ -39,6 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
       } finally {
         setLoading(false);
+        setHydrated(true);
         refreshingRef.current = null;
       }
     })();
@@ -53,11 +60,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // ignore
     }
-    setUser(null);
 
-    // Tell other listeners/tabs to refresh too
+    setUser(null);
+    setLoading(false);
+    setHydrated(true);
+
     if (typeof window !== "undefined") {
       window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
+
       try {
         const bc = new BroadcastChannel(AUTH_BROADCAST_CHANNEL);
         bc.postMessage({ type: AUTH_CHANGED_EVENT });
@@ -68,31 +78,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Initial load
   useEffect(() => {
-    refresh();
+    void refresh();
   }, [refresh]);
 
-  // Listen for same-tab auth updates (login/signup triggers)
   useEffect(() => {
     function onAuthChanged() {
-      refresh();
+      void refresh();
     }
+
     window.addEventListener(AUTH_CHANGED_EVENT, onAuthChanged);
     return () => window.removeEventListener(AUTH_CHANGED_EVENT, onAuthChanged);
   }, [refresh]);
 
-  // Listen for cross-tab auth updates
   useEffect(() => {
     let bc: BroadcastChannel | null = null;
+
     try {
       bc = new BroadcastChannel(AUTH_BROADCAST_CHANNEL);
       bc.onmessage = (ev) => {
-        if (ev?.data?.type === AUTH_CHANGED_EVENT) refresh();
+        if (ev?.data?.type === AUTH_CHANGED_EVENT) {
+          void refresh();
+        }
       };
     } catch {
       // ignore
     }
+
     return () => {
       try {
         bc?.close();
@@ -103,8 +115,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refresh]);
 
   const value = useMemo(
-    () => ({ user, loading, refresh, logout }),
-    [user, loading, refresh, logout]
+    () => ({
+      user,
+      loading,
+      hydrated,
+      refresh,
+      logout,
+    }),
+    [user, loading, hydrated, refresh, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -116,10 +134,6 @@ export function useAuth() {
   return ctx;
 }
 
-/**
- * Helper to call after login/signup success:
- *   notifyAuthChanged();
- */
 export function notifyAuthChanged() {
   if (typeof window === "undefined") return;
 

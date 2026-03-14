@@ -6,7 +6,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, ChevronDown } from "lucide-react";
 import { useAuth } from "./AuthProvider";
-import { me as apiMe } from "../lib/api/auth";
 import {
   type AppNotification,
   getUnreadNotificationCount,
@@ -241,7 +240,7 @@ export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
 
-  const { user, loading, logout } = useAuth();
+  const { user, logout } = useAuth();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -252,7 +251,6 @@ export default function Navbar() {
   const notifRef = useRef<HTMLDivElement | null>(null);
   const hamburgerRef = useRef<HTMLButtonElement | null>(null);
 
-  const [resolvedUser, setResolvedUser] = useState<NavbarUser | null>(null);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [notifLoading, setNotifLoading] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -262,8 +260,9 @@ export default function Navbar() {
     NotificationPermission | "unsupported"
   >("unsupported");
 
-  const effectiveUser = (user as NavbarUser | null) ?? resolvedUser;
+  const effectiveUser = (user as NavbarUser | null) ?? null;
   const isAuthed = !!effectiveUser;
+
   const viewerRole = useMemo(
     () => normalizeViewerRole(effectiveUser),
     [effectiveUser]
@@ -273,6 +272,7 @@ export default function Navbar() {
     () => (effectiveUser ? displayName(effectiveUser) : ""),
     [effectiveUser]
   );
+
   const initials = useMemo(() => (name ? getInitials(name) : "U"), [name]);
 
   useEffect(() => {
@@ -283,6 +283,7 @@ export default function Navbar() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+
     if (!("Notification" in window)) {
       setBrowserNotifPermission("unsupported");
       setBrowserNotifEnabled(false);
@@ -295,37 +296,7 @@ export default function Navbar() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function refreshMe() {
-      try {
-        const res = await apiMe();
-        if (cancelled) return;
-
-        if (res?.ok && res.user) {
-          setResolvedUser(res.user as NavbarUser);
-        } else {
-          setResolvedUser(null);
-        }
-      } catch {
-        if (!cancelled) setResolvedUser(null);
-      }
-    }
-
-    if (!loading && user) {
-      setResolvedUser(user as NavbarUser);
-      return;
-    }
-
-    if (!loading && !user) {
-      void refreshMe();
-    }
-
     function onFocus() {
-      if (!loading && !user) {
-        void refreshMe();
-      }
-
       if (typeof window !== "undefined" && "Notification" in window) {
         setBrowserNotifPermission(Notification.permission);
         const saved = window.localStorage.getItem(BROWSER_NOTIFY_PREF_KEY);
@@ -334,12 +305,8 @@ export default function Navbar() {
     }
 
     window.addEventListener("focus", onFocus);
-
-    return () => {
-      cancelled = true;
-      window.removeEventListener("focus", onFocus);
-    };
-  }, [loading, user, pathname]);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
 
   useEffect(() => {
     function onDown(e: MouseEvent) {
@@ -370,14 +337,17 @@ export default function Navbar() {
         setNotifOpen(false);
       }
     }
+
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
   useEffect(() => {
     if (!menuOpen) return;
+
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+
     return () => {
       document.body.style.overflow = prev;
     };
@@ -462,7 +432,6 @@ export default function Navbar() {
     try {
       await logout();
     } finally {
-      setResolvedUser(null);
       setNotifications([]);
       setUnreadCount(0);
       router.push("/login");
@@ -601,7 +570,7 @@ export default function Navbar() {
               Book a Service
             </Link>
 
-            {!loading && !isAuthed ? (
+            {!isAuthed ? (
               <Link
                 href="/login"
                 className="rounded-xl px-3 py-2 text-sm font-medium hover:opacity-90"
@@ -612,7 +581,7 @@ export default function Navbar() {
             ) : null}
           </div>
 
-          {!loading && isAuthed ? (
+          {isAuthed ? (
             <div className="relative shrink-0" ref={notifRef}>
               <button
                 type="button"
@@ -655,7 +624,7 @@ export default function Navbar() {
             </div>
           ) : null}
 
-          {!loading && isAuthed ? (
+          {isAuthed ? (
             <div className="relative hidden md:block" ref={accountRef}>
               <button
                 type="button"
@@ -816,7 +785,7 @@ export default function Navbar() {
               Book a Service
             </Link>
 
-            {!loading && !isAuthed ? (
+            {!isAuthed ? (
               <div className="grid gap-2">
                 <Link
                   href="/login"
@@ -844,7 +813,7 @@ export default function Navbar() {
               </div>
             ) : null}
 
-            {!loading && isAuthed ? (
+            {isAuthed ? (
               <div className="grid gap-2">
                 <div
                   className="rounded-xl border p-3"
