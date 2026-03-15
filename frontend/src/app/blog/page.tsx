@@ -8,21 +8,21 @@ const POSTS = [
     desc: "Learn which pests homeowners in Benicia commonly deal with and when it may be time to call a professional.",
     href: "/blog/common-pests-benicia-ca",
     date: null,
-    imageUrl: null,
+    imageUrl: "/pest-infested-house.png",
   },
   {
     title: "How to Prevent Ant Infestations in the Bay Area",
     desc: "Simple prevention steps that help reduce ant activity around your home and property.",
     href: "/blog/how-to-prevent-ants-in-the-bay-area",
     date: null,
-    imageUrl: null,
+    imageUrl: "/ant-infested-home.png",
   },
   {
     title: "What Attracts Rats to Homes?",
     desc: "Understand the most common causes of rodent activity and how to reduce the risk of infestation.",
     href: "/blog/what-attracts-rats-to-homes",
     date: null,
-    imageUrl: null,
+    imageUrl: "/rat-infested-home.png",
   },
 ];
 
