@@ -307,7 +307,7 @@ export default function RatAttractionPage() {
 
                 <div className="mt-6 flex flex-wrap gap-3">
                   <Link
-                    href="/rodent-control-bay-area"
+                    href="/sharkeys-pest-control-booking"
                     className="inline-flex items-center rounded-2xl px-5 py-3 text-sm font-semibold transition hover:opacity-90"
                     style={{
                       background: "rgb(var(--primary))",

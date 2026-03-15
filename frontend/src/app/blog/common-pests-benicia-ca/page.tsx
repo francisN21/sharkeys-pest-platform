@@ -300,7 +300,7 @@ export default function CommonPestsBeniciaPage() {
 
                 <div className="mt-6 flex flex-wrap gap-3">
                   <Link
-                    href="/pest-control-bay-area"
+                    href="/sharkeys-pest-control-booking"
                     className="inline-flex items-center rounded-2xl px-5 py-3 text-sm font-semibold transition duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:opacity-95"
                     style={{
                       background: "rgb(var(--primary))",
