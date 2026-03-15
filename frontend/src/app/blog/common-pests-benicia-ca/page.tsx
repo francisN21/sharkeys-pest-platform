@@ -6,50 +6,57 @@ function ImagePlaceholder({
   label,
   hint,
   height = "h-[260px]",
+  imageUrl,
 }: {
   label: string;
   hint: string;
   height?: string;
+  imageUrl?: string | null;
 }) {
   return (
     <div
       className={`group relative overflow-hidden rounded-3xl border ${height} transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl`}
       style={{
         borderColor: "rgb(var(--border))",
-        background:
-          "linear-gradient(135deg, rgba(59,130,246,0.10) 0%, rgba(99,102,241,0.12) 35%, rgba(15,23,42,0.95) 100%)",
+        background: imageUrl
+          ? `linear-gradient(180deg, rgba(0,0,0,0.15), rgba(0,0,0,0.55)), url(${imageUrl}) center / cover no-repeat`
+          : "linear-gradient(135deg, rgba(59,130,246,0.10) 0%, rgba(99,102,241,0.12) 35%, rgba(15,23,42,0.95) 100%)",
       }}
     >
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(circle at top right, rgba(255,255,255,0.12), transparent 32%)",
-        }}
-      />
+      {!imageUrl && (
+        <>
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(circle at top right, rgba(255,255,255,0.12), transparent 32%)",
+            }}
+          />
 
-      <div
-        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-        style={{
-          background:
-            "linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.08) 35%, transparent 70%)",
-        }}
-      />
+          <div
+            className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+            style={{
+              background:
+                "linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.08) 35%, transparent 70%)",
+            }}
+          />
 
-      <div className="relative flex h-full flex-col justify-between p-6">
-        <div>
-          <div className="inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/90">
-            Image Placeholder
+          <div className="relative flex h-full flex-col justify-between p-6">
+            <div>
+              <div className="inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/90">
+                Image Placeholder
+              </div>
+            </div>
+
+            <div>
+              <div className="text-lg font-semibold text-white">{label}</div>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-white/80">
+                {hint}
+              </p>
+            </div>
           </div>
-        </div>
-
-        <div>
-          <div className="text-lg font-semibold text-white">{label}</div>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/80">
-            {hint}
-          </p>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }
@@ -165,8 +172,9 @@ export default function CommonPestsBeniciaPage() {
               </div>
 
               <ImagePlaceholder
+                imageUrl="/common-pest-1.png"
                 label="Hero image: common household pests around a Benicia home"
-                hint="Suggested image: residential exterior with visual cues for ants, rodents, spiders, or wasp-prone rooflines and outdoor structures."
+                hint="Suggested image: residential exterior with visual cues for ants, rodents, spiders, or wasp-prone rooflines."
                 height="h-[280px] md:h-full md:min-h-[360px]"
               />
             </div>
@@ -196,13 +204,12 @@ export default function CommonPestsBeniciaPage() {
                       act early and reduce the chance of larger infestations.
                     </p>
                   </div>
-
                   <ImagePlaceholder
+                    imageUrl="/exterior-cracks.png"
                     label="Supporting image: pest entry points and activity zones"
-                    hint="Suggested image: exterior cracks, patio corners, garage edges, attic vents, or landscaping near a home's foundation."
+                    hint="Exterior cracks, patio corners, attic vents, or landscaping near the foundation."
                     height="h-[220px]"
-                  />
-
+                  />  
                   <div className="grid gap-6 md:grid-cols-2">
                     <InfoCard title="Ants">
                       Ant infestations are one of the most frequent pest issues
@@ -243,6 +250,7 @@ export default function CommonPestsBeniciaPage() {
               >
                 <div className="grid gap-6 md:grid-cols-[0.95fr_1.05fr] md:items-start">
                   <ImagePlaceholder
+                    imageUrl="/hiding-locations.png"
                     label="Supporting image: garage, attic, patio, or roofline pest zones"
                     hint="Suggested image: common nesting or hiding locations such as attic vents, patio beams, wall voids, or cluttered storage areas."
                     height="h-[240px] md:h-full md:min-h-[320px]"

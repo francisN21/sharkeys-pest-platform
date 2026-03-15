@@ -26,33 +26,42 @@ const POSTS = [
   },
 ];
 
-function BlogHeroImagePlaceholder() {
+function BlogHeroImage({
+  imageUrl,
+}: {
+  imageUrl?: string | null;
+}) {
   return (
     <div
       className="relative overflow-hidden rounded-3xl border h-[220px] md:h-full md:min-h-[260px]"
       style={{
         borderColor: "rgb(var(--border))",
-        background:
-          "linear-gradient(135deg, rgba(59,130,246,0.10) 0%, rgba(99,102,241,0.12) 35%, rgba(15,23,42,0.95) 100%)",
+        background: imageUrl
+          ? `linear-gradient(180deg, rgba(0,0,0,0.20), rgba(0,0,0,0.55)), url(${imageUrl}) center / cover no-repeat`
+          : "linear-gradient(135deg, rgba(59,130,246,0.10) 0%, rgba(99,102,241,0.12) 35%, rgba(15,23,42,0.95) 100%)",
       }}
     >
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(circle at top right, rgba(255,255,255,0.12), transparent 32%)",
-        }}
-      />
+      {!imageUrl && (
+        <>
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(circle at top right, rgba(255,255,255,0.12), transparent 32%)",
+            }}
+          />
 
-      <div className="relative flex h-full flex-col justify-end p-6">
-        <div className="text-lg font-semibold text-white">
-          Blog Hero Image Placeholder
-        </div>
-        <p className="mt-2 text-sm text-white/80">
-          Suggested image: technician inspecting a home exterior, pest control
-          truck, or close-up of common household pests (ants, rodents, spiders).
-        </p>
-      </div>
+          <div className="relative flex h-full flex-col justify-end p-6">
+            <div className="text-lg font-semibold text-white">
+              Blog Hero Image Placeholder
+            </div>
+            <p className="mt-2 text-sm text-white/80">
+              Suggested image: technician inspecting a home exterior, pest
+              control truck, or close-up of common household pests.
+            </p>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -141,7 +150,7 @@ export default function BlogPage() {
                 </div>
               </div>
 
-              <BlogHeroImagePlaceholder />
+              <BlogHeroImage imageUrl="/main-hero-blog.png" />
             </div>
           </header>
 
