@@ -6,42 +6,107 @@ function ImagePlaceholder({
   label,
   hint,
   height = "h-[260px]",
+  imageUrl,
 }: {
   label: string;
   hint: string;
   height?: string;
+  imageUrl?: string | null;
 }) {
   return (
     <div
-      className={`relative overflow-hidden rounded-3xl border ${height}`}
+      className={`group relative overflow-hidden rounded-3xl border ${height} transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl`}
       style={{
         borderColor: "rgb(var(--border))",
-        background:
-          "linear-gradient(135deg, rgba(59,130,246,0.10) 0%, rgba(99,102,241,0.12) 35%, rgba(15,23,42,0.95) 100%)",
+        background: imageUrl
+          ? "rgb(var(--card))"
+          : "linear-gradient(135deg, rgba(59,130,246,0.10) 0%, rgba(99,102,241,0.12) 35%, rgba(15,23,42,0.95) 100%)",
       }}
     >
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(circle at top right, rgba(255,255,255,0.12), transparent 32%)",
-        }}
-      />
+      {imageUrl ? (
+        <>
+          <div
+            className="absolute inset-0 transition-transform duration-500 ease-out group-hover:scale-[1.04]"
+            style={{
+              background: `url(${imageUrl}) center / cover no-repeat`,
+            }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(180deg, rgba(0,0,0,0.14) 0%, rgba(0,0,0,0.52) 100%)",
+            }}
+          />
+          <div
+            className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+            style={{
+              background:
+                "linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.08) 35%, transparent 70%)",
+            }}
+          />
+        </>
+      ) : (
+        <>
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(circle at top right, rgba(255,255,255,0.12), transparent 32%)",
+            }}
+          />
+          <div
+            className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+            style={{
+              background:
+                "linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.08) 35%, transparent 70%)",
+            }}
+          />
+        </>
+      )}
 
-      <div className="relative flex h-full flex-col justify-between p-6">
-        <div>
-          <div className="inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/90">
-            Image Placeholder
+      {!imageUrl && (
+        <div className="relative flex h-full flex-col justify-between p-6">
+          <div>
+            <div className="inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/90">
+              Image Placeholder
+            </div>
+          </div>
+
+          <div>
+            <div className="text-lg font-semibold text-white">{label}</div>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/80">
+              {hint}
+            </p>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
 
-        <div>
-          <div className="text-lg font-semibold text-white">{label}</div>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/80">
-            {hint}
-          </p>
-        </div>
-      </div>
+function InfoCard({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className="rounded-2xl border p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+      style={{
+        borderColor: "rgb(var(--border))",
+        background: "rgb(var(--bg))",
+      }}
+    >
+      <h3 className="text-lg font-semibold">{title}</h3>
+      <p
+        className="mt-2 text-sm leading-7"
+        style={{ color: "rgb(var(--muted))" }}
+      >
+        {children}
+      </p>
     </div>
   );
 }
@@ -130,6 +195,7 @@ export default function RatAttractionPage() {
               </div>
 
               <ImagePlaceholder
+                imageUrl="/rat-main-1.png"
                 label="Hero image: rat activity near a home exterior"
                 hint="Suggested image: a realistic exterior home scene showing areas where rodents may enter, such as vents, shrubs, foundation gaps, trash bins, or crawlspace openings."
                 height="h-[280px] md:h-full md:min-h-[360px]"
@@ -162,81 +228,34 @@ export default function RatAttractionPage() {
                   </div>
 
                   <ImagePlaceholder
+                    imageUrl="/rat-activity.png"
                     label="Supporting image: signs of rodent access"
                     hint="Suggested image: close-up of a garage gap, torn vent screen, or small entry point near pipes or siding."
                     height="h-[220px]"
                   />
 
                   <div className="grid gap-6 md:grid-cols-2">
-                    <div
-                      className="rounded-2xl border p-5"
-                      style={{
-                        borderColor: "rgb(var(--border))",
-                        background: "rgb(var(--bg))",
-                      }}
-                    >
-                      <h3 className="text-lg font-semibold">Food sources</h3>
-                      <p
-                        className="mt-2 text-sm leading-7"
-                        style={{ color: "rgb(var(--muted))" }}
-                      >
-                        Unsecured trash bins, pet food, bird feeders, and food
-                        scraps are common reasons rodents are attracted to
-                        residential properties.
-                      </p>
-                    </div>
+                    <InfoCard title="Food sources">
+                      Unsecured trash bins, pet food, bird feeders, and food
+                      scraps are common reasons rodents are attracted to
+                      residential properties.
+                    </InfoCard>
 
-                    <div
-                      className="rounded-2xl border p-5"
-                      style={{
-                        borderColor: "rgb(var(--border))",
-                        background: "rgb(var(--bg))",
-                      }}
-                    >
-                      <h3 className="text-lg font-semibold">Shelter</h3>
-                      <p
-                        className="mt-2 text-sm leading-7"
-                        style={{ color: "rgb(var(--muted))" }}
-                      >
-                        Rats often nest in attics, crawlspaces, sheds, and
-                        garages where they are protected from predators and
-                        changing weather.
-                      </p>
-                    </div>
+                    <InfoCard title="Shelter">
+                      Rats often nest in attics, crawlspaces, sheds, and garages
+                      where they are protected from predators and changing
+                      weather.
+                    </InfoCard>
 
-                    <div
-                      className="rounded-2xl border p-5"
-                      style={{
-                        borderColor: "rgb(var(--border))",
-                        background: "rgb(var(--bg))",
-                      }}
-                    >
-                      <h3 className="text-lg font-semibold">Water sources</h3>
-                      <p
-                        className="mt-2 text-sm leading-7"
-                        style={{ color: "rgb(var(--muted))" }}
-                      >
-                        Leaky pipes, irrigation systems, clogged drains, and
-                        standing water can attract rodents seeking hydration.
-                      </p>
-                    </div>
+                    <InfoCard title="Water sources">
+                      Leaky pipes, irrigation systems, clogged drains, and
+                      standing water can attract rodents seeking hydration.
+                    </InfoCard>
 
-                    <div
-                      className="rounded-2xl border p-5"
-                      style={{
-                        borderColor: "rgb(var(--border))",
-                        background: "rgb(var(--bg))",
-                      }}
-                    >
-                      <h3 className="text-lg font-semibold">Nearby vegetation</h3>
-                      <p
-                        className="mt-2 text-sm leading-7"
-                        style={{ color: "rgb(var(--muted))" }}
-                      >
-                        Dense shrubs, tree branches touching the roof, and yard
-                        clutter provide hiding places and access to the home.
-                      </p>
-                    </div>
+                    <InfoCard title="Nearby vegetation">
+                      Dense shrubs, tree branches touching the roof, and yard
+                      clutter provide hiding places and access to the home.
+                    </InfoCard>
                   </div>
                 </div>
               </section>
@@ -250,6 +269,7 @@ export default function RatAttractionPage() {
               >
                 <div className="grid gap-6 md:grid-cols-[0.95fr_1.05fr] md:items-start">
                   <ImagePlaceholder
+                    imageUrl="/rat-attic-infestation.png"
                     label="Supporting image: attic, crawlspace, or garage risk area"
                     hint="Suggested image: attic insulation disturbance, stored boxes in a garage, or a crawlspace access point."
                     height="h-[240px] md:h-full md:min-h-[320px]"
@@ -308,7 +328,7 @@ export default function RatAttractionPage() {
                 <div className="mt-6 flex flex-wrap gap-3">
                   <Link
                     href="/sharkeys-pest-control-booking"
-                    className="inline-flex items-center rounded-2xl px-5 py-3 text-sm font-semibold transition hover:opacity-90"
+                    className="inline-flex items-center rounded-2xl px-5 py-3 text-sm font-semibold transition duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:opacity-95"
                     style={{
                       background: "rgb(var(--primary))",
                       color: "rgb(var(--primary-fg))",
@@ -319,7 +339,7 @@ export default function RatAttractionPage() {
 
                   <Link
                     href="/contact"
-                    className="inline-flex items-center rounded-2xl border px-5 py-3 text-sm font-semibold transition hover:opacity-90"
+                    className="inline-flex items-center rounded-2xl border px-5 py-3 text-sm font-semibold transition duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:opacity-95"
                     style={{
                       borderColor: "rgb(var(--border))",
                       background: "rgb(var(--bg))",
