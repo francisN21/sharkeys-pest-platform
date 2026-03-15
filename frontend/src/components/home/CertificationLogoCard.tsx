@@ -1,50 +1,55 @@
 import Image from "next/image";
 import Link from "next/link";
-import HomeCard from "./HomeCard";
+import MarketingCard from "../ui/marketing-card";
 
 type CertificationLogoCardProps = {
   title: string;
-  description?: string;
-  href: string;
-  logoSrc: string;
-  logoAlt: string;
+  imageSrc: string;
+  imageAlt: string;
+  href?: string;
 };
 
 export default function CertificationLogoCard({
   title,
-  description,
+  imageSrc,
+  imageAlt,
   href,
-  logoSrc,
-  logoAlt,
 }: CertificationLogoCardProps) {
-  return (
-    <Link href={href} target="_blank" rel="noreferrer" className="block">
-      <HomeCard className="p-4">
-        <div className="text-sm font-semibold">{title}</div>
+  const content = (
+    <MarketingCard className="p-4">
+      <div className="text-sm font-semibold">{title}</div>
 
-        <div
-          className="mt-3 flex min-h-[96px] items-center justify-center overflow-hidden rounded-xl border"
-          style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--bg))" }}
-        >
-          <div className="relative h-16 w-full max-w-[180px]">
-            <Image
-              src={logoSrc}
-              alt={logoAlt}
-              fill
-              className="object-contain"
-            />
-          </div>
+      <div
+        className="mt-3 flex min-h-[96px] items-center justify-center overflow-hidden rounded-xl border"
+        style={{
+          borderColor: "rgb(var(--border))",
+          background: "rgb(var(--bg))",
+        }}
+      >
+        <div className="relative h-16 w-full max-w-[180px]">
+          <Image
+            src={imageSrc}
+            alt={imageAlt}
+            fill
+            className="object-contain"
+          />
         </div>
-
-        {description ? (
-          <div
-            className="mt-3 text-sm leading-6"
-            style={{ color: "rgb(var(--muted))" }}
-          >
-            {description}
-          </div>
-        ) : null}
-      </HomeCard>
-    </Link>
+      </div>
+    </MarketingCard>
   );
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className="block"
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  return content;
 }
