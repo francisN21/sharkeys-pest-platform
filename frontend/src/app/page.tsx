@@ -65,19 +65,19 @@ const SERVICE_AREAS = [
 const CERTIFICATIONS = [
   {
     title: "Green Pro Certified",
-    imageSrc: "/logos/certifications/greenpro-logo.png",
+    imageSrc: "/greenpro-certified-vector-logo.svg",
     imageAlt: "Green Pro Certified logo",
     href: "/logos/certifications/greenpro-logo.png",
   },
   {
     title: "Bird Barrier Certified Installer",
-    imageSrc: "/logos/certifications/bird-barrier-logo.png",
+    imageSrc: "/bird-barrier-logo.jpg",
     imageAlt: "Bird Barrier Certified Installer logo",
     href: "/logos/certifications/bird-barrier-logo.png",
   },
 ];
 
-const LINKEDIN_SOFTWARE_BY_HREF = "https://www.linkedin.com/in/YOUR-LINKEDIN-HANDLE";
+const LINKEDIN_SOFTWARE_BY_HREF = "https://www.linkedin.com/in/franciscorones/";
 
 export default function HomePage() {
   return (

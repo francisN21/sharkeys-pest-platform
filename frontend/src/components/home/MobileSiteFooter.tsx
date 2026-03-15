@@ -20,28 +20,29 @@ export default function MobileSiteFooter({
       className="mt-12 border-t md:hidden"
       style={{
         borderColor: "rgb(var(--border))",
-        background: "rgb(49 46 129)",
       }}
     >
       <div className="mx-auto max-w-6xl px-4 py-8 text-center text-sm text-white/90">
-        <div className="grid grid-cols-2 gap-3 text-left sm:grid-cols-3">
+
+        {/* CENTERED LINKS */}
+        <div className="grid grid-cols-2 gap-3 text-center sm:grid-cols-3 justify-items-center">
           {FOOTER_LINKS.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className="rounded-xl px-3 py-2 transition hover:bg-white/10"
+              className="w-full rounded-xl px-3 py-2 transition hover:bg-white/10"
             >
               {item.label}
             </Link>
           ))}
         </div>
 
-        <div className="mt-8 border-t pt-6" style={{ borderColor: "rgba(255,255,255,0.14)" }}>
+        <div
+          className="mt-8 border-t pt-6"
+          style={{ borderColor: "rgba(255,255,255,0.14)" }}
+        >
           <p className="text-sm text-white/85">
-            © 2025 Sharkys Pest Control. All rights reserved.{" "}
-            <Link href="/privacy-policy" className="text-yellow-300 hover:underline">
-              Privacy Policy
-            </Link>
+            © 2025 Sharkys Pest Control. All rights reserved.
           </p>
 
           <p className="mt-4 text-sm text-white/85">

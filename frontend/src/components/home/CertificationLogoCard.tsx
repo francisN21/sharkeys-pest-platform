@@ -19,19 +19,19 @@ export default function CertificationLogoCard({
     <MarketingCard className="p-4">
       <div className="text-sm font-semibold">{title}</div>
 
-      <div
-        className="mt-3 flex min-h-[96px] items-center justify-center overflow-hidden rounded-xl border"
-        style={{
-          borderColor: "rgb(var(--border))",
-          background: "rgb(var(--bg))",
-        }}
-      >
-        <div className="relative h-16 w-full max-w-[180px]">
+      <div className="mt-3 flex justify-center">
+        <div
+          className="relative aspect-square w-full max-w-[180px] overflow-hidden rounded-2xl border p-3 transition-all duration-300 group-hover:scale-[1.02]"
+          style={{
+            borderColor: "rgb(var(--border))",
+            background: "rgb(var(--bg))",
+          }}
+        >
           <Image
             src={imageSrc}
             alt={imageAlt}
             fill
-            className="object-contain"
+            className="object-contain p-2"
           />
         </div>
       </div>
