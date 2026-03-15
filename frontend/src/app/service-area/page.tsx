@@ -14,6 +14,89 @@ const AREAS = [
   "Oakland",
 ];
 
+function ImagePlaceholder({
+  label,
+  hint,
+  height = "h-[260px]",
+  imageUrl,
+}: {
+  label: string;
+  hint: string;
+  height?: string;
+  imageUrl?: string | null;
+}) {
+  return (
+    <div
+      className={`group relative overflow-hidden rounded-3xl border ${height} transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl`}
+      style={{
+        borderColor: "rgb(var(--border))",
+        background: imageUrl
+          ? "rgb(var(--card))"
+          : "linear-gradient(135deg, rgba(59,130,246,0.10) 0%, rgba(99,102,241,0.12) 35%, rgba(15,23,42,0.95) 100%)",
+      }}
+    >
+      {imageUrl ? (
+        <>
+          <div
+            className="absolute inset-0 transition-transform duration-500 ease-out group-hover:scale-[1.04]"
+            style={{
+              background: `url(${imageUrl}) center / cover no-repeat`,
+            }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(180deg, rgba(0,0,0,0.14) 0%, rgba(0,0,0,0.52) 100%)",
+            }}
+          />
+          <div
+            className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+            style={{
+              background:
+                "linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.08) 35%, transparent 70%)",
+            }}
+          />
+        </>
+      ) : (
+        <>
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(circle at top right, rgba(255,255,255,0.12), transparent 32%)",
+            }}
+          />
+          <div
+            className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+            style={{
+              background:
+                "linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.08) 35%, transparent 70%)",
+            }}
+          />
+        </>
+      )}
+
+      {!imageUrl && (
+        <div className="relative flex h-full flex-col justify-between p-6">
+          <div>
+            <div className="inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/90">
+              Image Placeholder
+            </div>
+          </div>
+
+          <div>
+            <div className="text-lg font-semibold text-white">{label}</div>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/80">
+              {hint}
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ServiceAreaHeroImage({
   imageUrl,
 }: {
@@ -181,7 +264,7 @@ export default function ServiceAreaPage() {
                 </div>
               </div>
 
-              <ServiceAreaHeroImage imageUrl="/main-logo.jpg" />
+              <ServiceAreaHeroImage imageUrl="/golden-gate-sharkyspestcontrol.png" />
             </div>
           </header>
 
@@ -225,39 +308,13 @@ export default function ServiceAreaPage() {
                 }}
               >
                 <div className="grid gap-6 md:grid-cols-[0.95fr_1.05fr] md:items-start">
-                  <div
-                    className="group relative overflow-hidden rounded-3xl border h-[240px] transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl md:h-full md:min-h-[320px]"
-                    style={{
-                      borderColor: "rgb(var(--border))",
-                      background:
-                        "linear-gradient(135deg, rgba(59,130,246,0.10) 0%, rgba(99,102,241,0.12) 35%, rgba(15,23,42,0.95) 100%)",
-                    }}
-                  >
-                    <div
-                      className="absolute inset-0"
-                      style={{
-                        background:
-                          "radial-gradient(circle at top right, rgba(255,255,255,0.12), transparent 32%)",
-                      }}
-                    />
-                    <div
-                      className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-                      style={{
-                        background:
-                          "linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.08) 35%, transparent 70%)",
-                      }}
-                    />
-                    <div className="relative flex h-full flex-col justify-end p-6">
-                      <div className="text-lg font-semibold text-white">
-                        Local service coverage image
-                      </div>
-                      <p className="mt-2 text-sm leading-6 text-white/80">
-                        Suggested image: technician arriving at a property,
-                        service vehicle, or residential neighborhood in the Bay
-                        Area.
-                      </p>
-                    </div>
-                  </div>
+                  
+                  <ImagePlaceholder
+                    imageUrl="/sharkys-pest-control-bayarea.png"
+                    label="Hero image: rat activity near a home exterior"
+                    hint="Suggested image: a realistic exterior home scene showing areas where rodents may enter, such as vents, shrubs, foundation gaps, trash bins, or crawlspace openings."
+                    height="h-[280px] md:h-full md:min-h-[360px]"
+                  />
 
                   <div>
                     <h2 className="text-2xl font-bold tracking-tight">
