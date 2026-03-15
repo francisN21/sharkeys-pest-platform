@@ -89,7 +89,7 @@ export default function HomePage() {
 
                 <div className="flex flex-wrap gap-3">
                   <Link
-                    href="/sharkeys-pest-control-booking"
+                    href="/sharkys-pest-control-booking"
                     className="rounded-xl px-5 py-3 text-sm font-semibold hover:opacity-90"
                     style={{
                       background: "rgb(var(--primary))",
@@ -205,7 +205,7 @@ export default function HomePage() {
 
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link
-                  href="/sharkeys-pest-control-booking"
+                  href="/sharkys-pest-control-booking"
                   className="rounded-xl px-5 py-3 text-sm font-semibold hover:opacity-90"
                   style={{
                     background: "rgb(var(--primary))",
@@ -387,7 +387,7 @@ export default function HomePage() {
                   </div>
 
                   <Link
-                    href="/sharkeys-pest-control-booking"
+                    href="/sharkys-pest-control-booking"
                     className="shrink-0 rounded-xl px-4 py-2 text-sm font-semibold hover:opacity-90"
                     style={{
                       background: "rgb(var(--primary))",
