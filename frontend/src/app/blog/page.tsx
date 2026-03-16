@@ -1,6 +1,7 @@
 import Navbar from "../../components/Navbar";
 import PageTracker from "../../components/PageTracker";
 import BlogCard from "../../../src/app/blog/BlogCard";
+import SiteFooter from "@/src/components/home/SiteFooter";
 
 const POSTS = [
   {
@@ -65,6 +66,8 @@ function BlogHeroImage({
     </div>
   );
 }
+
+const LINKEDIN_SOFTWARE_BY_HREF = "https://www.linkedin.com/in/franciscorones/";
 
 export default function BlogPage() {
   return (
@@ -167,6 +170,10 @@ export default function BlogPage() {
             ))}
           </div>
         </div>
+      </section>
+      
+      <section className="md:min-h-screen md:flex md:flex-col md:justify-end">
+        <SiteFooter softwareByHref={LINKEDIN_SOFTWARE_BY_HREF} />
       </section>
     </main>
   );

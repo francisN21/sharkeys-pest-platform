@@ -1,6 +1,10 @@
 import Link from "next/link";
 import Navbar from "../../../components/Navbar";
 import PageTracker from "../../../components/PageTracker";
+import SiteFooter from "@/src/components/home/SiteFooter";
+
+const LINKEDIN_SOFTWARE_BY_HREF = "https://www.linkedin.com/in/franciscorones/";
+
 
 function ImagePlaceholder({
   label,
@@ -376,6 +380,10 @@ export default function AntPreventionPage() {
           </div>
         </div>
       </article>
+
+      <section className="md:min-h-screen md:flex md:flex-col md:justify-end">
+        <SiteFooter softwareByHref={LINKEDIN_SOFTWARE_BY_HREF} />
+      </section>
     </main>
   );
 }
