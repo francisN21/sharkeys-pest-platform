@@ -5,9 +5,10 @@ import ScrollReveal from "../components/ScrollReveal";
 import ServiceAreaStrip from "../components/ui/service-area-strip";
 import MarketingCard from "../components/ui/marketing-card";
 import CertificationLogoCard from "../components/home/CertificationLogoCard";
-import MobileSiteFooter from "../components/home/MobileSiteFooter";
+import SiteFooter from "../components/home/SiteFooter";
 
-const SECTION = "snap-start flex flex-col justify-start py-20 md:min-h-screen md:justify-center";
+const SECTION =
+  "flex flex-col justify-start py-20 md:snap-start md:min-h-screen md:justify-center";
 const CONTAINER = "mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8";
 
 const SERVICES = [
@@ -81,7 +82,7 @@ const LINKEDIN_SOFTWARE_BY_HREF = "https://www.linkedin.com/in/franciscorones/";
 
 export default function HomePage() {
   return (
-    <main className="h-screen overflow-y-auto scroll-smooth md:snap-y md:snap-mandatory">
+    <main className="min-h-screen overflow-x-hidden scroll-smooth md:h-screen md:overflow-y-auto md:snap-y md:snap-mandatory">
       <Navbar />
 
       {/* Hero */}
@@ -98,7 +99,6 @@ export default function HomePage() {
             <div className="grid gap-10 p-6 md:grid-cols-[1.1fr_0.9fr] md:items-center md:p-8 lg:p-10">
               <ScrollReveal>
                 <div className="space-y-5">
-
                   <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
                     Sharkys Pest Control in Benicia, serving the whole Bay Area.
                   </h1>
@@ -447,7 +447,9 @@ export default function HomePage() {
         </div>
       </section>
 
-      <MobileSiteFooter softwareByHref={LINKEDIN_SOFTWARE_BY_HREF} />
+      <section className="md:snap-start md:min-h-[calc(100vh-72px)] md:flex md:flex-col md:justify-end">
+        <SiteFooter softwareByHref={LINKEDIN_SOFTWARE_BY_HREF} />
+      </section>
     </main>
   );
 }
