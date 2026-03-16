@@ -21,11 +21,7 @@ export default function CertificationLogoCard({
 
       <div className="mt-3 flex justify-center">
         <div
-          className="relative aspect-square w-full max-w-[180px] overflow-hidden rounded-2xl border p-3 transition-all duration-300 group-hover:scale-[1.02]"
-          style={{
-            borderColor: "rgb(var(--border))",
-            background: "rgb(var(--bg))",
-          }}
+          className="relative aspect-square w-full max-w-[200px] overflow-hidden rounded-2xl transition-all duration-300 group-hover:scale-[1.02]"
         >
           <Image
             src={imageSrc}

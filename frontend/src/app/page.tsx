@@ -7,7 +7,7 @@ import MarketingCard from "../components/ui/marketing-card";
 import CertificationLogoCard from "../components/home/CertificationLogoCard";
 import MobileSiteFooter from "../components/home/MobileSiteFooter";
 
-const SECTION = "min-h-screen snap-start flex items-center";
+const SECTION = "snap-start flex flex-col justify-start py-20 md:min-h-screen md:justify-center";
 const CONTAINER = "mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8";
 
 const SERVICES = [
@@ -85,10 +85,7 @@ export default function HomePage() {
       <Navbar />
 
       {/* Hero */}
-      <section
-        id="home"
-        className={`${SECTION} scroll-mt-24 md:scroll-mt-28`}
-      >
+      <section id="home" className={`${SECTION} scroll-mt-24 md:scroll-mt-28`}>
         <div className={`${CONTAINER} space-y-8 py-10 lg:py-14`}>
           <div
             className="overflow-hidden rounded-[2rem] border"
@@ -101,19 +98,9 @@ export default function HomePage() {
             <div className="grid gap-10 p-6 md:grid-cols-[1.1fr_0.9fr] md:items-center md:p-8 lg:p-10">
               <ScrollReveal>
                 <div className="space-y-5">
-                  <div
-                    className="inline-flex w-fit rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]"
-                    style={{
-                      borderColor: "rgb(var(--border))",
-                      background: "rgba(59,130,246,0.08)",
-                      color: "rgb(var(--fg))",
-                    }}
-                  >
-                    Benicia Pest Control
-                  </div>
 
                   <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
-                    Sharkys Pest Control in Benicia, serving the Bay Area.
+                    Sharkys Pest Control in Benicia, serving the whole Bay Area.
                   </h1>
 
                   <p
@@ -221,7 +208,10 @@ export default function HomePage() {
                 Choose a service, pick a date, and request your appointment online.
               </p>
 
-              <ol className="mt-6 grid gap-3 text-sm sm:grid-cols-2" style={{ color: "rgb(var(--muted))" }}>
+              <ol
+                className="mt-6 grid gap-3 text-sm sm:grid-cols-2"
+                style={{ color: "rgb(var(--muted))" }}
+              >
                 {[
                   "Choose a service that matches your pest issue",
                   "Enter your contact details and property information",
@@ -229,10 +219,16 @@ export default function HomePage() {
                   "Receive confirmation and next steps",
                 ].map((step, index) => (
                   <MarketingCard key={step} className="p-4">
-                    <div className="text-sm font-semibold" style={{ color: "rgb(var(--fg))" }}>
+                    <div
+                      className="text-sm font-semibold"
+                      style={{ color: "rgb(var(--fg))" }}
+                    >
                       {index + 1}) Step
                     </div>
-                    <div className="mt-2 text-sm" style={{ color: "rgb(var(--muted))" }}>
+                    <div
+                      className="mt-2 text-sm"
+                      style={{ color: "rgb(var(--muted))" }}
+                    >
                       {step}
                     </div>
                   </MarketingCard>
@@ -270,7 +266,7 @@ export default function HomePage() {
 
       {/* SERVICES */}
       <section id="services" className={SECTION}>
-        <div className={CONTAINER}>
+        <div className={`${CONTAINER} space-y-8`}>
           <ScrollReveal>
             <div className="space-y-3">
               <h2 className="text-2xl font-bold tracking-tight">Services</h2>
@@ -280,11 +276,14 @@ export default function HomePage() {
               </p>
             </div>
 
-            <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {SERVICES.map((s) => (
                 <MarketingCard key={s.title} className="p-6">
                   <div className="text-sm font-semibold">{s.title}</div>
-                  <div className="mt-2 text-sm" style={{ color: "rgb(var(--muted))" }}>
+                  <div
+                    className="mt-2 text-sm"
+                    style={{ color: "rgb(var(--muted))" }}
+                  >
                     {s.desc}
                   </div>
 
@@ -304,7 +303,7 @@ export default function HomePage() {
 
       {/* ABOUT */}
       <section id="about" className={`${SECTION} scroll-mt-24 md:scroll-mt-28`}>
-        <div className={CONTAINER}>
+        <div className={`${CONTAINER} space-y-8`}>
           <ScrollReveal className="grid gap-8 md:grid-cols-2 md:items-start">
             <div>
               <div className="space-y-3">
@@ -315,7 +314,7 @@ export default function HomePage() {
                 </p>
               </div>
 
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <div className="mt-8 grid gap-5 sm:grid-cols-2">
                 <MarketingCard className="p-4">
                   <div className="text-sm font-semibold">Founded in Benicia, CA</div>
                   <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
@@ -382,9 +381,12 @@ export default function HomePage() {
                   background: "rgba(var(--bg), 0.2)",
                 }}
               >
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h3 className="text-base font-semibold" style={{ color: "rgb(var(--fg))" }}>
+                    <h3
+                      className="text-base font-semibold"
+                      style={{ color: "rgb(var(--fg))" }}
+                    >
                       Need help fast?
                     </h3>
                     <p className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
@@ -394,7 +396,7 @@ export default function HomePage() {
 
                   <Link
                     href="/sharkys-pest-control-booking"
-                    className="shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:opacity-95"
+                    className="w-full rounded-xl px-4 py-2 text-center text-sm font-semibold transition duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:opacity-95 sm:w-auto"
                     style={{
                       background: "rgb(var(--primary))",
                       color: "rgb(var(--primary-fg))",
@@ -424,10 +426,16 @@ export default function HomePage() {
                       className="rounded-xl p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
                       style={{ background: "rgb(var(--card))" }}
                     >
-                      <div className="font-semibold" style={{ color: "rgb(var(--fg))" }}>
+                      <div
+                        className="font-semibold"
+                        style={{ color: "rgb(var(--fg))" }}
+                      >
                         {item.title}
                       </div>
-                      <div className="mt-1 break-all" style={{ color: "rgb(var(--muted))" }}>
+                      <div
+                        className="mt-1 break-all"
+                        style={{ color: "rgb(var(--muted))" }}
+                      >
                         {item.value}
                       </div>
                     </div>
