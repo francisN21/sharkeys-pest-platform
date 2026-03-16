@@ -66,6 +66,56 @@ async function getAdminAndSuperUserIds(client) {
     .filter((x) => Number.isInteger(x) && x > 0);
 }
 
+function isSundayFromIso(iso) {
+  const d = new Date(iso);
+  return d.getDay() === 0;
+}
+
+async function hasAvailabilityBlockConflict(client, startsAt, endsAt) {
+  const r = await client.query(
+    `
+    SELECT 1
+    FROM availability_blocks
+    WHERE starts_at < $1::timestamptz
+      AND ends_at > $2::timestamptz
+    LIMIT 1
+    `,
+    [endsAt, startsAt]
+  );
+
+  return r.rowCount > 0;
+}
+
+async function assertBookingWindowAllowed(client, startsAt, endsAt) {
+  const start = new Date(startsAt);
+  const end = new Date(endsAt);
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    const err = new Error("Invalid startsAt/endsAt");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (end <= start) {
+    const err = new Error("End time must be after start time");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (isSundayFromIso(startsAt)) {
+    const err = new Error("Bookings are not available on Sundays");
+    err.statusCode = 409;
+    throw err;
+  }
+
+  const blocked = await hasAvailabilityBlockConflict(client, startsAt, endsAt);
+  if (blocked) {
+    const err = new Error("Time slot unavailable");
+    err.statusCode = 409;
+    throw err;
+  }
+}
+
 router.post("/", requireAuth, async (req, res, next) => {
   const client = await pool.connect();
   try {
@@ -75,6 +125,8 @@ router.post("/", requireAuth, async (req, res, next) => {
     const userId = req.user.id;
 
     await client.query("BEGIN");
+
+    await assertBookingWindowAllowed(client, startsAt, endsAt);
 
     const s = await client.query(
       `SELECT id FROM services WHERE public_id = $1 AND is_active = true`,
@@ -146,6 +198,19 @@ router.post("/", requireAuth, async (req, res, next) => {
     if (e && e.code === "23P01") {
       return res.status(409).json({ ok: false, message: "Time slot unavailable" });
     }
+
+    if (e?.message === "Time slot unavailable") {
+      return res.status(409).json({ ok: false, message: "Time slot unavailable" });
+    }
+
+    if (e?.message === "Bookings are not available on Sundays") {
+      return res.status(409).json({ ok: false, message: "Bookings are not available on Sundays" });
+    }
+
+    if (e?.statusCode) {
+      return res.status(e.statusCode).json({ ok: false, message: e.message });
+    }
+
     next(e);
   } finally {
     client.release();
@@ -201,18 +266,7 @@ router.patch("/:publicId", requireAuth, requireRole("customer"), async (req, res
         });
       }
 
-      const startsAt = new Date(payload.starts_at);
-      const endsAt = new Date(payload.ends_at);
-
-      if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
-        await client.query("ROLLBACK");
-        return res.status(400).json({ ok: false, message: "Invalid starts_at/ends_at" });
-      }
-
-      if (endsAt <= startsAt) {
-        await client.query("ROLLBACK");
-        return res.status(400).json({ ok: false, message: "End time must be after start time" });
-      }
+      await assertBookingWindowAllowed(client, payload.starts_at, payload.ends_at);
     }
 
     const sets = [];
@@ -290,6 +344,19 @@ router.patch("/:publicId", requireAuth, requireRole("customer"), async (req, res
     try {
       await client.query("ROLLBACK");
     } catch {}
+
+    if (e?.message === "Time slot unavailable") {
+      return res.status(409).json({ ok: false, message: "Time slot unavailable" });
+    }
+
+    if (e?.message === "Bookings are not available on Sundays") {
+      return res.status(409).json({ ok: false, message: "Bookings are not available on Sundays" });
+    }
+
+    if (e?.statusCode) {
+      return res.status(e.statusCode).json({ ok: false, message: e.message });
+    }
+
     next(e);
   } finally {
     client.release();
@@ -414,7 +481,7 @@ router.patch("/:publicId/cancel", requireAuth, requireRole("customer"), async (r
   }
 });
 
-router.get("/availability", requireAuth, async (req, res, next) => {
+router.get("/availability", async (req, res, next) => {
   try {
     const date = String(req.query.date || "").trim();
     const tzOffsetMinutes = Number(req.query.tzOffsetMinutes ?? NaN);
@@ -437,9 +504,16 @@ router.get("/availability", requireAuth, async (req, res, next) => {
     const startUtcIso = new Date(startUtcMs).toISOString();
     const endUtcIso = new Date(endUtcMs).toISOString();
 
-    const r = await pool.query(
+    const bookingRes = await pool.query(
       `
-      SELECT public_id, starts_at, ends_at, status
+      SELECT
+        public_id,
+        starts_at,
+        ends_at,
+        status,
+        'booking'::text AS source,
+        NULL::text AS reason,
+        NULL::text AS block_type
       FROM bookings
       WHERE status != 'cancelled'
         AND starts_at < $1::timestamptz
@@ -449,12 +523,55 @@ router.get("/availability", requireAuth, async (req, res, next) => {
       [endUtcIso, startUtcIso]
     );
 
+    const blockRes = await pool.query(
+      `
+      SELECT
+        public_id,
+        starts_at,
+        ends_at,
+        'blocked'::text AS status,
+        'block'::text AS source,
+        reason,
+        block_type
+      FROM availability_blocks
+      WHERE starts_at < $1::timestamptz
+        AND ends_at > $2::timestamptz
+      ORDER BY starts_at ASC
+      `,
+      [endUtcIso, startUtcIso]
+    );
+
+    const localMidday = new Date(Date.UTC(y, m - 1, d, 12, 0, 0, 0) + tzOffsetMinutes * 60_000);
+    const isSunday = localMidday.getUTCDay() === 0;
+
+    const intervals = [
+      ...bookingRes.rows,
+      ...blockRes.rows,
+    ];
+
+    if (isSunday) {
+      intervals.push({
+        public_id: `closed-${date}`,
+        starts_at: startUtcIso,
+        ends_at: endUtcIso,
+        status: "blocked",
+        source: "block",
+        reason: "Closed on Sundays",
+        block_type: "closed",
+      });
+    }
+
+    intervals.sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
+
     return res.json({
       ok: true,
       date,
       startUtc: startUtcIso,
       endUtc: endUtcIso,
-      bookings: r.rows,
+      bookings: intervals,
+      intervals,
+      isClosedAllDay: isSunday,
+      closedReason: isSunday ? "Closed on Sundays" : null,
     });
   } catch (e) {
     next(e);
