@@ -49,6 +49,8 @@ export type CreateBookingResponse = {
 };
 
 
+
+
 const API_BASE = process.env.NEXT_PUBLIC_AUTH_API_BASE;
 
 function resolveUrl(path: string) {
@@ -134,17 +136,23 @@ export function cancelBooking(publicId: string) {
 
 export type AvailabilityBooking = {
   public_id: string;
-  starts_at: string; // ISO
-  ends_at: string;   // ISO
+  starts_at: string;
+  ends_at: string;
   status: string;
+  source?: "booking" | "block";
+  reason?: string | null;
+  block_type?: string | null;
 };
 
 export type BookingAvailabilityResponse = {
   ok: boolean;
-  date: string; // YYYY-MM-DD
+  date: string;
   startUtc: string;
   endUtc: string;
   bookings: AvailabilityBooking[];
+  intervals?: AvailabilityBooking[];
+  isClosedAllDay?: boolean;
+  closedReason?: string | null;
 };
 
 export function getBookingAvailability(params: { date: string; tzOffsetMinutes: number }) {
