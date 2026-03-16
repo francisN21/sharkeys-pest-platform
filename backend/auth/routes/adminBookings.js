@@ -126,6 +126,7 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
     const payload = adminCreateBookingSchema.parse(req.body);
 
     await client.query("BEGIN");
+    await assertBookingWindowAllowed(client, payload.startsAt, payload.endsAt);
 
     const s = await client.query(
       `SELECT id FROM services WHERE public_id = $1 AND is_active = true`,
@@ -267,6 +268,17 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
 
     if (e && e.code === "23P01") {
       return res.status(409).json({ ok: false, message: "Time slot unavailable" });
+    }
+    if (e?.message === "Time slot unavailable") {
+      return res.status(409).json({ ok: false, message: "Time slot unavailable" });
+    }
+
+    if (e?.message === "Bookings are not available on Sundays") {
+      return res.status(409).json({ ok: false, message: "Bookings are not available on Sundays" });
+    }
+
+    if (e?.statusCode) {
+      return res.status(e.statusCode).json({ ok: false, message: e.message });
     }
 
     next(e);
