@@ -23,6 +23,7 @@ const adminCustomersRouter = require("../routes/adminCustomers");
 const workerBookingsRouter = require("../routes/workerBookings");
 const adminEditServiceRouter = require("../routes/adminServices");
 const adminTechBookingsRouter = require("../routes/adminTechBookings");
+const adminAvailabilityRoutes = require("../routes/adminAvailability");
 
 // Prices Routes Pipeline
 const bookingPricesRouter = require("../routes/bookingPrices.js")
@@ -138,6 +139,7 @@ app.use("/admin/bookings", adminBookingsRouter);
 app.use("/admin/customers", adminCustomersRouter);
 app.use("/admin/services", adminEditServiceRouter);
 app.use("/worker/bookings", workerBookingsRouter);
+app.use("/admin/availability", adminAvailabilityRoutes);
 
 
 app.use(notFound);
