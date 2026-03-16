@@ -22,14 +22,62 @@ function normalizePhone(v) {
   return String(v || "").replace(/\D/g, "");
 }
 
+function isSundayFromIso(iso) {
+  const d = new Date(iso);
+  return d.getDay() === 0;
+}
+
+async function hasAvailabilityBlockConflict(client, startsAt, endsAt) {
+  const r = await client.query(
+    `
+    SELECT 1
+    FROM availability_blocks
+    WHERE starts_at < $1::timestamptz
+      AND ends_at > $2::timestamptz
+    LIMIT 1
+    `,
+    [endsAt, startsAt]
+  );
+
+  return r.rowCount > 0;
+}
+
+async function assertBookingWindowAllowed(client, startsAt, endsAt) {
+  const start = new Date(startsAt);
+  const end = new Date(endsAt);
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    const err = new Error("Invalid startsAt/endsAt");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (end <= start) {
+    const err = new Error("End time must be after start time");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (isSundayFromIso(startsAt)) {
+    const err = new Error("Bookings are not available on Sundays");
+    err.statusCode = 409;
+    throw err;
+  }
+
+  const blocked = await hasAvailabilityBlockConflict(client, startsAt, endsAt);
+  if (blocked) {
+    const err = new Error("Time slot unavailable");
+    err.statusCode = 409;
+    throw err;
+  }
+}
+
 const publicCreateBookingSchema = z.object({
   servicePublicId: z.string().uuid(),
   startsAt: z.string().datetime(),
   endsAt: z.string().datetime(),
   notes: z.string().trim().min(1).max(2000),
-
   address: z.string().trim().min(5),
-
   lead: z.object({
     email: z.string().trim().email(),
     first_name: z.string().trim().min(1),
@@ -48,7 +96,8 @@ router.post("/", async (req, res, next) => {
 
     await client.query("BEGIN");
 
-    // Block internal staff from using the public booking route
+    await assertBookingWindowAllowed(client, payload.startsAt, payload.endsAt);
+
     if (req.user?.id) {
       const roleRes = await client.query(
         `SELECT role FROM user_roles WHERE user_id = $1`,
@@ -101,7 +150,6 @@ router.post("/", async (req, res, next) => {
     let existingLead = null;
     let matchedBy = "new";
 
-    // 1) Match by email first
     if (normalizedEmail) {
       const byEmail = await client.query(
         `
@@ -127,7 +175,6 @@ router.post("/", async (req, res, next) => {
       }
     }
 
-    // 2) If no email match, match by normalized phone
     if (!existingLead && normalizedPhone) {
       const byPhone = await client.query(
         `
@@ -301,6 +348,18 @@ router.post("/", async (req, res, next) => {
         ok: false,
         message: "Time slot unavailable",
       });
+    }
+
+    if (e?.message === "Time slot unavailable") {
+      return res.status(409).json({ ok: false, message: "Time slot unavailable" });
+    }
+
+    if (e?.message === "Bookings are not available on Sundays") {
+      return res.status(409).json({ ok: false, message: "Bookings are not available on Sundays" });
+    }
+
+    if (e?.statusCode) {
+      return res.status(e.statusCode).json({ ok: false, message: e.message });
     }
 
     next(e);
