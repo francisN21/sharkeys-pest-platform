@@ -362,7 +362,7 @@ export default function Navbar() {
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="hidden items-center gap-3 md:flex">
             <Link
-              href="/sharkeys-pest-control-booking"
+              href="/sharkys-pest-control-booking"
               className="rounded-xl px-4 py-2 text-sm font-semibold shadow-sm hover:opacity-90"
               style={{
                 background: "rgb(59 130 246)",

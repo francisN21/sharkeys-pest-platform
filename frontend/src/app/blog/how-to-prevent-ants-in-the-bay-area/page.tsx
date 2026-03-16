@@ -313,7 +313,7 @@ export default function AntPreventionPage() {
 
                 <div className="mt-6 flex flex-wrap gap-3">
                   <Link
-                    href="/sharkeys-pest-control-booking"
+                    href="/sharkys-pest-control-booking"
                     className="inline-flex items-center rounded-2xl px-5 py-3 text-sm font-semibold transition duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:opacity-95"
                     style={{
                       background: "rgb(var(--primary))",

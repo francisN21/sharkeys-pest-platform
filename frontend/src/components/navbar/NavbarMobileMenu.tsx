@@ -50,7 +50,7 @@ export default function NavbarMobileMenu({
         </div>
 
         <Link
-          href="/sharkeys-pest-control-booking"
+          href="/sharkys-pest-control-booking"
           className="block rounded-xl px-3 py-3 text-center text-sm font-semibold shadow-sm hover:opacity-90"
           style={{
             background: "rgb(59 130 246)",

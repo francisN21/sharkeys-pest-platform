@@ -40,7 +40,7 @@ export default function LoginClient() {
   }
 
   function handleGuest() {
-    router.push("/sharkeys-pest-control-booking");
+    router.push("/sharkys-pest-control-booking");
   }
 
   function handleGooglePlaceholder() {

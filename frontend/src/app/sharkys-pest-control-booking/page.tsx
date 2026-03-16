@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "../../components/Navbar";
+import { me as apiMe } from "../../lib/api/auth";
 import { getServices, type Service } from "../../lib/api/services";
 import {
   getBookingAvailability,
@@ -118,6 +119,28 @@ function formatSelectedHeader(
   return `${dayLabel} • ${startLabel} – ${endLabel}`;
 }
 
+function redirectAuthenticatedUserByRole(
+  router: ReturnType<typeof useRouter>,
+  userRole?: string | null
+) {
+  if (userRole === "customer") {
+    router.replace("/book");
+    return true;
+  }
+
+  if (userRole === "superuser" || userRole === "admin") {
+    router.replace("/account/admin/leads");
+    return true;
+  }
+
+  if (userRole === "technician" || userRole === "worker") {
+    router.replace("/account/technician");
+    return true;
+  }
+
+  return false;
+}
+
 function PageContainer({
   children,
   className,
@@ -136,6 +159,8 @@ type RecurrenceFreq = "" | "biweekly" | "monthly" | "quarterly";
 
 export default function NewCustomerBookingPage() {
   const router = useRouter();
+
+  const [authChecking, setAuthChecking] = useState(true);
 
   const [services, setServices] = useState<Service[]>([]);
   const [loadingServices, setLoadingServices] = useState(true);
@@ -187,6 +212,47 @@ export default function NewCustomerBookingPage() {
     if (!startsAtIso) return null;
     return addMinutesIso(startsAtIso, durationMinutes);
   }, [startsAtIso, durationMinutes]);
+
+  /**
+   * COPY THIS BLOCK TO OTHER PUBLIC BOOKING PAGES
+   * ---------------------------------------------
+   * Purpose:
+   * - If user is already authenticated, redirect them away from public booking pages
+   * - customer -> /book
+   * - superuser/admin -> /account/admin/leads
+   * - technician/worker -> /account/technician
+   *
+   * Keep:
+   * - authChecking state
+   * - redirectAuthenticatedUserByRole helper
+   * - this effect block
+   */
+useEffect(() => {
+  let alive = true;
+
+  (async () => {
+    try {
+      const me = await apiMe();
+
+      if (!alive) return;
+
+      const redirected = redirectAuthenticatedUserByRole(
+        router,
+        me.user?.user_role ?? null
+      );
+
+      if (redirected) return;
+    } catch {
+      // not authenticated or failed lookup -> stay on public booking page
+    } finally {
+      if (alive) setAuthChecking(false);
+    }
+  })();
+
+  return () => {
+    alive = false;
+  };
+}, [router]);
 
   useEffect(() => {
     let alive = true;
@@ -412,6 +478,24 @@ export default function NewCustomerBookingPage() {
     } finally {
       setLoadingSubmit(false);
     }
+  }
+
+  if (authChecking) {
+    return (
+      <main className="min-h-screen overflow-y-auto scroll-smooth bg-gradient-to-b from-background via-background to-muted/20">
+        <Navbar />
+        <PageContainer>
+          <div
+            className="rounded-2xl border p-6 shadow-sm"
+            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+          >
+            <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
+              Loading…
+            </div>
+          </div>
+        </PageContainer>
+      </main>
+    );
   }
 
   return (

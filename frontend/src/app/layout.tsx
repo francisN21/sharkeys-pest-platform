@@ -39,7 +39,7 @@ export default function RootLayout({
               "@context": "https://schema.org",
               "@type": "PestControl",
               "name": "Sharkys Pest Control",
-              "image": "https://sharkeyspestcontrolbayarea.com/main-logo.jpg",
+              "image": "https://sharkyspestcontrolbayarea.com/main-logo.jpg",
               "telephone": "+1-707-361-5023",
               "email": "office.sharkyspestcontrol@gmail.com",
               "address": {
@@ -57,7 +57,7 @@ export default function RootLayout({
                 "San Francisco CA",
                 "Oakland CA"
               ],
-              "url": "https://sharkeyspestcontrolbayarea.com"
+              "url": "https://sharkyspestcontrolbayarea.com"
             })
           }}
         />
