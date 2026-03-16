@@ -43,6 +43,56 @@ async function addEvent(client, bookingId, actorUserId, eventType, metadata = {}
   );
 }
 
+function isSundayFromIso(iso) {
+  const d = new Date(iso);
+  return d.getDay() === 0;
+}
+
+async function hasAvailabilityBlockConflict(client, startsAt, endsAt) {
+  const r = await client.query(
+    `
+    SELECT 1
+    FROM availability_blocks
+    WHERE starts_at < $1::timestamptz
+      AND ends_at > $2::timestamptz
+    LIMIT 1
+    `,
+    [endsAt, startsAt]
+  );
+
+  return r.rowCount > 0;
+}
+
+async function assertBookingWindowAllowed(client, startsAt, endsAt) {
+  const start = new Date(startsAt);
+  const end = new Date(endsAt);
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    const err = new Error("Invalid startsAt/endsAt");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (end <= start) {
+    const err = new Error("End time must be after start time");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (isSundayFromIso(startsAt)) {
+    const err = new Error("Bookings are not available on Sundays");
+    err.statusCode = 409;
+    throw err;
+  }
+
+  const blocked = await hasAvailabilityBlockConflict(client, startsAt, endsAt);
+  if (blocked) {
+    const err = new Error("Time slot unavailable");
+    err.statusCode = 409;
+    throw err;
+  }
+}
+
 const adminCreateBookingSchema = z
   .object({
     servicePublicId: z.string().uuid(),
