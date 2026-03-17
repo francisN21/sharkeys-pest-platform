@@ -15,7 +15,6 @@ export default function BlogCard({
   title,
   desc,
   href,
-  date = "Coming soon",
   imageUrl = null,
 }: BlogCardProps) {
   const hasImage = Boolean(imageUrl);
@@ -76,7 +75,7 @@ export default function BlogCard({
               backdropFilter: "blur(8px)",
             }}
           >
-            {date}
+            Pest Control
           </span>
         </div>
 

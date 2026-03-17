@@ -158,7 +158,6 @@ export default function AdminAvailabilityPage() {
   useEffect(() => {
     if (!canUsePage && !loadingMe) return;
     void loadBlocks(selectedDateYmd);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDateYmd, canUsePage, loadingMe]);
 
   const calendarCells = useMemo(() => {

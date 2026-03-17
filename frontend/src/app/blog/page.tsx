@@ -106,7 +106,7 @@ export default function BlogPage() {
                 </div>
 
                 <h1 className="mt-4 text-4xl font-extrabold tracking-tight sm:text-5xl">
-                  Latest from Our Blog
+                  Welcome to Our Blog
                 </h1>
 
                 <p
