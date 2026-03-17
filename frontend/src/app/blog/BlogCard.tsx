@@ -75,7 +75,7 @@ export default function BlogCard({
               backdropFilter: "blur(8px)",
             }}
           >
-            Pest Control
+            Sharkys Pest Control
           </span>
         </div>
 
