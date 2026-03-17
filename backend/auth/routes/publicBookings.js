@@ -3,6 +3,7 @@ const { z } = require("zod");
 const { pool } = require("../src/db");
 const { broadcastToRoles } = require("../src/realtime");
 const { createNotifications } = require("../src/notifications");
+const { sendBookingConfirmationEmail } = require("../src/email");
 
 const router = express.Router();
 
@@ -120,7 +121,7 @@ router.post("/", async (req, res, next) => {
     }
 
     const s = await client.query(
-      `SELECT id FROM services WHERE public_id = $1 AND is_active = true`,
+      `SELECT id, title FROM services WHERE public_id = $1 AND is_active = true`,
       [payload.servicePublicId]
     );
 
@@ -130,6 +131,7 @@ router.post("/", async (req, res, next) => {
     }
 
     const serviceId = s.rows[0].id;
+    const serviceTitle = s.rows[0].title;
     const lead = payload.lead;
 
     const finalAddress =
@@ -317,6 +319,19 @@ router.post("/", async (req, res, next) => {
       startsAt: booking.starts_at,
       source: "public",
     });
+
+    if (leadRow.email) {
+      await sendBookingConfirmationEmail({
+        to: leadRow.email,
+        firstName: leadRow.first_name,
+        bookingPublicId: booking.public_id,
+        serviceTitle,
+        startsAt: booking.starts_at,
+        endsAt: booking.ends_at,
+        address: booking.address,
+        notes: booking.notes,
+      });
+    }
 
     return res.status(201).json({
       ok: true,
