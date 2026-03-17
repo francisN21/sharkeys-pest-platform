@@ -5,6 +5,7 @@ const { requireAuth } = require("../middleware/requireAuth");
 const { requireRole } = require("../middleware/requireRole");
 const { broadcastToRoles, broadcastToUser } = require("../src/realtime");
 const { createNotifications } = require("../src/notifications");
+const { sendBookingConfirmationEmail } = require("../src/email");
 
 const router = express.Router();
 
@@ -129,7 +130,7 @@ router.post("/", requireAuth, async (req, res, next) => {
     await assertBookingWindowAllowed(client, startsAt, endsAt);
 
     const s = await client.query(
-      `SELECT id FROM services WHERE public_id = $1 AND is_active = true`,
+      `SELECT id, title FROM services WHERE public_id = $1 AND is_active = true`,
       [servicePublicId]
     );
     if (s.rowCount === 0) {
@@ -138,6 +139,7 @@ router.post("/", requireAuth, async (req, res, next) => {
     }
 
     const serviceId = s.rows[0].id;
+    const serviceTitle = s.rows[0].title;
 
     const created = await client.query(
       `
@@ -167,6 +169,19 @@ router.post("/", requireAuth, async (req, res, next) => {
       },
     }));
 
+    const customerRes = await client.query(
+      `
+      SELECT email, first_name
+      FROM users
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [userId]
+    );
+
+    const customerEmail = customerRes.rows[0]?.email ?? null;
+    const customerFirstName = customerRes.rows[0]?.first_name ?? null;
+
     await createNotifications(client, notificationRows);
 
     await client.query("COMMIT");
@@ -176,6 +191,19 @@ router.post("/", requireAuth, async (req, res, next) => {
       bookingId: booking.public_id,
       startsAt: booking.starts_at,
     });
+
+    if (customerEmail) {
+      await sendBookingConfirmationEmail({
+        to: customerEmail,
+        firstName: customerFirstName,
+        bookingPublicId: booking.public_id,
+        serviceTitle,
+        startsAt: booking.starts_at,
+        endsAt: booking.ends_at,
+        address: booking.address,
+        notes: booking.notes,
+      });
+    }
 
     return res.status(201).json({
       ok: true,
