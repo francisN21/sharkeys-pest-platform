@@ -4,6 +4,7 @@ const { requireAuth } = require("../middleware/requireAuth");
 const { requireRole } = require("../middleware/requireRole");
 const { broadcastToBookingParticipants } = require("../src/realtime");
 const { createNotifications } = require("../src/notifications");
+const { sendBookingCompletedEmail } = require("../src/email");
 
 const router = express.Router();
 
@@ -251,10 +252,18 @@ router.patch("/:id/complete", requireAuth, requireRole("worker"), async (req, re
       SELECT
         u.first_name AS worker_first_name,
         u.last_name AS worker_last_name,
-        bp.final_price_cents
+        bp.final_price_cents,
+        s.title AS service_title,
+        cu.email AS customer_email,
+        cu.first_name AS customer_first_name,
+        l.email AS lead_email,
+        l.first_name AS lead_first_name
       FROM bookings b
       LEFT JOIN users u ON u.id = b.completed_worker_user_id
       LEFT JOIN booking_prices bp ON bp.booking_id = b.id
+      LEFT JOIN services s ON s.id = b.service_id
+      LEFT JOIN users cu ON cu.id = b.customer_user_id
+      LEFT JOIN leads l ON l.id = b.lead_id
       WHERE b.id = $1
       LIMIT 1
       `,
@@ -270,6 +279,10 @@ router.patch("/:id/complete", requireAuth, requireRole("worker"), async (req, re
       enrich?.final_price_cents === null || enrich?.final_price_cents === undefined
         ? undefined
         : Number(enrich.final_price_cents);
+
+    const serviceTitle = enrich?.service_title ?? null;
+    const emailTo = enrich?.customer_email || enrich?.lead_email || null;
+    const firstNameForEmail = enrich?.customer_first_name || enrich?.lead_first_name || null;
 
     const adminUserIds = await getAdminAndSuperUserIds(client);
 
@@ -336,6 +349,18 @@ router.patch("/:id/complete", requireAuth, requireRole("worker"), async (req, re
         excludeUserIds: [workerId],
       }
     );
+
+    if (emailTo) {
+      await sendBookingCompletedEmail({
+        to: emailTo,
+        firstName: firstNameForEmail,
+        bookingPublicId,
+        serviceTitle,
+        completedAt: updated.rows[0].completed_at,
+        technicianName,
+        finalPriceCents,
+      });
+    }
 
     res.json({ ok: true, booking: updated.rows[0] });
   } catch (e) {
