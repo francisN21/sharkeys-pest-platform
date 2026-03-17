@@ -87,6 +87,87 @@ function buildWelcomeEmail(payload) {
   };
 }
 
+function buildWelcomeVerificationEmail(payload) {
+  const firstName = payload.firstName || "there";
+  const verifyUrl = payload.verifyUrl || "";
+  const code = payload.code || "";
+
+  return {
+    subject: "Welcome to Sharky's Pest Control - Verify your email",
+    html: wrapEmailHtml(
+      "Verify Your Email",
+      `
+        <p style="margin-top:0;">Hi ${escapeHtml(firstName)},</p>
+        <p>Welcome to Sharky's Pest Control. Your account has been created successfully.</p>
+        <p>Please verify your email using the code below:</p>
+
+        <div style="margin:20px 0;padding:16px 20px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;text-align:center;">
+          <div style="font-size:32px;font-weight:700;letter-spacing:8px;color:#0f172a;">
+            ${escapeHtml(code)}
+          </div>
+        </div>
+
+        ${
+          verifyUrl
+            ? `<p>You can also verify here: <a href="${escapeHtml(verifyUrl)}">${escapeHtml(verifyUrl)}</a></p>`
+            : ""
+        }
+
+        <p>This code expires in 15 minutes.</p>
+        <p style="margin-bottom:0;">We’re glad to have you with us.</p>
+      `
+    ),
+    text: [
+      `Hi ${firstName},`,
+      "",
+      "Welcome to Sharky's Pest Control. Your account has been created successfully.",
+      "",
+      `Verification code: ${code}`,
+      verifyUrl ? `Verify here: ${verifyUrl}` : "",
+      "",
+      "This code expires in 15 minutes.",
+      "",
+      "We’re glad to have you with us.",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  };
+}
+
+function buildPasswordResetEmail(payload) {
+  const firstName = payload.firstName || "there";
+  const resetUrl = payload.resetUrl || "";
+
+  return {
+    subject: "Reset your password",
+    html: wrapEmailHtml(
+      "Reset Your Password",
+      `
+        <p style="margin-top:0;">Hi ${escapeHtml(firstName)},</p>
+        <p>We received a request to reset your password.</p>
+        ${
+          resetUrl
+            ? `<p>Use this link to reset it: <a href="${escapeHtml(resetUrl)}">${escapeHtml(resetUrl)}</a></p>`
+            : ""
+        }
+        <p>This link expires in 1 hour.</p>
+        <p style="margin-bottom:0;">If you did not request this, you can safely ignore this email.</p>
+      `
+    ),
+    text: [
+      `Hi ${firstName},`,
+      "",
+      "We received a request to reset your password.",
+      resetUrl ? `Reset link: ${resetUrl}` : "",
+      "",
+      "This link expires in 1 hour.",
+      "If you did not request this, you can safely ignore this email.",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  };
+}
+
 function buildBookingCreatedCustomerEmail(payload) {
   const customerName = payload.customerName || "there";
   const schedule =
@@ -262,6 +343,8 @@ module.exports = {
   formatDateTime,
   formatMoney,
   buildWelcomeEmail,
+  buildWelcomeVerificationEmail,
+  buildPasswordResetEmail,
   buildBookingCreatedCustomerEmail,
   buildBookingCreatedOfficeEmail,
   buildBookingAssignedCustomerEmail,
