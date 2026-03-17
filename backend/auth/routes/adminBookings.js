@@ -7,6 +7,10 @@ const {
   broadcastToUser,
 } = require("../src/realtime");
 const { createNotifications } = require("../src/notifications");
+const {
+  sendBookingConfirmationEmail,
+  sendBookingAssignedEmail,
+} = require("../src/email");
 
 const router = express.Router();
 
@@ -129,7 +133,7 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
     await assertBookingWindowAllowed(client, payload.startsAt, payload.endsAt);
 
     const s = await client.query(
-      `SELECT id FROM services WHERE public_id = $1 AND is_active = true`,
+      `SELECT id, title FROM services WHERE public_id = $1 AND is_active = true`,
       [payload.servicePublicId]
     );
     if (s.rowCount === 0) {
@@ -137,14 +141,17 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
       return res.status(400).json({ ok: false, message: "Invalid service" });
     }
     const serviceId = s.rows[0].id;
+    const serviceTitle = s.rows[0].title;
 
     let customerUserId = null;
     let leadId = null;
     let finalAddress = null;
+    let emailTo = null;
+    let firstNameForEmail = null;
 
     if (payload.customerPublicId) {
       const u = await client.query(
-        `SELECT id, address FROM users WHERE public_id = $1`,
+        `SELECT id, address, email, first_name FROM users WHERE public_id = $1`,
         [payload.customerPublicId]
       );
       if (u.rowCount === 0) {
@@ -155,6 +162,8 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
       customerUserId = u.rows[0].id;
       const customerAddress = String(u.rows[0].address || "").trim();
       finalAddress = String(payload.address || "").trim() || customerAddress;
+      emailTo = u.rows[0].email ?? null;
+      firstNameForEmail = u.rows[0].first_name ?? null;
 
       if (!finalAddress || finalAddress.length < 5) {
         await client.query("ROLLBACK");
@@ -177,7 +186,7 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
           account_type = COALESCE(EXCLUDED.account_type, leads.account_type),
           address    = COALESCE(EXCLUDED.address, leads.address),
           updated_at = now()
-        RETURNING id, address
+        RETURNING id, address, email, first_name
         `,
         [
           lead.email,
@@ -191,6 +200,8 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
 
       leadId = up.rows[0].id;
       finalAddress = String(payload.address || "").trim() || String(up.rows[0].address || "").trim();
+      emailTo = up.rows[0].email ?? payload.lead.email ?? null;
+      firstNameForEmail = up.rows[0].first_name ?? payload.lead.first_name ?? null;
 
       if (!finalAddress || finalAddress.length < 5) {
         await client.query("ROLLBACK");
@@ -246,6 +257,19 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
         type: "booking.created",
         bookingId: booking.public_id,
         startsAt: booking.starts_at,
+      });
+    }
+
+    if (emailTo) {
+      await sendBookingConfirmationEmail({
+        to: emailTo,
+        firstName: firstNameForEmail,
+        bookingPublicId: booking.public_id,
+        serviceTitle,
+        startsAt: booking.starts_at,
+        endsAt: booking.ends_at,
+        address: booking.address,
+        notes: booking.notes,
       });
     }
 
@@ -551,7 +575,21 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
     await client.query("BEGIN");
 
     const b = await client.query(
-      `SELECT id, status, customer_user_id FROM bookings WHERE public_id = $1 FOR UPDATE`,
+      `
+      SELECT
+        b.id,
+        b.status,
+        b.customer_user_id,
+        b.lead_id,
+        b.starts_at,
+        b.ends_at,
+        b.address,
+        s.title AS service_title
+      FROM bookings b
+      JOIN services s ON s.id = b.service_id
+      WHERE b.public_id = $1
+      FOR UPDATE
+      `,
       [bookingPublicId]
     );
 
@@ -574,13 +612,23 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
     const previousWorkerUserId = prevAssignRes.rows[0]?.worker_user_id ?? null;
 
     const w = await client.query(
-      `SELECT 1 FROM user_roles WHERE role = 'worker' AND user_id = $1`,
+      `
+      SELECT u.id, u.first_name, u.last_name, u.phone
+      FROM users u
+      JOIN user_roles ur ON ur.user_id = u.id
+      WHERE ur.role = 'worker' AND u.id = $1
+      LIMIT 1
+      `,
       [workerUserId]
     );
     if (w.rowCount === 0) {
       await client.query("ROLLBACK");
       return res.status(400).json({ ok: false, message: "Invalid technician (workerUserId)" });
     }
+
+    const worker = w.rows[0];
+    const technicianName = [worker.first_name, worker.last_name].filter(Boolean).join(" ").trim() || null;
+    const technicianPhone = worker.phone ?? null;
 
     await client.query(
       `
@@ -644,21 +692,48 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
       });
     }
 
+    let emailTo = null;
+    let firstNameForEmail = null;
+
+    const recipientRes = await client.query(
+      `
+      SELECT
+        cu.email AS customer_email,
+        cu.first_name AS customer_first_name,
+        l.email AS lead_email,
+        l.first_name AS lead_first_name
+      FROM bookings b
+      LEFT JOIN users cu ON cu.id = b.customer_user_id
+      LEFT JOIN leads l ON l.id = b.lead_id
+      WHERE b.id = $1
+      LIMIT 1
+      `,
+      [booking.id]
+    );
+
+    if (recipientRes.rowCount > 0) {
+      emailTo = recipientRes.rows[0].customer_email || recipientRes.rows[0].lead_email || null;
+      firstNameForEmail =
+        recipientRes.rows[0].customer_first_name || recipientRes.rows[0].lead_first_name || null;
+    }
+
     await createNotifications(client, notificationRows);
 
     await client.query("COMMIT");
 
+    const assignedAtNow = new Date().toISOString();
+
     broadcastToUser(workerUserId, {
       type: "booking.assigned",
       bookingId: bookingPublicId,
-      assignedAt: new Date().toISOString(),
+      assignedAt: assignedAtNow,
     });
 
     if (booking.customer_user_id) {
       broadcastToUser(booking.customer_user_id, {
         type: "booking.assigned",
         bookingId: bookingPublicId,
-        assignedAt: new Date().toISOString(),
+        assignedAt: assignedAtNow,
       });
     }
 
@@ -666,15 +741,29 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
       broadcastToUser(previousWorkerUserId, {
         type: "booking.reassigned",
         bookingId: bookingPublicId,
-        assignedAt: new Date().toISOString(),
+        assignedAt: assignedAtNow,
       });
     }
 
     broadcastToRoles(["admin", "superuser"], {
       type: "booking.assigned",
       bookingId: bookingPublicId,
-      assignedAt: new Date().toISOString(),
+      assignedAt: assignedAtNow,
     });
+
+    if (emailTo) {
+      await sendBookingAssignedEmail({
+        to: emailTo,
+        firstName: firstNameForEmail,
+        bookingPublicId,
+        serviceTitle: booking.service_title,
+        startsAt: booking.starts_at,
+        endsAt: booking.ends_at,
+        address: booking.address,
+        technicianName,
+        technicianPhone,
+      });
+    }
 
     res.json({ ok: true, booking: updated.rows[0] });
   } catch (e) {
