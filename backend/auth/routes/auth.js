@@ -1,4 +1,3 @@
-// routes/auth.js
 const express = require("express");
 const argon2 = require("argon2");
 const { z } = require("zod");
@@ -10,6 +9,8 @@ const {
   deleteSession,
 } = require("../src/auth/session");
 const { requireAuth } = require("../middleware/requireAuth");
+const { sendWelcomeEmail } = require("../src/email/mailer");
+const { config } = require("../src/config");
 
 const router = express.Router();
 
@@ -21,9 +22,6 @@ function normalizeEmail(email) {
 }
 
 function getAuthedUserId(req) {
-  // Support either style:
-  // - req.user = { id }
-  // - req.auth = { userId, expiresAt }
   return req.user?.id ?? req.auth?.userId ?? null;
 }
 
@@ -33,7 +31,6 @@ function getAuthExpiresAt(req) {
 
 /**
  * Schemas
- * Note: signup includes your profile fields; login keeps minimal.
  */
 const signupSchema = z.object({
   first_name: z.string().min(1).max(100),
@@ -50,20 +47,6 @@ const loginSchema = z.object({
   password: z.string().min(1).max(128),
 });
 
-/**
- * POST /auth/signup
- * - Creates user
- * - If a lead exists with the same email, promotes lead -> user:
- *   - lock lead row
- *   - rename lead email to placeholder (avoids cross-table uniqueness trigger conflict)
- *   - create user
- *   - migrate bookings lead_id -> customer_user_id
- *   - record lead_conversions row
- *   - migrate customer_tags lead -> registered
- *   - delete lead + old lead tags
- * - Inserts default role: customer
- * - Creates session cookie
- */
 router.post("/signup", async (req, res, next) => {
   const client = await pool.connect();
   try {
@@ -81,14 +64,12 @@ router.post("/signup", async (req, res, next) => {
 
     await client.query("BEGIN");
 
-    // 1) If user already exists, stop (same behavior as today)
     const existing = await client.query(`SELECT id FROM users WHERE email = $1`, [normalizedEmail]);
     if (existing.rowCount > 0) {
       await client.query("ROLLBACK");
       return res.status(409).json({ ok: false, message: "Email already in use" });
     }
 
-    // 2) If lead exists, lock it for promotion (include public_id for lead_conversions audit)
     const leadRes = await client.query(
       `SELECT
          id,
@@ -105,14 +86,11 @@ router.post("/signup", async (req, res, next) => {
     );
     const lead = leadRes.rows[0] || null;
 
-    // 3) If lead exists, rename its email to a placeholder to avoid trigger conflict on users insert
-    //    (Trigger checks: "does leads.email == NEW.email?")
     if (lead) {
       const placeholderEmail = `promoted+lead${lead.id}@example.invalid`;
       await client.query(`UPDATE leads SET email = $1 WHERE id = $2`, [placeholderEmail, lead.id]);
     }
 
-    // 4) Create the user
     const passwordHash = await argon2.hash(password);
 
     const created = await client.query(
@@ -141,7 +119,6 @@ router.post("/signup", async (req, res, next) => {
 
     const user = created.rows[0];
 
-    // 5) Default role: customer
     await client.query(
       `INSERT INTO user_roles (user_id, role)
        VALUES ($1, 'customer')
@@ -149,9 +126,7 @@ router.post("/signup", async (req, res, next) => {
       [user.id]
     );
 
-    // 6) If this was a lead promotion, migrate dependent data then delete lead
     if (lead) {
-      // IMPORTANT: migrate bookings first to satisfy bookings_customer_or_lead_chk (XOR)
       await client.query(
         `UPDATE bookings
          SET customer_user_id = $1,
@@ -160,7 +135,6 @@ router.post("/signup", async (req, res, next) => {
         [user.id, lead.id]
       );
 
-      // Record lead -> user conversion (metrics/audit)
       await client.query(
         `
         INSERT INTO lead_conversions (lead_id, lead_public_id, user_id, email)
@@ -170,7 +144,6 @@ router.post("/signup", async (req, res, next) => {
         [lead.id, lead.public_id, user.id, normalizedEmail]
       );
 
-      // Optional but recommended: migrate customer_tags lead -> registered
       await client.query(
         `
         INSERT INTO customer_tags (kind, entity_id, tag, note, updated_by_user_id, updated_at)
@@ -187,22 +160,25 @@ router.post("/signup", async (req, res, next) => {
         [user.id, lead.id]
       );
 
-      // Clean up old lead tag row
       await client.query(`DELETE FROM customer_tags WHERE kind = 'lead' AND entity_id = $1`, [lead.id]);
-
-      // Now safe to delete the lead (bookings no longer reference it)
       await client.query(`DELETE FROM leads WHERE id = $1`, [lead.id]);
     }
 
     await client.query("COMMIT");
 
-    // Create session AFTER commit (keeps your current pattern)
     const { sessionId, expiresAt } = await createSession(user.id);
 
     const cookieName = process.env.SESSION_COOKIE_NAME || "sid";
     res.cookie(cookieName, sessionId, {
       ...getCookieOptions(),
       expires: new Date(expiresAt),
+    });
+
+    await sendWelcomeEmail({
+      to: user.email,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      appBaseUrl: config.APP_BASE_URL,
     });
 
     return res.status(201).json({
@@ -225,7 +201,6 @@ router.post("/signup", async (req, res, next) => {
       await client.query("ROLLBACK");
     } catch {}
 
-    // If your cross-table uniqueness trigger throws 23505, return a clean 409
     if (e && e.code === "23505") {
       return res.status(409).json({ ok: false, message: "Email already in use" });
     }
@@ -236,11 +211,6 @@ router.post("/signup", async (req, res, next) => {
   }
 });
 
-/**
- * POST /auth/login
- * - Validates credentials
- * - Creates session cookie
- */
 router.post("/login", async (req, res, next) => {
   try {
     const { email, password } = loginSchema.parse(req.body);
@@ -286,7 +256,6 @@ router.post("/login", async (req, res, next) => {
       expires: new Date(expiresAt),
     });
 
-    // Pick a primary role for convenience (admin > worker > customer)
     const roles = user.roles || [];
     const user_role = roles.includes("admin") ? "admin" : roles.includes("worker") ? "worker" : "customer";
 
@@ -301,8 +270,8 @@ router.post("/login", async (req, res, next) => {
         account_type: user.account_type,
         address: user.address,
         email_verified_at: user.email_verified_at,
-        roles,       // ['customer'] or ['admin', ...]
-        user_role,   // 'admin' | 'worker' | 'customer'
+        roles,
+        user_role,
       },
       session: { expiresAt },
     });
@@ -311,9 +280,6 @@ router.post("/login", async (req, res, next) => {
   }
 });
 
-/**
- * POST /auth/logout
- */
 router.post("/logout", async (req, res, next) => {
   try {
     const cookieName = process.env.SESSION_COOKIE_NAME || "sid";
@@ -328,11 +294,6 @@ router.post("/logout", async (req, res, next) => {
   }
 });
 
-/**
- * GET /auth/me
- * Uses requireAuth and then fetches profile.
- * Works with either req.user.id OR req.auth.userId depending on your middleware.
- */
 router.get("/me", requireAuth, async (req, res, next) => {
   try {
     const userId = getAuthedUserId(req);
