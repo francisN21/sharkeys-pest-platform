@@ -2,6 +2,8 @@ const { resend } = require("./resendClient");
 const { config } = require("../config");
 const {
   buildWelcomeEmail,
+  buildWelcomeVerificationEmail,
+  buildPasswordResetEmail,
   buildBookingCreatedCustomerEmail,
   buildBookingCreatedOfficeEmail,
   buildBookingAssignedCustomerEmail,
@@ -57,6 +59,26 @@ async function sendWelcomeEmail(payload) {
   });
 }
 
+async function sendWelcomeVerificationEmail(payload) {
+  const content = buildWelcomeVerificationEmail(payload);
+  return safeSendEmail({
+    to: payload.to,
+    subject: content.subject,
+    html: content.html,
+    text: content.text,
+  });
+}
+
+async function sendPasswordResetEmail(payload) {
+  const content = buildPasswordResetEmail(payload);
+  return safeSendEmail({
+    to: payload.to,
+    subject: content.subject,
+    html: content.html,
+    text: content.text,
+  });
+}
+
 async function sendBookingCreatedCustomerEmail(payload) {
   const content = buildBookingCreatedCustomerEmail(payload);
   return safeSendEmail({
@@ -101,6 +123,8 @@ async function sendBookingCompletedCustomerEmail(payload) {
 module.exports = {
   safeSendEmail,
   sendWelcomeEmail,
+  sendWelcomeVerificationEmail,
+  sendPasswordResetEmail,
   sendBookingCreatedCustomerEmail,
   sendBookingCreatedOfficeEmail,
   sendBookingAssignedCustomerEmail,
