@@ -18,6 +18,7 @@ export type TabKey =
   | "bookings"
   | "tech"
   | "admin_customers"
+  | "admin_availability"
   | "admin_leads"
   | "admin_dispatch"
   | "admin_jobhistory"
@@ -37,6 +38,7 @@ export const DEFAULT_TAB_BADGES: Record<TabKey, number> = {
   bookings: 0,
   tech: 0,
   admin_customers: 0,
+  admin_availability: 0,
   admin_leads: 0,
   admin_dispatch: 0,
   admin_jobhistory: 0,
@@ -48,6 +50,7 @@ export const DEFAULT_PULSING_TABS: Record<TabKey, boolean> = {
   bookings: false,
   tech: false,
   admin_customers: false,
+  admin_availability: false,
   admin_leads: false,
   admin_dispatch: false,
   admin_jobhistory: false,
@@ -61,6 +64,7 @@ export function getTabKeyFromPathname(pathname: string | null): TabKey {
   if (path.startsWith("/account/bookings")) return "bookings";
   if (path.startsWith("/account/technician")) return "tech";
   if (path.startsWith("/account/admin/customers")) return "admin_customers";
+  if (path.startsWith("/account/admin/availability")) return "admin_availability";  
   if (path.startsWith("/account/admin/leads")) return "admin_leads";
   if (path.startsWith("/account/admin/dispatch")) return "admin_dispatch";
   if (path.startsWith("/account/admin/jobhistory")) return "admin_jobhistory";
@@ -119,6 +123,15 @@ function buildTabs(
       href: "/account/admin/customers",
       badgeCount: tabBadges.admin_customers,
       pulseBadge: pulsingTabs.admin_customers,
+    },
+    {
+      key: "admin_availability",
+      label: "Availability",
+      icon: "fa-solid fa-calendar",
+      href: "/account/admin/availability",
+      badgeCount: tabBadges.admin_availability,
+      pulseBadge: pulsingTabs.admin_availability,
+      
     },
     {
       key: "admin_leads",
