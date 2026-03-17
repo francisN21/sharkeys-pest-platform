@@ -4,6 +4,7 @@ const { z } = require("zod");
 const { requireAuth } = require("../middleware/requireAuth");
 const { broadcastToUsers } = require("../src/realtime");
 const { createNotifications } = require("../src/notifications");
+const { sendBookingAssignedEmail } = require("../src/email");
 
 const router = express.Router();
 
@@ -336,7 +337,21 @@ router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, 
     await client.query("BEGIN");
 
     const bRes = await client.query(
-      `SELECT id, status, customer_user_id FROM bookings WHERE public_id = $1 FOR UPDATE`,
+      `
+      SELECT
+        b.id,
+        b.status,
+        b.customer_user_id,
+        b.lead_id,
+        b.starts_at,
+        b.ends_at,
+        b.address,
+        s.title AS service_title
+      FROM bookings b
+      JOIN services s ON s.id = b.service_id
+      WHERE b.public_id = $1
+      FOR UPDATE
+      `,
       [bookingPublicId]
     );
     if (bRes.rowCount === 0) {
@@ -352,13 +367,23 @@ router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, 
     }
 
     const techRes = await client.query(
-      `SELECT 1 FROM user_roles WHERE user_id = $1 AND role = 'worker' LIMIT 1`,
+      `
+      SELECT u.id, u.first_name, u.last_name, u.phone
+      FROM users u
+      JOIN user_roles ur ON ur.user_id = u.id
+      WHERE u.id = $1 AND ur.role = 'worker'
+      LIMIT 1
+      `,
       [worker_user_id]
     );
     if (techRes.rowCount === 0) {
       await client.query("ROLLBACK");
       return res.status(400).json({ ok: false, message: "Target user is not a technician" });
     }
+
+    const newWorker = techRes.rows[0];
+    const technicianName = [newWorker.first_name, newWorker.last_name].filter(Boolean).join(" ").trim() || null;
+    const technicianPhone = newWorker.phone ?? null;
 
     const prevAssignRes = await client.query(
       `SELECT worker_user_id FROM booking_assignments WHERE booking_id = $1 LIMIT 1`,
@@ -439,6 +464,31 @@ router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, 
       },
     });
 
+    let emailTo = null;
+    let firstNameForEmail = null;
+
+    const recipientRes = await client.query(
+      `
+      SELECT
+        cu.email AS customer_email,
+        cu.first_name AS customer_first_name,
+        l.email AS lead_email,
+        l.first_name AS lead_first_name
+      FROM bookings b
+      LEFT JOIN users cu ON cu.id = b.customer_user_id
+      LEFT JOIN leads l ON l.id = b.lead_id
+      WHERE b.id = $1
+      LIMIT 1
+      `,
+      [booking.id]
+    );
+
+    if (recipientRes.rowCount > 0) {
+      emailTo = recipientRes.rows[0].customer_email || recipientRes.rows[0].lead_email || null;
+      firstNameForEmail =
+        recipientRes.rows[0].customer_first_name || recipientRes.rows[0].lead_first_name || null;
+    }
+
     await createNotifications(client, notificationRows);
 
     await client.query("COMMIT");
@@ -451,6 +501,20 @@ router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, 
         assignedAt: new Date().toISOString(),
       }
     );
+
+    if (emailTo) {
+      await sendBookingAssignedEmail({
+        to: emailTo,
+        firstName: firstNameForEmail,
+        bookingPublicId,
+        serviceTitle: booking.service_title,
+        startsAt: booking.starts_at,
+        endsAt: booking.ends_at,
+        address: booking.address,
+        technicianName,
+        technicianPhone,
+      });
+    }
 
     return res.json({ ok: true });
   } catch (e) {
