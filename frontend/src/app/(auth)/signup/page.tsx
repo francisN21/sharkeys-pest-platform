@@ -12,9 +12,7 @@ import { signup, ApiError, me } from "../../../lib/api/auth";
 import { notifyAuthChanged } from "../../../components/AuthProvider";
 
 function friendlySignupError(e: unknown): string {
-  // Our api/auth.ts throws ApiError on non-2xx
   if (e instanceof ApiError) {
-    // Common cases
     if (e.status === 409) return e.message || "Email already in use.";
     if (e.status === 400) return e.message || "Please check your input and try again.";
     if (e.status === 401) return "Please sign in again.";
@@ -43,20 +41,22 @@ export default function SignupPage() {
     },
   });
 
-  // Optional UX: if user is already signed in, redirect them out of signup
   useEffect(() => {
     let alive = true;
+
     (async () => {
       try {
         const r = await me();
         if (!alive) return;
+
         if (r?.ok && r.user?.public_id) {
           router.replace("/account");
         }
       } catch {
-        // ignore; not logged in
+        // not signed in
       }
     })();
+
     return () => {
       alive = false;
     };
@@ -65,13 +65,16 @@ export default function SignupPage() {
   async function onSubmit(values: SignupValues) {
     setServerError(null);
 
-    await signup(values);
+    const res = await signup(values);
 
-    // Backend sets cookie session; tell app to refresh auth state
     notifyAuthChanged();
 
-    // Go straight to account; avoid flashing "ok" message
-    router.push("/account");
+    const email = res?.verification?.email || res?.user?.email || values.email;
+
+    const params = new URLSearchParams();
+    if (email) params.set("email", email);
+
+    router.push(`/verify-email${params.toString() ? `?${params.toString()}` : ""}`);
   }
 
   return (
@@ -83,11 +86,14 @@ export default function SignupPage() {
         </p>
       </div>
 
-      {serverError && (
-        <div className="rounded-xl border p-3 text-sm border-red-500">
+      {serverError ? (
+        <div
+          className="rounded-xl border p-3 text-sm"
+          style={{ borderColor: "rgb(239 68 68)" }}
+        >
           {serverError}
         </div>
-      )}
+      ) : null}
 
       <form
         className="space-y-4"
@@ -99,7 +105,6 @@ export default function SignupPage() {
           }
         })}
       >
-        {/* First + Last */}
         <div className="grid gap-3 sm:grid-cols-2">
           <AuthTextField
             label="First name"
@@ -135,6 +140,10 @@ export default function SignupPage() {
             <label className="text-sm font-semibold">Account type (optional)</label>
             <select
               className="w-full rounded-xl border px-3 py-2 text-sm"
+              style={{
+                borderColor: "rgb(var(--border))",
+                background: "transparent",
+              }}
               {...register("accountType")}
             >
               <option value="residential">Residential</option>
@@ -172,15 +181,22 @@ export default function SignupPage() {
         <button
           disabled={isSubmitting}
           className="w-full rounded-xl px-4 py-3 text-sm font-semibold disabled:opacity-60"
-          style={{ background: "rgb(var(--primary))", color: "rgb(var(--primary-fg))" }}
+          style={{
+            background: "rgb(var(--primary))",
+            color: "rgb(var(--primary-fg))",
+          }}
         >
           {isSubmitting ? "Creating..." : "Create account"}
         </button>
       </form>
 
-      <p className="text-sm text-center" style={{ color: "rgb(var(--muted))" }}>
+      <p className="text-center text-sm" style={{ color: "rgb(var(--muted))" }}>
         Already have an account?{" "}
-        <Link href="/login" className="font-semibold hover:underline">
+        <Link
+          href="/login"
+          className="font-semibold hover:underline"
+          style={{ color: "rgb(var(--fg))" }}
+        >
           Sign in
         </Link>
       </p>
