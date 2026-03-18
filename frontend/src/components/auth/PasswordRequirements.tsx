@@ -47,6 +47,10 @@ export default function PasswordRequirements({ password }: Props) {
         {rule(hasSpecial, "At least one special character")}
         {rule(noSpaces, "No spaces")}
       </div>
+
+      <p className="mt-3 text-xs" style={{ color: "rgb(var(--muted))" }}>
+        Your new password must also be different from your current password and your 5 most recent passwords.
+      </p>
     </div>
   );
 }
