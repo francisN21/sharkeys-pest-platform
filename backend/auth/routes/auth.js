@@ -673,6 +673,34 @@ router.post("/password/reset", async (req, res, next) => {
       return res.status(400).json({ ok: false, message: "Invalid or expired reset token" });
     }
 
+    const userRes = await client.query(
+      `
+      SELECT id, password_hash
+      FROM users
+      WHERE id = $1
+      LIMIT 1
+      FOR UPDATE
+      `,
+      [resetRow.user_id]
+    );
+
+    const user = userRes.rows[0] || null;
+    if (!user) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ ok: false, message: "Account not found" });
+    }
+
+    if (user.password_hash) {
+      const sameAsCurrent = await argon2.verify(user.password_hash, password);
+      if (sameAsCurrent) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({
+          ok: false,
+          message: "New password must be different from your current password",
+        });
+      }
+    }
+
     const passwordHash = await argon2.hash(password);
 
     await client.query(
