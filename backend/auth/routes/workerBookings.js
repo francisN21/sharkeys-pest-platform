@@ -4,7 +4,7 @@ const { requireAuth } = require("../middleware/requireAuth");
 const { requireRole } = require("../middleware/requireRole");
 const { broadcastToBookingParticipants } = require("../src/realtime");
 const { createNotifications } = require("../src/notifications");
-const { sendBookingCompletedEmail } = require("../src/email");
+const { sendBookingCompletedEmail } = require("../src/email/mailer");
 
 const router = express.Router();
 

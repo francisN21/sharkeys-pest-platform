@@ -3,7 +3,7 @@ const { z } = require("zod");
 const { pool } = require("../src/db");
 const { broadcastToRoles } = require("../src/realtime");
 const { createNotifications } = require("../src/notifications");
-const { sendBookingConfirmationEmail } = require("../src/email");
+const { sendBookingConfirmationEmail } = require("../src/email/mailer");
 
 const router = express.Router();
 

@@ -4,7 +4,7 @@ const { z } = require("zod");
 const { requireAuth } = require("../middleware/requireAuth");
 const { broadcastToUsers } = require("../src/realtime");
 const { createNotifications } = require("../src/notifications");
-const { sendBookingAssignedEmail } = require("../src/email");
+const { sendBookingAssignedEmail } = require("../src/email/mailer");
 
 const router = express.Router();
 

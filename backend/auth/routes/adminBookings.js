@@ -10,7 +10,7 @@ const { createNotifications } = require("../src/notifications");
 const {
   sendBookingConfirmationEmail,
   sendBookingAssignedEmail,
-} = require("../src/email");
+} = require("../src/email/mailer");
 
 const router = express.Router();
 
