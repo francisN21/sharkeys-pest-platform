@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import AuthTextField from "../../../components/forms/AuthTextField";
+import PasswordRequirements from "../../../components/auth/PasswordRequirements";
 import { signupSchema, type SignupValues } from "../../../lib/validators/auth";
 import { signup, ApiError, me } from "../../../lib/api/auth";
 import { notifyAuthChanged } from "../../../components/AuthProvider";
@@ -26,12 +27,12 @@ function friendlySignupError(e: unknown): string {
 
 export default function SignupPage() {
   const router = useRouter();
-
   const [serverError, setServerError] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<SignupValues>({
     resolver: zodResolver(signupSchema),
@@ -40,6 +41,8 @@ export default function SignupPage() {
       agree: true,
     },
   });
+
+  const passwordValue = watch("password") || "";
 
   useEffect(() => {
     let alive = true;
@@ -53,7 +56,7 @@ export default function SignupPage() {
           router.replace("/account");
         }
       } catch {
-        // not signed in
+        // ignore
       }
     })();
 
@@ -70,7 +73,6 @@ export default function SignupPage() {
     notifyAuthChanged();
 
     const email = res?.verification?.email || res?.user?.email || values.email;
-
     const params = new URLSearchParams();
     if (email) params.set("email", email);
 
@@ -165,6 +167,8 @@ export default function SignupPage() {
           error={errors.password?.message}
           {...register("password")}
         />
+
+        <PasswordRequirements password={passwordValue} />
 
         <AuthTextField
           label="Confirm password"
