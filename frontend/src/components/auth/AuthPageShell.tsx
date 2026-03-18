@@ -4,8 +4,6 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import Image from "next/image";
 
-const LOGO_SRC = "/main-logo.jpg";
-
 type AuthPageShellProps = {
   title: string;
   subtitle: string;
@@ -21,13 +19,29 @@ export default function AuthPageShell({
 }: AuthPageShellProps) {
   return (
     <div
-      className="min-h-screen w-full px-4 py-10 sm:px-6"
+      className="min-h-screen grid place-items-center px-4"
       style={{ background: "rgb(var(--bg))", color: "rgb(var(--fg))" }}
     >
+      <div className="w-full max-w-md space-y-6 fade-up">
+        <div className="flex flex-col items-center gap-3">
+          <Link href="/" aria-label="Go to homepage">
+            <Image
+              src="/main-logo.jpg"
+              alt="Sharkys Pest Control"
+              width={256}
+              height={256}
+              className="object-contain rounded-2xl"
+              priority
+            />
+          </Link>
 
+          <div className="text-center">
+            <div className="text-lg font-semibold tracking-tight">
+              Sharkys Pest Control
+            </div>
+          </div>
+        </div>
 
-
-      <div className="mx-auto flex min-h-[80vh] max-w-md items-center">
         <div
           className="w-full rounded-3xl border p-6 shadow-2xl sm:p-8"
           style={{
@@ -45,7 +59,10 @@ export default function AuthPageShell({
           {children}
 
           {footer ? (
-            <div className="mt-6 text-center text-sm" style={{ color: "rgb(var(--muted))" }}>
+            <div
+              className="mt-6 text-center text-sm"
+              style={{ color: "rgb(var(--muted))" }}
+            >
               {footer}
             </div>
           ) : null}
