@@ -1,14 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, CheckCircle2, Mail, ShieldAlert } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Mail,
+  ShieldAlert,
+  Eye,
+  EyeOff,
+  Check,
+  X,
+} from "lucide-react";
 
 import AuthTextField from "../../components/forms/AuthTextField";
 import AuthPageShell from "../../components/auth/AuthPageShell";
+import PasswordRequirements from "../../components/auth/PasswordRequirements";
 import { forgotPassword, resetPassword } from "../../lib/api/auth";
 import {
   forgotPasswordSchema,
@@ -27,6 +37,8 @@ export default function ResetPasswordPage() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [resetSuccess, setResetSuccess] = useState(false);
   const [requestSuccess, setRequestSuccess] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const resetForm = useForm<ResetPasswordValues>({
     resolver: zodResolver(resetPasswordSchema),
@@ -42,6 +54,16 @@ export default function ResetPasswordPage() {
       email: emailFromQuery,
     },
   });
+
+  const passwordValue = resetForm.watch("password") || "";
+  const confirmPasswordValue = resetForm.watch("confirmPassword") || "";
+
+  const passwordsMatch = useMemo(() => {
+    if (!passwordValue || !confirmPasswordValue) return false;
+    return passwordValue === confirmPasswordValue;
+  }, [passwordValue, confirmPasswordValue]);
+
+  const showPasswordMatchState = passwordValue.length > 0 || confirmPasswordValue.length > 0;
 
   async function onSubmitReset(values: ResetPasswordValues) {
     setServerError(null);
@@ -204,19 +226,72 @@ export default function ResetPasswordPage() {
             className="space-y-4"
             onSubmit={resetForm.handleSubmit(onSubmitReset)}
           >
-            <AuthTextField
-              label="New password"
-              type="password"
-              error={resetForm.formState.errors.password?.message}
-              {...resetForm.register("password")}
-            />
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-semibold">New password</label>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="inline-flex items-center gap-1 text-xs font-semibold hover:opacity-80"
+                  style={{ color: "rgb(var(--muted))" }}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
 
-            <AuthTextField
-              label="Confirm new password"
-              type="password"
-              error={resetForm.formState.errors.confirmPassword?.message}
-              {...resetForm.register("confirmPassword")}
-            />
+              <AuthTextField
+                label=""
+                type={showPassword ? "text" : "password"}
+                error={resetForm.formState.errors.password?.message}
+                {...resetForm.register("password")}
+              />
+            </div>
+
+            <PasswordRequirements password={passwordValue} />
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-semibold">Confirm new password</label>
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((v) => !v)}
+                  className="inline-flex items-center gap-1 text-xs font-semibold hover:opacity-80"
+                  style={{ color: "rgb(var(--muted))" }}
+                >
+                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showConfirmPassword ? "Hide" : "Show"}
+                </button>
+              </div>
+
+              <AuthTextField
+                label=""
+                type={showConfirmPassword ? "text" : "password"}
+                error={resetForm.formState.errors.confirmPassword?.message}
+                {...resetForm.register("confirmPassword")}
+              />
+            </div>
+
+            {showPasswordMatchState ? (
+              <div
+                className="rounded-xl border p-3"
+                style={{
+                  borderColor: "rgb(var(--border))",
+                  background: "rgba(var(--bg), 0.2)",
+                }}
+              >
+                <div className="flex items-center gap-2 text-sm">
+                  {passwordsMatch ? (
+                    <Check className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <X className="h-4 w-4 text-red-500" />
+                  )}
+                  <span style={{ opacity: passwordsMatch ? 1 : 0.8 }}>
+                    {passwordsMatch ? "Passwords match" : "Passwords must match"}
+                  </span>
+                </div>
+              </div>
+            ) : null}
 
             <button
               type="submit"
