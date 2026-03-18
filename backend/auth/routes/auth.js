@@ -112,12 +112,22 @@ async function issuePasswordResetToken(client, userId) {
 /**
  * Schemas
  */
+const strongPasswordSchema = z
+  .string()
+  .min(14, "Password must be at least 14 characters")
+  .max(128, "Password is too long")
+  .regex(/[A-Z]/, "Must include an uppercase letter")
+  .regex(/[a-z]/, "Must include a lowercase letter")
+  .regex(/\d/, "Must include a number")
+  .regex(/[^A-Za-z0-9]/, "Must include a special character")
+  .refine((val) => !/\s/.test(val), "No spaces allowed");
+
 const signupSchema = z.object({
   first_name: z.string().min(1).max(100),
   last_name: z.string().min(1).max(100),
   email: z.string().email().transform((s) => s.trim()),
   phone: z.string().min(7).max(30).optional(),
-  password: z.string().min(8).max(128),
+  password: strongPasswordSchema,
   accountType: z.enum(["residential", "business"]).optional(),
   address: z.string().min(5).max(500).optional(),
 });
@@ -142,7 +152,7 @@ const forgotPasswordSchema = z.object({
 
 const resetPasswordSchema = z.object({
   token: z.string().trim().min(20).max(500),
-  password: z.string().min(8).max(128),
+  password: strongPasswordSchema,
 });
 
 /**
@@ -644,6 +654,7 @@ router.post("/password/forgot", async (req, res, next) => {
 
 /**
  * POST /auth/password/reset
+ * Prevent reuse of current password and last 5 previous passwords
  */
 router.post("/password/reset", async (req, res, next) => {
   const client = await pool.connect();
@@ -696,9 +707,43 @@ router.post("/password/reset", async (req, res, next) => {
         await client.query("ROLLBACK");
         return res.status(400).json({
           ok: false,
-          message: "New password must be different from your current password",
+          message: "New password must be different from your current password and recent passwords",
         });
       }
+    }
+
+    const historyRes = await client.query(
+      `
+      SELECT password_hash
+      FROM user_password_history
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT 5
+      `,
+      [user.id]
+    );
+
+    for (const row of historyRes.rows) {
+      if (!row?.password_hash) continue;
+
+      const reused = await argon2.verify(row.password_hash, password);
+      if (reused) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({
+          ok: false,
+          message: "New password must be different from your current password and recent passwords",
+        });
+      }
+    }
+
+    if (user.password_hash) {
+      await client.query(
+        `
+        INSERT INTO user_password_history (user_id, password_hash)
+        VALUES ($1, $2)
+        `,
+        [user.id, user.password_hash]
+      );
     }
 
     const passwordHash = await argon2.hash(password);
@@ -710,12 +755,26 @@ router.post("/password/reset", async (req, res, next) => {
           updated_at = now()
       WHERE id = $1
       `,
-      [resetRow.user_id, passwordHash]
+      [user.id, passwordHash]
     );
 
     await client.query(
       `UPDATE password_reset_tokens SET consumed_at = now() WHERE id = $1`,
       [resetRow.id]
+    );
+
+    await client.query(
+      `
+      DELETE FROM user_password_history
+      WHERE id IN (
+        SELECT id
+        FROM user_password_history
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+        OFFSET 5
+      )
+      `,
+      [user.id]
     );
 
     await client.query("COMMIT");
