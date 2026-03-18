@@ -1,4 +1,3 @@
-// frontend/src/lib/api/auth.ts
 import type { LoginValues, SignupValues } from "../validators/auth";
 
 type ApiErrorShape = { message?: string; error?: string; ok?: boolean };
@@ -17,6 +16,7 @@ function resolveUrl(path: string) {
 export class ApiError extends Error {
   status: number;
   payload?: unknown;
+
   constructor(message: string, status: number, payload?: unknown) {
     super(message);
     this.name = "ApiError";
@@ -48,9 +48,8 @@ async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
 // Types that match backend
 // -----------------------------
 export type AuthUser = {
-  // backend returns id on /auth/me, but signup/login return public_id
-  id?: number | string; // bigint can come back as string
-  public_id: string; // UUID
+  id?: number | string;
+  public_id: string;
   email: string;
 
   first_name?: string | null;
@@ -64,7 +63,7 @@ export type AuthUser = {
   created_at?: string;
 
   roles?: string[];
-  user_role?: "admin" | "worker" | "customer" | string;
+  user_role?: "superuser" | "admin" | "worker" | "customer" | string;
 };
 
 export type AuthSession = { expiresAt: string | null };
@@ -73,6 +72,10 @@ export type SignupResponse = {
   ok: boolean;
   user: AuthUser;
   session: AuthSession;
+  verification?: {
+    email: string;
+    expiresAt: string | null;
+  };
 };
 
 export type LoginResponse = {
@@ -89,6 +92,29 @@ export type MeResponse = {
 
 export type AuthOkResponse = { ok: boolean; message?: string };
 
+export type VerifyEmailRequestResponse = {
+  ok: boolean;
+  message?: string;
+  expiresAt?: string | null;
+};
+
+export type VerifyEmailConfirmResponse = {
+  ok: boolean;
+  alreadyVerified?: boolean;
+  user?: AuthUser;
+};
+
+export type ForgotPasswordResponse = {
+  ok: boolean;
+  message?: string;
+  expiresAt?: string | null;
+};
+
+export type ResetPasswordResponse = {
+  ok: boolean;
+  message?: string;
+};
+
 // -----------------------------
 // API calls
 // -----------------------------
@@ -101,18 +127,13 @@ export function signup(payload: SignupValues) {
       email: payload.email,
       phone: payload.phone ?? null,
       password: payload.password,
-
-      // ✅ MUST match backend zod key: accountType
       accountType: payload.accountType ?? null,
-
       address: payload.address ?? null,
     }),
   });
 }
 
 export function login(payload: LoginValues) {
-  // Your backend loginSchema expects { email, password }
-  // Good as-is.
   return jsonFetch<LoginResponse>("/auth/login", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -142,10 +163,36 @@ export function me() {
   return jsonFetch<MeResponse>("/auth/me", { method: "GET" });
 }
 
+export function requestVerifyEmail(email: string) {
+  return jsonFetch<VerifyEmailRequestResponse>("/auth/verify-email/request", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function confirmVerifyEmail(payload: { email: string; code: string }) {
+  return jsonFetch<VerifyEmailConfirmResponse>("/auth/verify-email/confirm", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function forgotPassword(email: string) {
+  return jsonFetch<ForgotPasswordResponse>("/auth/password/forgot", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function resetPassword(payload: { token: string; password: string }) {
+  return jsonFetch<ResetPasswordResponse>("/auth/password/reset", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 /**
- * ✅ Helper: reliably derive numeric meUserId
- * - supports "id" as number
- * - supports "id" as string (if backend serializes bigint as string)
+ * Helper: reliably derive numeric meUserId
  */
 export function getMeUserId(res?: MeResponse | null): number | null {
   const raw = res?.user?.id as unknown;
