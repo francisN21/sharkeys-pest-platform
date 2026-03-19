@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { me, type MeResponse } from "../../lib/api/auth";
 import Navbar from "../../components/Navbar";
 import TrafficOverview from "../../components/su-dashboard/TrafficOverview";
@@ -10,6 +10,7 @@ import CustomersOverview from "../../components/su-dashboard/CustomersOverview";
 import SurveyOverview from "../../components/su-dashboard/SurveyOverview";
 import ServicesOverview from "../../components/su-dashboard/ServicesOverview";
 import RevenueOverview from "../../components/su-dashboard/RevenueOverview";
+import OwnerRouteTabs from "./_components/owner-route-tabs";
 
 type MeUserWithRoles = NonNullable<MeResponse["user"]> & {
   roles?: string[] | null;
@@ -34,6 +35,8 @@ function isSuperUser(res: MeResponse | null) {
 
 export default function OwnerDashboardPage() {
   const router = useRouter();
+  const pathname = usePathname();
+
   const [data, setData] = useState<MeResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -84,10 +87,10 @@ export default function OwnerDashboardPage() {
   if (!isSU) return null;
 
   return (
-    <main className="h-screen overflow-y-auto scroll-smooth md:snap-y md:snap-mandatory">
+    <main className="min-h-screen overflow-y-auto scroll-smooth md:snap-y md:snap-mandatory">
       <Navbar />
 
-      <div className="mx-auto max-w-6xl px-4 py-10 space-y-6">
+      <div className="mx-auto max-w-6xl px-3 py-6 space-y-4 sm:px-4 sm:py-8 md:py-10 md:space-y-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <h1 className="text-2xl font-semibold">Owner Dashboard</h1>
@@ -110,36 +113,14 @@ export default function OwnerDashboardPage() {
         </div>
 
         <div
-          className="inline-flex w-full flex-wrap gap-2 rounded-2xl border p-2"
-          style={{
-            borderColor: "rgb(var(--border))",
-            background: "rgb(var(--card))",
-          }}
+          className="w-full border-b pb-3 sm:pb-4"
+          style={{ borderColor: "rgb(var(--border))" }}
         >
-          <button
-            type="button"
-            aria-current="page"
-            className="rounded-xl px-4 py-2 text-sm font-semibold"
-            style={{
-              background: "rgb(var(--primary))",
-              color: "rgb(var(--primary-fg))",
-            }}
-          >
-            Dashboard
-          </button>
-
-          <button
-            type="button"
-            onClick={() => router.push("/owner-dashboard/employees")}
-            className="rounded-xl border px-4 py-2 text-sm font-semibold hover:opacity-90"
-            style={{
-              borderColor: "rgb(var(--border))",
-              background: "transparent",
-              color: "rgb(var(--fg))",
-            }}
-          >
-            Employees
-          </button>
+          <div className="-mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0">
+            <div className="min-w-max">
+              <OwnerRouteTabs pathname={pathname} loading={loading} />
+            </div>
+          </div>
         </div>
 
         <div
