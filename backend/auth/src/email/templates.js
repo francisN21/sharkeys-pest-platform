@@ -25,11 +25,8 @@ function formatMoney(cents) {
   return `$${(Number(cents) / 100).toFixed(2)}`;
 }
 
-// ─── BRAND CONFIG ─────────────────────────────────────────────────────────────
-// Edit these values once and every email will reflect them automatically.
+
 const BRAND = {
-  // TODO: Replace with the full public URL to your logo file.
-  // See "Logo Setup" instructions at the bottom of this file.
   logoUrl: "http://sharkyspestcontrolbayarea/main-logo.jpg",
   logoAlt: "Sharky's Pest Control",
   logoWidth: "160",
@@ -43,7 +40,6 @@ const BRAND = {
   borderColor: "#e2e8f0",
   cardBg: "#f8fafc",
 };
-// ─────────────────────────────────────────────────────────────────────────────
 
 function wrapEmailHtml(title, bodyHtml, ctaHtml = "") {
   return `
@@ -146,7 +142,7 @@ function lineItemText(label, value) {
 
 // ─── EMAIL BUILDERS ───────────────────────────────────────────────────────────
 
-function buildWelcomeEmail(payload) {
+function buildWelcomeEmail(payload = {}) {
   const firstName = payload.firstName || "there";
   const appBaseUrl = payload.appBaseUrl || "";
 
@@ -172,7 +168,7 @@ function buildWelcomeEmail(payload) {
   };
 }
 
-function buildWelcomeVerificationEmail(payload) {
+function buildWelcomeVerificationEmail(payload = {}) {
   const firstName = payload.firstName || "there";
   const verifyUrl = payload.verifyUrl || "";
   const code = payload.code || "";
@@ -212,7 +208,7 @@ function buildWelcomeVerificationEmail(payload) {
   };
 }
 
-function buildPasswordResetEmail(payload) {
+function buildPasswordResetEmail(payload = {}) {
   const firstName = payload.firstName || "there";
   const resetUrl = payload.resetUrl || "";
 
@@ -240,7 +236,42 @@ function buildPasswordResetEmail(payload) {
   };
 }
 
-function buildBookingCreatedCustomerEmail(payload) {
+function buildEmployeeInviteEmail(payload = {}) {
+  const firstName = payload.firstName || "there";
+  const roleLabel = payload.roleLabel || "team member";
+  const setupUrl = payload.setupUrl || "";
+
+  const body = `
+    ${p(`Hi ${escapeHtml(firstName)},`)}
+    ${p(`You've been invited to join Sharky's Pest Control as a <strong>${escapeHtml(roleLabel)}</strong>.`)}
+    ${p("Complete your employee account setup using the secure link below. Once finished, your account will be activated and your email will be verified automatically.")}
+    ${infoTableHtml([
+      ["Role", roleLabel],
+      ["Company", BRAND.companyName],
+      ["Invite Expires", "7 days from the time it was sent"],
+    ])}
+    ${divider()}
+    ${p("For security, this invitation link can only be used once. If the link expires, please contact your system owner for a new invite.", `color:${BRAND.mutedColor};font-size:14px;margin-bottom:0;`)}
+  `;
+
+  return {
+    subject: `You're invited to join Sharky's Pest Control`,
+    html: wrapEmailHtml("Employee Invitation", body, ctaButtonHtml("Complete Employee Setup", setupUrl)),
+    text: [
+      `Hi ${firstName},`,
+      "",
+      `You've been invited to join Sharky's Pest Control as a ${roleLabel}.`,
+      setupUrl ? `Complete setup: ${setupUrl}` : "",
+      "",
+      "This invitation link can only be used once.",
+      "If the link expires, please contact your system owner for a new invite.",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  };
+}
+
+function buildBookingCreatedCustomerEmail(payload = {}) {
   const customerName = payload.customerName || "there";
   const schedule =
     payload.startsAt && payload.endsAt
@@ -283,7 +314,7 @@ function buildBookingCreatedCustomerEmail(payload) {
   };
 }
 
-function buildBookingCreatedOfficeEmail(payload) {
+function buildBookingCreatedOfficeEmail(payload = {}) {
   const schedule =
     payload.startsAt && payload.endsAt
       ? `${formatDateTime(payload.startsAt)} – ${formatDateTime(payload.endsAt)}`
@@ -327,7 +358,7 @@ function buildBookingCreatedOfficeEmail(payload) {
   };
 }
 
-function buildBookingAssignedCustomerEmail(payload) {
+function buildBookingAssignedCustomerEmail(payload = {}) {
   const customerName = payload.customerName || "there";
   const schedule =
     payload.startsAt && payload.endsAt
@@ -370,7 +401,7 @@ function buildBookingAssignedCustomerEmail(payload) {
   };
 }
 
-function buildBookingCompletedCustomerEmail(payload) {
+function buildBookingCompletedCustomerEmail(payload = {}) {
   const customerName = payload.customerName || "there";
   const finalPrice = formatMoney(payload.finalPriceCents);
   const completedAt = payload.completedAt ? formatDateTime(payload.completedAt) : "";
@@ -417,6 +448,7 @@ module.exports = {
   buildWelcomeEmail,
   buildWelcomeVerificationEmail,
   buildPasswordResetEmail,
+  buildEmployeeInviteEmail,
   buildBookingCreatedCustomerEmail,
   buildBookingCreatedOfficeEmail,
   buildBookingAssignedCustomerEmail,
