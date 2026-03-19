@@ -628,7 +628,7 @@ router.post("/password/forgot", async (req, res, next) => {
         email: user.email,
       });
 
-      await sendPasswordResetEmail({
+      const emailResult = await sendPasswordResetEmail({
         to: user.email,
         firstName: user.first_name,
         resetUrl,
@@ -663,7 +663,7 @@ router.post("/password/reset", async (req, res, next) => {
     const tokenHash = hashValue(token);
 
     await client.query("BEGIN");
-
+    console.log("Here")
     const tokenRes = await client.query(
       `
       SELECT prt.id, prt.user_id
