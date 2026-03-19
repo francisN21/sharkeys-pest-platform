@@ -11,7 +11,6 @@ import SurveyOverview from "../../components/su-dashboard/SurveyOverview";
 import ServicesOverview from "../../components/su-dashboard/ServicesOverview";
 import RevenueOverview from "../../components/su-dashboard/RevenueOverview";
 
-
 type MeUserWithRoles = NonNullable<MeResponse["user"]> & {
   roles?: string[] | null;
   user_role?: string | null;
@@ -72,7 +71,10 @@ export default function OwnerDashboardPage() {
   if (loading) {
     return (
       <main className="mx-auto max-w-6xl px-4 py-10">
-        <div className="rounded-2xl border p-4 text-sm" style={{ borderColor: "rgb(var(--border))" }}>
+        <div
+          className="rounded-2xl border p-4 text-sm"
+          style={{ borderColor: "rgb(var(--border))" }}
+        >
           Loading owner dashboard…
         </div>
       </main>
@@ -82,69 +84,124 @@ export default function OwnerDashboardPage() {
   if (!isSU) return null;
 
   return (
-      <main className="h-screen overflow-y-auto scroll-smooth md:snap-y md:snap-mandatory">
-        <Navbar />
-        <div className="mx-auto max-w-6xl px-4 py-10 space-y-6">
-        <div className="flex items-start justify-between gap-4">
-            <div>
+    <main className="h-screen overflow-y-auto scroll-smooth md:snap-y md:snap-mandatory">
+      <Navbar />
+
+      <div className="mx-auto max-w-6xl px-4 py-10 space-y-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
             <h1 className="text-2xl font-semibold">Owner Dashboard</h1>
             <p className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
-                Site access, customer sources, and booking performance.
+              Site access, customer sources, and booking performance.
             </p>
-            </div>
+          </div>
 
-            <button
+          <button
             type="button"
             onClick={() => router.push("/account")}
             className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
-            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-            >
+            style={{
+              borderColor: "rgb(var(--border))",
+              background: "rgb(var(--card))",
+            }}
+          >
             Back to Account
-            </button>
-        </div>
-
-                <div
-        className="rounded-2xl border p-6"
-        style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-        >
-            <RevenueOverview />
+          </button>
         </div>
 
         <div
-            className="rounded-2xl border p-6"
-            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+          className="inline-flex w-full flex-wrap gap-2 rounded-2xl border p-2"
+          style={{
+            borderColor: "rgb(var(--border))",
+            background: "rgb(var(--card))",
+          }}
         >
-            <BookingsOverview />
+          <button
+            type="button"
+            aria-current="page"
+            className="rounded-xl px-4 py-2 text-sm font-semibold"
+            style={{
+              background: "rgb(var(--primary))",
+              color: "rgb(var(--primary-fg))",
+            }}
+          >
+            Dashboard
+          </button>
+
+          <button
+            type="button"
+            onClick={() => router.push("/owner-dashboard/employees")}
+            className="rounded-xl border px-4 py-2 text-sm font-semibold hover:opacity-90"
+            style={{
+              borderColor: "rgb(var(--border))",
+              background: "transparent",
+              color: "rgb(var(--fg))",
+            }}
+          >
+            Employees
+          </button>
         </div>
 
         <div
-            className="rounded-2xl border p-6"
-            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+          className="rounded-2xl border p-6"
+          style={{
+            borderColor: "rgb(var(--border))",
+            background: "rgb(var(--card))",
+          }}
         >
-            <TrafficOverview days={30} />
+          <RevenueOverview />
         </div>
 
+        <div
+          className="rounded-2xl border p-6"
+          style={{
+            borderColor: "rgb(var(--border))",
+            background: "rgb(var(--card))",
+          }}
+        >
+          <BookingsOverview />
+        </div>
 
         <div
-            className="rounded-2xl border p-6"
-            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+          className="rounded-2xl border p-6"
+          style={{
+            borderColor: "rgb(var(--border))",
+            background: "rgb(var(--card))",
+          }}
         >
-            <CustomersOverview />
-        </div>
-        <div
-            className="rounded-2xl border p-6"
-            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-        >
-            <SurveyOverview />
-        </div>
-        <div
-        className="rounded-2xl border p-6"
-        style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-        >
-            <ServicesOverview />
+          <TrafficOverview days={30} />
         </div>
 
+        <div
+          className="rounded-2xl border p-6"
+          style={{
+            borderColor: "rgb(var(--border))",
+            background: "rgb(var(--card))",
+          }}
+        >
+          <CustomersOverview />
         </div>
-      </main>  
+
+        <div
+          className="rounded-2xl border p-6"
+          style={{
+            borderColor: "rgb(var(--border))",
+            background: "rgb(var(--card))",
+          }}
+        >
+          <SurveyOverview />
+        </div>
+
+        <div
+          className="rounded-2xl border p-6"
+          style={{
+            borderColor: "rgb(var(--border))",
+            background: "rgb(var(--card))",
+          }}
+        >
+          <ServicesOverview />
+        </div>
+      </div>
+    </main>
   );
 }
