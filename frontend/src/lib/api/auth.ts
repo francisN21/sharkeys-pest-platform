@@ -25,7 +25,7 @@ export class ApiError extends Error {
   }
 }
 
-async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
+export async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const url = resolveUrl(path);
 
   const res = await fetch(url, {
