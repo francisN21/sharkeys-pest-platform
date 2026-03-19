@@ -1,0 +1,675 @@
+const express = require("express");
+const argon2 = require("argon2");
+const crypto = require("crypto");
+const { z } = require("zod");
+
+const { pool } = require("../src/db");
+const { requireAuth } = require("../middleware/requireAuth");
+const { config } = require("../src/config");
+const { sendEmployeeInviteEmail } = require("../src/email/mailer");
+
+const router = express.Router();
+
+/**
+ * Helpers
+ */
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function hashValue(value) {
+  return crypto.createHash("sha256").update(String(value)).digest("hex");
+}
+
+function generateInviteToken() {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+function addDays(date, days) {
+  return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
+}
+
+function buildAppUrl(path, params = {}) {
+  const baseUrl = String(config.APP_BASE_URL || "").trim();
+  if (!baseUrl) return null;
+
+  const url = new URL(path || "/", baseUrl);
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && String(value) !== "") {
+      url.searchParams.set(key, String(value));
+    }
+  }
+
+  return url.toString();
+}
+
+function normalizeInvitedRole(role) {
+  const value = String(role || "").trim().toLowerCase();
+
+  if (value === "superadmin") return "superuser";
+  if (value === "technician") return "worker";
+  if (value === "superuser") return "superuser";
+  if (value === "admin") return "admin";
+  if (value === "worker") return "worker";
+
+  return null;
+}
+
+function displayRole(role) {
+  const value = String(role || "").trim().toLowerCase();
+
+  if (value === "superuser") return "superadmin";
+  if (value === "worker") return "technician";
+  if (value === "admin") return "admin";
+
+  return value || null;
+}
+
+async function requireSuperuser(req, res, next) {
+  try {
+    const userId = req.user?.id ?? req.auth?.userId ?? null;
+    if (!userId) {
+      return res.status(401).json({ ok: false, message: "Not authenticated" });
+    }
+
+    const r = await pool.query(
+      `SELECT 1 FROM user_roles WHERE user_id = $1 AND role = 'superuser' LIMIT 1`,
+      [userId]
+    );
+
+    if (r.rowCount === 0) {
+      return res.status(403).json({ ok: false, message: "Forbidden" });
+    }
+
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
+const strongPasswordSchema = z
+  .string()
+  .min(14, "Password must be at least 14 characters")
+  .max(128, "Password is too long")
+  .regex(/[A-Z]/, "Must include an uppercase letter")
+  .regex(/[a-z]/, "Must include a lowercase letter")
+  .regex(/\d/, "Must include a number")
+  .regex(/[^A-Za-z0-9]/, "Must include a special character")
+  .refine((val) => !/\s/.test(val), "No spaces allowed");
+
+const inviteEmployeeSchema = z.object({
+  email: z.string().email().transform((s) => s.trim()),
+  first_name: z.string().trim().min(1).max(100),
+  last_name: z.string().trim().min(1).max(100),
+  phone: z.string().trim().min(7).max(30).optional(),
+  user_role: z.enum(["superadmin", "superuser", "admin", "technician", "worker"]),
+});
+
+const completeEmployeeSetupSchema = z.object({
+  token: z.string().trim().min(20).max(500),
+  password: strongPasswordSchema,
+  first_name: z.string().trim().min(1).max(100).optional(),
+  last_name: z.string().trim().min(1).max(100).optional(),
+  phone: z.string().trim().min(7).max(30).optional(),
+});
+
+/**
+ * GET /employees
+ * Superuser-only employee list
+ */
+router.get("/", requireAuth, requireSuperuser, async (req, res, next) => {
+  try {
+    const q = await pool.query(
+      `
+      SELECT
+        u.id,
+        u.public_id,
+        u.email,
+        u.first_name,
+        u.last_name,
+        u.phone,
+        u.email_verified_at,
+        u.created_at,
+        (u.password_hash IS NOT NULL) AS has_password,
+        COALESCE(array_agg(DISTINCT ur.role) FILTER (WHERE ur.role IS NOT NULL), '{}'::text[]) AS roles,
+        li.id AS invite_id,
+        li.invited_role,
+        li.expires_at AS invite_expires_at,
+        li.consumed_at AS invite_consumed_at,
+        li.created_at AS invite_created_at
+      FROM users u
+      LEFT JOIN user_roles ur
+        ON ur.user_id = u.id
+      LEFT JOIN LATERAL (
+        SELECT id, invited_role, expires_at, consumed_at, created_at
+        FROM employee_invites ei
+        WHERE ei.user_id = u.id
+        ORDER BY ei.created_at DESC
+        LIMIT 1
+      ) li ON true
+      WHERE
+        EXISTS (
+          SELECT 1
+          FROM user_roles eur
+          WHERE eur.user_id = u.id
+            AND eur.role IN ('superuser', 'admin', 'worker')
+        )
+        OR (li.id IS NOT NULL AND li.consumed_at IS NULL)
+      GROUP BY
+        u.id,
+        li.id,
+        li.invited_role,
+        li.expires_at,
+        li.consumed_at,
+        li.created_at
+      ORDER BY
+        COALESCE(u.last_name, '') ASC,
+        COALESCE(u.first_name, '') ASC,
+        u.email ASC
+      `
+    );
+
+    const now = Date.now();
+
+    const employees = q.rows.map((row) => {
+      const roles = Array.isArray(row.roles) ? row.roles : [];
+      const primaryRole =
+        roles.includes("superuser")
+          ? "superuser"
+          : roles.includes("admin")
+          ? "admin"
+          : roles.includes("worker")
+          ? "worker"
+          : row.invited_role || null;
+
+      const invitePending =
+        !!row.invite_id &&
+        !row.invite_consumed_at &&
+        (!row.invite_expires_at || new Date(row.invite_expires_at).getTime() > now);
+
+      const active =
+        roles.some((r) => ["superuser", "admin", "worker"].includes(String(r))) &&
+        !!row.email_verified_at &&
+        !!row.has_password;
+
+      return {
+        id: Number(row.id),
+        public_id: row.public_id,
+        email: row.email,
+        first_name: row.first_name,
+        last_name: row.last_name,
+        phone: row.phone,
+        email_verified_at: row.email_verified_at,
+        created_at: row.created_at,
+        roles,
+        user_role: displayRole(primaryRole),
+        status: active ? "active" : invitePending ? "invited" : "pending",
+        invite: row.invite_id
+          ? {
+              invited_role: displayRole(row.invited_role),
+              expires_at: row.invite_expires_at,
+              consumed_at: row.invite_consumed_at,
+              created_at: row.invite_created_at,
+            }
+          : null,
+      };
+    });
+
+    return res.json({ ok: true, employees });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /employees/:publicId
+ * Superuser-only employee detail
+ */
+router.get("/:publicId", requireAuth, requireSuperuser, async (req, res, next) => {
+  try {
+    const publicId = String(req.params.publicId || "").trim();
+
+    const q = await pool.query(
+      `
+      SELECT
+        u.id,
+        u.public_id,
+        u.email,
+        u.first_name,
+        u.last_name,
+        u.phone,
+        u.email_verified_at,
+        u.created_at,
+        (u.password_hash IS NOT NULL) AS has_password,
+        COALESCE(array_agg(DISTINCT ur.role) FILTER (WHERE ur.role IS NOT NULL), '{}'::text[]) AS roles,
+        li.id AS invite_id,
+        li.invited_role,
+        li.expires_at AS invite_expires_at,
+        li.consumed_at AS invite_consumed_at,
+        li.created_at AS invite_created_at
+      FROM users u
+      LEFT JOIN user_roles ur
+        ON ur.user_id = u.id
+      LEFT JOIN LATERAL (
+        SELECT id, invited_role, expires_at, consumed_at, created_at
+        FROM employee_invites ei
+        WHERE ei.user_id = u.id
+        ORDER BY ei.created_at DESC
+        LIMIT 1
+      ) li ON true
+      WHERE u.public_id = $1
+      GROUP BY
+        u.id,
+        li.id,
+        li.invited_role,
+        li.expires_at,
+        li.consumed_at,
+        li.created_at
+      LIMIT 1
+      `,
+      [publicId]
+    );
+
+    if (q.rowCount === 0) {
+      return res.status(404).json({ ok: false, message: "Employee not found" });
+    }
+
+    const row = q.rows[0];
+    const roles = Array.isArray(row.roles) ? row.roles : [];
+    const primaryRole =
+      roles.includes("superuser")
+        ? "superuser"
+        : roles.includes("admin")
+        ? "admin"
+        : roles.includes("worker")
+        ? "worker"
+        : row.invited_role || null;
+
+    return res.json({
+      ok: true,
+      employee: {
+        id: Number(row.id),
+        public_id: row.public_id,
+        email: row.email,
+        first_name: row.first_name,
+        last_name: row.last_name,
+        phone: row.phone,
+        email_verified_at: row.email_verified_at,
+        created_at: row.created_at,
+        has_password: !!row.has_password,
+        roles,
+        user_role: displayRole(primaryRole),
+        invite: row.invite_id
+          ? {
+              invited_role: displayRole(row.invited_role),
+              expires_at: row.invite_expires_at,
+              consumed_at: row.invite_consumed_at,
+              created_at: row.invite_created_at,
+            }
+          : null,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /employees/invite
+ * Superuser-only invite endpoint
+ *
+ * Behavior:
+ * - creates placeholder user if needed
+ * - does NOT activate employee role yet
+ * - sends setup email
+ * - role is applied only after employee completes setup
+ */
+router.post("/invite", requireAuth, requireSuperuser, async (req, res, next) => {
+  const client = await pool.connect();
+
+  try {
+    const actorUserId = req.user?.id ?? req.auth?.userId ?? null;
+    const parsed = inviteEmployeeSchema.parse(req.body);
+
+    const invitedRole = normalizeInvitedRole(parsed.user_role);
+    if (!invitedRole) {
+      return res.status(400).json({ ok: false, message: "Invalid employee role" });
+    }
+
+    const normalizedEmail = normalizeEmail(parsed.email);
+
+    await client.query("BEGIN");
+
+    let userRes = await client.query(
+      `
+      SELECT id, public_id, email, first_name, last_name, phone, password_hash, email_verified_at
+      FROM users
+      WHERE email = $1
+      LIMIT 1
+      FOR UPDATE
+      `,
+      [normalizedEmail]
+    );
+
+    let user = userRes.rows[0] || null;
+
+    if (user) {
+      const rolesRes = await client.query(
+        `SELECT role FROM user_roles WHERE user_id = $1`,
+        [user.id]
+      );
+
+      const existingRoles = rolesRes.rows.map((r) => String(r.role || "").trim().toLowerCase());
+
+      if (existingRoles.includes("superuser") || existingRoles.includes("admin") || existingRoles.includes("worker")) {
+        await client.query("ROLLBACK");
+        return res.status(409).json({
+          ok: false,
+          message: "This user already has an employee role",
+        });
+      }
+
+      await client.query(
+        `
+        UPDATE users
+        SET
+          first_name = COALESCE(NULLIF($2, ''), first_name),
+          last_name = COALESCE(NULLIF($3, ''), last_name),
+          phone = COALESCE(NULLIF($4, ''), phone),
+          updated_at = now()
+        WHERE id = $1
+        `,
+        [user.id, parsed.first_name, parsed.last_name, parsed.phone || null]
+      );
+
+      const refreshed = await client.query(
+        `
+        SELECT id, public_id, email, first_name, last_name, phone, password_hash, email_verified_at
+        FROM users
+        WHERE id = $1
+        LIMIT 1
+        `,
+        [user.id]
+      );
+
+      user = refreshed.rows[0];
+    } else {
+      const created = await client.query(
+        `
+        INSERT INTO users (
+          email,
+          password_hash,
+          first_name,
+          last_name,
+          phone,
+          account_type,
+          address
+        )
+        VALUES ($1, NULL, $2, $3, $4, NULL, NULL)
+        RETURNING id, public_id, email, first_name, last_name, phone, password_hash, email_verified_at
+        `,
+        [normalizedEmail, parsed.first_name, parsed.last_name, parsed.phone || null]
+      );
+
+      user = created.rows[0];
+    }
+
+    await client.query(
+      `DELETE FROM employee_invites WHERE user_id = $1 AND consumed_at IS NULL`,
+      [user.id]
+    );
+
+    const token = generateInviteToken();
+    const tokenHash = hashValue(token);
+    const expiresAt = addDays(new Date(), 7).toISOString();
+
+    await client.query(
+      `
+      INSERT INTO employee_invites (
+        user_id,
+        invited_by_user_id,
+        invited_role,
+        token_hash,
+        expires_at
+      )
+      VALUES ($1, $2, $3, $4, $5)
+      `,
+      [user.id, actorUserId, invitedRole, tokenHash, expiresAt]
+    );
+
+    await client.query("COMMIT");
+
+    const setupUrl = buildAppUrl(
+      String(process.env.EMPLOYEE_SETUP_PATH || "/employee-setup").trim(),
+      { token }
+    );
+
+    const emailResult = await sendEmployeeInviteEmail({
+      to: user.email,
+      firstName: user.first_name,
+      roleLabel: displayRole(invitedRole),
+      setupUrl,
+    });
+
+    return res.status(201).json({
+      ok: true,
+      employee: {
+        public_id: user.public_id,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        phone: user.phone,
+        user_role: displayRole(invitedRole),
+      },
+      invite: {
+        expiresAt,
+      },
+      email: emailResult,
+    });
+  } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * POST /employees/complete
+ * Public endpoint used from employee setup page
+ *
+ * - validates invite token
+ * - sets password
+ * - optionally confirms details
+ * - marks email verified
+ * - applies employee role
+ * - removes customer role if present
+ */
+router.post("/complete", async (req, res, next) => {
+  const client = await pool.connect();
+
+  try {
+    const parsed = completeEmployeeSetupSchema.parse(req.body);
+    const tokenHash = hashValue(parsed.token);
+
+    await client.query("BEGIN");
+
+    const inviteRes = await client.query(
+      `
+      SELECT
+        ei.id,
+        ei.user_id,
+        ei.invited_role,
+        ei.expires_at,
+        ei.consumed_at,
+        u.email,
+        u.first_name,
+        u.last_name,
+        u.phone,
+        u.password_hash,
+        u.email_verified_at
+      FROM employee_invites ei
+      JOIN users u ON u.id = ei.user_id
+      WHERE ei.token_hash = $1
+        AND ei.consumed_at IS NULL
+        AND ei.expires_at > now()
+      ORDER BY ei.created_at DESC
+      LIMIT 1
+      FOR UPDATE
+      `,
+      [tokenHash]
+    );
+
+    const invite = inviteRes.rows[0] || null;
+    if (!invite) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ ok: false, message: "Invalid or expired invite" });
+    }
+
+    const userRes = await client.query(
+      `
+      SELECT id, public_id, email, password_hash, email_verified_at
+      FROM users
+      WHERE id = $1
+      LIMIT 1
+      FOR UPDATE
+      `,
+      [invite.user_id]
+    );
+
+    const user = userRes.rows[0] || null;
+    if (!user) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ ok: false, message: "Account not found" });
+    }
+
+    if (user.password_hash) {
+      const sameAsCurrent = await argon2.verify(user.password_hash, parsed.password);
+      if (sameAsCurrent) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({
+          ok: false,
+          message: "New password must be different from your current password and recent passwords",
+        });
+      }
+    }
+
+    const historyRes = await client.query(
+      `
+      SELECT password_hash
+      FROM user_password_history
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT 5
+      `,
+      [user.id]
+    );
+
+    for (const row of historyRes.rows) {
+      if (!row?.password_hash) continue;
+
+      const reused = await argon2.verify(row.password_hash, parsed.password);
+      if (reused) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({
+          ok: false,
+          message: "New password must be different from your current password and recent passwords",
+        });
+      }
+    }
+
+    if (user.password_hash) {
+      await client.query(
+        `
+        INSERT INTO user_password_history (user_id, password_hash)
+        VALUES ($1, $2)
+        `,
+        [user.id, user.password_hash]
+      );
+    }
+
+    const passwordHash = await argon2.hash(parsed.password);
+
+    await client.query(
+      `
+      UPDATE users
+      SET
+        password_hash = $2,
+        first_name = COALESCE(NULLIF($3, ''), first_name),
+        last_name = COALESCE(NULLIF($4, ''), last_name),
+        phone = COALESCE(NULLIF($5, ''), phone),
+        email_verified_at = COALESCE(email_verified_at, now()),
+        updated_at = now()
+      WHERE id = $1
+      `,
+      [
+        user.id,
+        passwordHash,
+        parsed.first_name || null,
+        parsed.last_name || null,
+        parsed.phone || null,
+      ]
+    );
+
+    await client.query(
+      `
+      INSERT INTO user_roles (user_id, role)
+      VALUES ($1, $2)
+      ON CONFLICT DO NOTHING
+      `,
+      [user.id, invite.invited_role]
+    );
+
+    await client.query(
+      `DELETE FROM user_roles WHERE user_id = $1 AND role = 'customer'`,
+      [user.id]
+    );
+
+    await client.query(
+      `UPDATE employee_invites SET consumed_at = now() WHERE id = $1`,
+      [invite.id]
+    );
+
+    await client.query(
+      `DELETE FROM email_verification_codes WHERE user_id = $1 AND consumed_at IS NULL`,
+      [user.id]
+    );
+
+    await client.query(
+      `
+      DELETE FROM user_password_history
+      WHERE id IN (
+        SELECT id
+        FROM user_password_history
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+        OFFSET 5
+      )
+      `,
+      [user.id]
+    );
+
+    await client.query("COMMIT");
+
+    return res.json({
+      ok: true,
+      user: {
+        public_id: user.public_id,
+        email: user.email,
+        user_role: displayRole(invite.invited_role),
+      },
+    });
+  } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+module.exports = router;
