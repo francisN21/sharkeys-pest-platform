@@ -25,7 +25,6 @@ function formatMoney(cents) {
   return `$${(Number(cents) / 100).toFixed(2)}`;
 }
 
-
 const BRAND = {
   logoUrl: "http://sharkyspestcontrolbayarea/main-logo.jpg",
   logoAlt: "Sharky's Pest Control",
@@ -82,7 +81,6 @@ function wrapEmailHtml(title, bodyHtml, ctaHtml = "") {
   `;
 }
 
-/** Renders a CTA button */
 function ctaButtonHtml(label, url) {
   if (!url) return "";
   return `
@@ -96,7 +94,6 @@ function ctaButtonHtml(label, url) {
   `;
 }
 
-/** Renders a styled info card table */
 function infoTableHtml(rows) {
   const rowsHtml = rows
     .filter(([, v]) => v !== null && v !== undefined && v !== "")
@@ -138,6 +135,14 @@ function p(text, style = "") {
 function lineItemText(label, value) {
   if (value === null || value === undefined || value === "") return "";
   return `${label}: ${value}`;
+}
+
+function normalizeRoleLabel(value) {
+  const role = String(value || "").trim().toLowerCase();
+  if (role === "superadmin" || role === "superuser") return "Super Admin";
+  if (role === "admin") return "Admin";
+  if (role === "technician" || role === "worker") return "Technician";
+  return role || "Team Member";
 }
 
 // ─── EMAIL BUILDERS ───────────────────────────────────────────────────────────
@@ -238,33 +243,39 @@ function buildPasswordResetEmail(payload = {}) {
 
 function buildEmployeeInviteEmail(payload = {}) {
   const firstName = payload.firstName || "there";
-  const roleLabel = payload.roleLabel || "team member";
+  const roleLabel = normalizeRoleLabel(payload.roleLabel || payload.role);
   const setupUrl = payload.setupUrl || "";
 
   const body = `
     ${p(`Hi ${escapeHtml(firstName)},`)}
-    ${p(`You've been invited to join Sharky's Pest Control as a <strong>${escapeHtml(roleLabel)}</strong>.`)}
-    ${p("Complete your employee account setup using the secure link below. Once finished, your account will be activated and your email will be verified automatically.")}
+    ${p(`Welcome to ${escapeHtml(BRAND.companyName)}.`)}
+    ${p(`You've been invited to join the team as a <strong>${escapeHtml(roleLabel)}</strong>. To activate your employee access, please complete your account setup using the secure link below.`)}
     ${infoTableHtml([
-      ["Role", roleLabel],
       ["Company", BRAND.companyName],
+      ["Employee Role", roleLabel],
+      ["Account Status", "Pending setup"],
       ["Invite Expires", "7 days from the time it was sent"],
     ])}
     ${divider()}
-    ${p("For security, this invitation link can only be used once. If the link expires, please contact your system owner for a new invite.", `color:${BRAND.mutedColor};font-size:14px;margin-bottom:0;`)}
+    ${p("Once setup is complete, your employee account will be activated and your email will be verified automatically.")}
+    ${p("For security, this invitation link can only be used once. If it expires, please contact your system administrator or business owner for a new invite.", `color:${BRAND.mutedColor};font-size:14px;margin-bottom:0;`)}
   `;
 
   return {
-    subject: `You're invited to join Sharky's Pest Control`,
-    html: wrapEmailHtml("Employee Invitation", body, ctaButtonHtml("Complete Employee Setup", setupUrl)),
+    subject: `Employee invite – ${BRAND.companyName}`,
+    html: wrapEmailHtml("Complete Your Employee Setup", body, ctaButtonHtml("Complete Employee Setup", setupUrl)),
     text: [
       `Hi ${firstName},`,
       "",
-      `You've been invited to join Sharky's Pest Control as a ${roleLabel}.`,
-      setupUrl ? `Complete setup: ${setupUrl}` : "",
+      `Welcome to ${BRAND.companyName}.`,
+      `You've been invited to join as a ${roleLabel}.`,
+      "",
+      "Complete your employee setup using the secure link below:",
+      setupUrl || "",
       "",
       "This invitation link can only be used once.",
-      "If the link expires, please contact your system owner for a new invite.",
+      "It expires 7 days after it was sent.",
+      "If it expires, please contact your administrator for a new invite.",
     ]
       .filter(Boolean)
       .join("\n"),

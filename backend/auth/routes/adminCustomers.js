@@ -3,9 +3,37 @@ const express = require("express");
 const { z } = require("zod");
 const { pool } = require("../src/db");
 const { requireAuth } = require("../middleware/requireAuth");
-const { requireRole } = require("../middleware/requireRole");
 
 const router = express.Router();
+
+async function requireAdminOrSuperuser(req, res, next) {
+  try {
+    const userId = req.user?.id ?? req.auth?.userId ?? null;
+
+    if (!userId) {
+      return res.status(401).json({ ok: false, message: "Not authenticated" });
+    }
+
+    const roleRes = await pool.query(
+      `
+      SELECT 1
+      FROM user_roles
+      WHERE user_id = $1
+        AND role IN ('admin', 'superuser')
+      LIMIT 1
+      `,
+      [userId]
+    );
+
+    if (roleRes.rowCount === 0) {
+      return res.status(403).json({ ok: false, message: "Forbidden" });
+    }
+
+    return next();
+  } catch (e) {
+    return next(e);
+  }
+}
 
 /**
  * LIST (registered customers + leads)
@@ -17,7 +45,7 @@ const listSchema = z.object({
   q: z.string().trim().optional(),
 });
 
-router.get("/", requireAuth, requireRole("admin"), async (req, res, next) => {
+router.get("/", requireAuth, requireAdminOrSuperuser, async (req, res, next) => {
   try {
     const { page, pageSize, q } = listSchema.parse(req.query);
     const offset = (page - 1) * pageSize;
@@ -41,7 +69,12 @@ router.get("/", requireAuth, requireRole("admin"), async (req, res, next) => {
         FROM users u
         WHERE
           EXISTS (SELECT 1 FROM user_roles urc WHERE urc.user_id = u.id AND urc.role = 'customer')
-          AND NOT EXISTS (SELECT 1 FROM user_roles urx WHERE urx.user_id = u.id AND urx.role IN ('admin','worker'))
+          AND NOT EXISTS (
+            SELECT 1
+            FROM user_roles urx
+            WHERE urx.user_id = u.id
+              AND urx.role IN ('admin', 'superuser', 'worker')
+          )
 
         UNION ALL
 
@@ -94,7 +127,12 @@ router.get("/", requireAuth, requireRole("admin"), async (req, res, next) => {
         FROM users u
         WHERE
           EXISTS (SELECT 1 FROM user_roles urc WHERE urc.user_id = u.id AND urc.role = 'customer')
-          AND NOT EXISTS (SELECT 1 FROM user_roles urx WHERE urx.user_id = u.id AND urx.role IN ('admin','worker'))
+          AND NOT EXISTS (
+            SELECT 1
+            FROM user_roles urx
+            WHERE urx.user_id = u.id
+              AND urx.role IN ('admin', 'superuser', 'worker')
+          )
 
         UNION ALL
 
@@ -219,7 +257,7 @@ const searchSchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(25),
 });
 
-router.get("/search", requireAuth, requireRole("admin"), async (req, res, next) => {
+router.get("/search", requireAuth, requireAdminOrSuperuser, async (req, res, next) => {
   try {
     const parsed = searchSchema.safeParse(req.query);
     if (!parsed.success) {
@@ -247,7 +285,12 @@ router.get("/search", requireAuth, requireRole("admin"), async (req, res, next) 
           FROM users u
           WHERE
             EXISTS (SELECT 1 FROM user_roles urc WHERE urc.user_id = u.id AND urc.role = 'customer')
-            AND NOT EXISTS (SELECT 1 FROM user_roles urx WHERE urx.user_id = u.id AND urx.role IN ('admin','worker'))
+            AND NOT EXISTS (
+              SELECT 1
+              FROM user_roles urx
+              WHERE urx.user_id = u.id
+                AND urx.role IN ('admin', 'superuser', 'worker')
+            )
             AND (
               u.email ILIKE $1
               OR COALESCE(u.first_name,'') ILIKE $1
@@ -298,7 +341,12 @@ router.get("/search", requireAuth, requireRole("admin"), async (req, res, next) 
           FROM users u
           WHERE
             EXISTS (SELECT 1 FROM user_roles urc WHERE urc.user_id = u.id AND urc.role = 'customer')
-            AND NOT EXISTS (SELECT 1 FROM user_roles urx WHERE urx.user_id = u.id AND urx.role IN ('admin','worker'))
+            AND NOT EXISTS (
+              SELECT 1
+              FROM user_roles urx
+              WHERE urx.user_id = u.id
+                AND urx.role IN ('admin', 'superuser', 'worker')
+            )
 
           UNION ALL
 
@@ -354,9 +402,31 @@ async function resolveEntity(kind, publicId) {
   if (kind === "registered") {
     const r = await pool.query(
       `
-      SELECT u.id AS entity_id, u.public_id, u.first_name, u.last_name, u.phone, u.email, u.address, u.account_type, u.created_at
+      SELECT
+        u.id AS entity_id,
+        u.public_id,
+        u.first_name,
+        u.last_name,
+        u.phone,
+        u.email,
+        u.address,
+        u.account_type,
+        u.created_at
       FROM users u
-      WHERE u.public_id = $1
+      WHERE
+        u.public_id = $1
+        AND EXISTS (
+          SELECT 1
+          FROM user_roles urc
+          WHERE urc.user_id = u.id
+            AND urc.role = 'customer'
+        )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM user_roles urx
+          WHERE urx.user_id = u.id
+            AND urx.role IN ('admin', 'superuser', 'worker')
+        )
       LIMIT 1
       `,
       [publicId]
@@ -366,7 +436,16 @@ async function resolveEntity(kind, publicId) {
 
   const r = await pool.query(
     `
-    SELECT l.id AS entity_id, l.public_id, l.first_name, l.last_name, l.phone, l.email, l.address, l.account_type, l.created_at
+    SELECT
+      l.id AS entity_id,
+      l.public_id,
+      l.first_name,
+      l.last_name,
+      l.phone,
+      l.email,
+      l.address,
+      l.account_type,
+      l.created_at
     FROM leads l
     WHERE l.public_id = $1
     LIMIT 1
@@ -385,7 +464,7 @@ function groupStatus(status) {
 /**
  * GET /admin/customers/:kind/:publicId
  */
-router.get("/:kind/:publicId", requireAuth, requireRole("admin"), async (req, res, next) => {
+router.get("/:kind/:publicId", requireAuth, requireAdminOrSuperuser, async (req, res, next) => {
   try {
     const kind = kindSchema.parse(req.params.kind);
     const publicId = String(req.params.publicId || "");
@@ -497,7 +576,7 @@ const tagSchema = z.object({
   note: z.string().trim().max(500).nullable().optional(),
 });
 
-router.patch("/:kind/:publicId/tag", requireAuth, requireRole("admin"), async (req, res, next) => {
+router.patch("/:kind/:publicId/tag", requireAuth, requireAdminOrSuperuser, async (req, res, next) => {
   try {
     const kind = kindSchema.parse(req.params.kind);
     const publicId = String(req.params.publicId || "");
@@ -517,7 +596,7 @@ router.patch("/:kind/:publicId/tag", requireAuth, requireRole("admin"), async (r
         updated_by_user_id = EXCLUDED.updated_by_user_id,
         updated_at = EXCLUDED.updated_at
       `,
-      [kind, entity.entity_id, tag, note ?? null, req.user?.id ?? null]
+      [kind, entity.entity_id, tag, note ?? null, req.user?.id ?? req.auth?.userId ?? null]
     );
 
     res.json({ ok: true });

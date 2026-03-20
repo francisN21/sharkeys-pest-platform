@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { SlideTabs, type SlideTabItem } from "../../../components/ui/slide-tabs";
 import type { MeResponse } from "../../../lib/api/auth";
 
-export type AppRole = "customer" | "technician" | "admin";
-export type ApiUserRole = "customer" | "worker" | "admin";
+export type AppRole = "customer" | "technician" | "admin" | "superuser";
+export type ApiUserRole = "customer" | "worker" | "admin" | "superuser";
 
 export type AuthedUser = MeResponse["user"] & {
   user_role?: ApiUserRole;
@@ -64,7 +64,7 @@ export function getTabKeyFromPathname(pathname: string | null): TabKey {
   if (path.startsWith("/account/bookings")) return "bookings";
   if (path.startsWith("/account/technician")) return "tech";
   if (path.startsWith("/account/admin/customers")) return "admin_customers";
-  if (path.startsWith("/account/admin/availability")) return "admin_availability";  
+  if (path.startsWith("/account/admin/availability")) return "admin_availability";
   if (path.startsWith("/account/admin/leads")) return "admin_leads";
   if (path.startsWith("/account/admin/dispatch")) return "admin_dispatch";
   if (path.startsWith("/account/admin/jobhistory")) return "admin_jobhistory";
@@ -131,7 +131,6 @@ function buildTabs(
       href: "/account/admin/availability",
       badgeCount: tabBadges.admin_availability,
       pulseBadge: pulsingTabs.admin_availability,
-      
     },
     {
       key: "admin_leads",

@@ -4,6 +4,7 @@ const {
   buildWelcomeEmail,
   buildWelcomeVerificationEmail,
   buildPasswordResetEmail,
+  buildEmployeeInviteEmail,
   buildBookingCreatedCustomerEmail,
   buildBookingCreatedOfficeEmail,
   buildBookingAssignedCustomerEmail,
@@ -79,6 +80,16 @@ async function sendPasswordResetEmail(payload) {
   });
 }
 
+async function sendEmployeeInviteEmail(payload) {
+  const content = buildEmployeeInviteEmail(payload);
+  return safeSendEmail({
+    to: payload.to,
+    subject: content.subject,
+    html: content.html,
+    text: content.text,
+  });
+}
+
 async function sendBookingCreatedCustomerEmail(payload) {
   const content = buildBookingCreatedCustomerEmail(payload);
   return safeSendEmail({
@@ -125,6 +136,7 @@ module.exports = {
   sendWelcomeEmail,
   sendWelcomeVerificationEmail,
   sendPasswordResetEmail,
+  sendEmployeeInviteEmail,
   sendBookingCreatedCustomerEmail,
   sendBookingCreatedOfficeEmail,
   sendBookingAssignedCustomerEmail,

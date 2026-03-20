@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Navbar from "../../../components/Navbar";
-import { me, type MeResponse } from "../../../lib/api/auth";
+import { me } from "../../../lib/api/auth";
 import { subscribeRealtimeEvent } from "../../../lib/realtime/realtimeBus";
 import type { RealtimeEvent } from "../../../lib/realtime/events";
 import AccountRouteTabs, {
@@ -11,7 +11,6 @@ import AccountRouteTabs, {
   DEFAULT_TAB_BADGES,
   getTabKeyFromPathname,
   type AppRole,
-  type ApiUserRole,
   type AuthedUser,
   type TabKey,
 } from "../_components/account-route-tabs";
@@ -22,11 +21,13 @@ const PULSES_STORAGE_KEY = "account-route-tab-pulses:v1";
 function normalizeRole(user: AuthedUser | null): AppRole {
   const primary = user?.user_role;
 
+  if (primary === "superuser") return "superuser";
   if (primary === "admin") return "admin";
   if (primary === "worker") return "technician";
   if (primary === "customer") return "customer";
 
   const roles = user?.roles ?? [];
+  if (roles.includes("superuser")) return "superuser";
   if (roles.includes("admin")) return "admin";
   if (roles.includes("worker")) return "technician";
   return "customer";
@@ -69,7 +70,7 @@ function readStoredPulses(): Record<TabKey, boolean> {
 }
 
 function getNotificationTargetTab(role: AppRole, evt: RealtimeEvent): TabKey | null {
-  if (role === "admin") {
+  if (role === "admin" || role === "superuser") {
     switch (evt.type) {
       case "booking.created":
       case "booking.accepted":
