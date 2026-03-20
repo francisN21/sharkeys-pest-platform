@@ -2,10 +2,10 @@ import Image from "next/image";
 import Link from "next/link";
 import Navbar from "../components/Navbar";
 import ScrollReveal from "../components/ScrollReveal";
-import ServiceAreaStrip from "../components/ui/service-area-strip";
 import MarketingCard from "../components/ui/marketing-card";
 import CertificationLogoCard from "../components/home/CertificationLogoCard";
 import SiteFooter from "../components/home/SiteFooter";
+import { InfiniteSlider } from "../components/ui/infinite-slider";
 
 const SECTION =
   "flex flex-col justify-start py-20 md:snap-start md:min-h-screen md:justify-center";
@@ -16,31 +16,37 @@ const SERVICES = [
     title: "Pest Extermination",
     desc: "Ants, roaches, bed bugs, fleas/ticks, flies, snails, earwigs, mites, crickets, mosquitoes, spiders, wasps, gophers, moles, voles, and rodents.",
     href: "/pest-control-bay-area",
+    accent: "🐜",
   },
   {
     title: "Wildlife Control",
     desc: "Raccoon, skunk, possum, squirrel, and other wildlife—removal and prevention.",
     href: "/wildlife-control-bay-area",
+    accent: "🦝",
   },
   {
     title: "Specialty Services",
     desc: "General Pest Control, Rodent Exclusion, Crawl/Attic Clean Up, Vapor Barrier, Rodent Proofing, Pigeon Exclusion, Animal Removal, Tree/Yard Spray, Sanitize & Deodorize.",
     href: "/rodent-control-bay-area",
+    accent: "🔬",
   },
   {
     title: "Commercial Services",
     desc: "Partnership-based approach for restaurants, healthcare, and retail—with documentation support.",
     href: "/commercial-pest-control-bay-area",
+    accent: "🏢",
   },
   {
     title: "Eco/Green Options",
     desc: "Environmentally conscious treatments available upon request—ask what fits your situation.",
     href: "/eco-friendly-pest-control-bay-area",
+    accent: "🌿",
   },
   {
     title: "Customized Plans",
     desc: "Tailored solutions for residential and commercial needs based on your property and pest pressure.",
     href: "/residential-pest-control-bay-area",
+    accent: "📋",
   },
 ];
 
@@ -51,16 +57,23 @@ const HIGHLIGHTS = [
   { title: "Professional Care", desc: "Respectful service for homes and businesses." },
 ];
 
-const SERVICE_AREAS = [
-  "Benicia",
-  "Vallejo",
-  "Fairfield",
-  "Concord",
-  "Martinez",
-  "San Francisco",
-  "Daly City",
-  "San Ramon",
-  "Oakland",
+const SLIDER_ITEMS = [
+  { type: "area", label: "Benicia" },
+  { type: "trust", label: "Licensed & Insured" },
+  { type: "area", label: "Vallejo" },
+  { type: "area", label: "Fairfield" },
+  { type: "trust", label: "Family Owned & Operated" },
+  { type: "area", label: "Concord" },
+  { type: "area", label: "Martinez" },
+  { type: "trust", label: "GreenPro Certified" },
+  { type: "area", label: "San Francisco" },
+  { type: "area", label: "Daly City" },
+  { type: "trust", label: "Bird Barrier Certified" },
+  { type: "area", label: "San Ramon" },
+  { type: "area", label: "Oakland" },
+  { type: "trust", label: "Bay Area Trusted Since Day One" },
+  { type: "area", label: "Walnut Creek" },
+  { type: "area", label: "Hercules" },
 ];
 
 const CERTIFICATIONS = [
@@ -87,7 +100,7 @@ export default function HomePage() {
 
       {/* Hero */}
       <section id="home" className={`${SECTION} scroll-mt-24 md:scroll-mt-28`}>
-        <div className={`${CONTAINER} space-y-8 py-10 lg:py-14`}>
+        <div className={`${CONTAINER} space-y-6 py-10 lg:py-14`}>
           <div
             className="overflow-hidden rounded-[2rem] border"
             style={{
@@ -99,6 +112,20 @@ export default function HomePage() {
             <div className="grid gap-10 p-6 md:grid-cols-[1.1fr_0.9fr] md:items-center md:p-8 lg:p-10">
               <ScrollReveal>
                 <div className="space-y-5">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em]"
+                      style={{
+                        borderColor: "rgba(234,179,8,0.35)",
+                        background: "rgba(234,179,8,0.08)",
+                        color: "rgb(234 179 8)",
+                      }}
+                    >
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-yellow-400" />
+                      Bay Area&apos;s Trusted Pest Control
+                    </span>
+                  </div>
+
                   <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
                     Sharkys Pest Control in Benicia, serving the whole Bay Area.
                   </h1>
@@ -140,7 +167,13 @@ export default function HomePage() {
                   <div className="grid gap-3 pt-3 sm:grid-cols-2">
                     {HIGHLIGHTS.map((h) => (
                       <MarketingCard key={h.title} className="p-4">
-                        <div className="text-sm font-semibold">{h.title}</div>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+                            style={{ background: "rgb(var(--primary))" }}
+                          />
+                          <div className="text-sm font-semibold">{h.title}</div>
+                        </div>
                         <div
                           className="mt-1 text-sm"
                           style={{ color: "rgb(var(--muted))" }}
@@ -180,7 +213,45 @@ export default function HomePage() {
           </div>
 
           <ScrollReveal>
-            <ServiceAreaStrip title="Servicing" areas={SERVICE_AREAS} />
+            <div className="space-y-1.5">
+              <p
+                className="px-1 text-[11px] font-semibold uppercase tracking-[0.12em]"
+                style={{ color: "rgb(var(--muted))" }}
+              >
+                Servicing
+              </p>
+              <InfiniteSlider gap={10} duration={35} durationOnHover={80}>
+                {SLIDER_ITEMS.map((item) => (
+                  <span
+                    key={item.label}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium whitespace-nowrap"
+                    style={
+                      item.type === "trust"
+                        ? {
+                            borderColor: "rgba(234,179,8,0.3)",
+                            background: "rgba(234,179,8,0.07)",
+                            color: "rgb(234 179 8)",
+                          }
+                        : {
+                            borderColor: "rgb(var(--border))",
+                            background: "rgb(var(--card))",
+                            color: "rgb(var(--fg))",
+                          }
+                    }
+                  >
+                    {item.type === "trust" ? (
+                      <span className="text-yellow-400">✦</span>
+                    ) : (
+                      <span
+                        className="inline-block h-1.5 w-1.5 rounded-full"
+                        style={{ background: "rgb(var(--primary))" }}
+                      />
+                    )}
+                    {item.label}
+                  </span>
+                ))}
+              </InfiniteSlider>
+            </div>
           </ScrollReveal>
         </div>
       </section>
@@ -220,10 +291,19 @@ export default function HomePage() {
                 ].map((step, index) => (
                   <MarketingCard key={step} className="p-4">
                     <div
-                      className="text-sm font-semibold"
+                      className="flex items-center gap-2 text-sm font-semibold"
                       style={{ color: "rgb(var(--fg))" }}
                     >
-                      {index + 1}) Step
+                      <span
+                        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
+                        style={{
+                          background: "rgb(var(--primary))",
+                          color: "rgb(var(--primary-fg))",
+                        }}
+                      >
+                        {index + 1}
+                      </span>
+                      Step {index + 1}
                     </div>
                     <div
                       className="mt-2 text-sm"
@@ -269,6 +349,16 @@ export default function HomePage() {
         <div className={`${CONTAINER} space-y-8`}>
           <ScrollReveal>
             <div className="space-y-3">
+              <div
+                className="inline-flex w-fit rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]"
+                style={{
+                  borderColor: "rgb(var(--border))",
+                  background: "rgba(59,130,246,0.08)",
+                  color: "rgb(var(--fg))",
+                }}
+              >
+                What We Do
+              </div>
               <h2 className="text-2xl font-bold tracking-tight">Services</h2>
               <p className="max-w-3xl" style={{ color: "rgb(var(--muted))" }}>
                 Comprehensive pest control solutions for homes and businesses,
@@ -278,7 +368,11 @@ export default function HomePage() {
 
             <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {SERVICES.map((s) => (
-                <MarketingCard key={s.title} className="p-6">
+                <MarketingCard
+                  key={s.title}
+                  className="group p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+                >
+                  <div className="mb-3 text-2xl">{s.accent}</div>
                   <div className="text-sm font-semibold">{s.title}</div>
                   <div
                     className="mt-2 text-sm"
@@ -289,7 +383,7 @@ export default function HomePage() {
 
                   <Link
                     href={s.href}
-                    className="mt-4 inline-flex items-center text-sm font-semibold transition hover:translate-x-1"
+                    className="mt-4 inline-flex items-center text-sm font-semibold transition-transform duration-200 group-hover:translate-x-1"
                     style={{ color: "rgb(var(--fg))" }}
                   >
                     Request service →
@@ -307,6 +401,16 @@ export default function HomePage() {
           <ScrollReveal className="grid gap-8 md:grid-cols-2 md:items-start">
             <div>
               <div className="space-y-3">
+                <div
+                  className="inline-flex w-fit rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]"
+                  style={{
+                    borderColor: "rgb(var(--border))",
+                    background: "rgba(59,130,246,0.08)",
+                    color: "rgb(var(--fg))",
+                  }}
+                >
+                  Our Story
+                </div>
                 <h2 className="text-2xl font-bold tracking-tight">About us</h2>
                 <p style={{ color: "rgb(var(--muted))" }}>
                   A family-owned and operated company built on trust, accountability,
@@ -316,14 +420,26 @@ export default function HomePage() {
 
               <div className="mt-8 grid gap-5 sm:grid-cols-2">
                 <MarketingCard className="p-4">
-                  <div className="text-sm font-semibold">Founded in Benicia, CA</div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="inline-block h-1.5 w-1.5 rounded-full"
+                      style={{ background: "rgb(var(--primary))" }}
+                    />
+                    <div className="text-sm font-semibold">Founded in Benicia, CA</div>
+                  </div>
                   <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
                     Serving the Bay Area community with pride.
                   </div>
                 </MarketingCard>
 
                 <MarketingCard className="p-4">
-                  <div className="text-sm font-semibold">Owner-operated</div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="inline-block h-1.5 w-1.5 rounded-full"
+                      style={{ background: "rgb(var(--primary))" }}
+                    />
+                    <div className="text-sm font-semibold">Owner-operated</div>
+                  </div>
                   <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
                     Direct attention and oversight on every service call.
                   </div>
@@ -378,7 +494,7 @@ export default function HomePage() {
                 className="mt-6 rounded-2xl border p-5"
                 style={{
                   borderColor: "rgb(var(--border))",
-                  background: "rgba(var(--bg), 0.2)",
+                  background: "rgb(var(--bg) / 0.2)",
                 }}
               >
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -390,7 +506,7 @@ export default function HomePage() {
                       Need help fast?
                     </h3>
                     <p className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
-                      Contact Sharkys Pest Control and we’ll help you get scheduled.
+                      Contact Sharkys Pest Control and we&apos;ll help you get scheduled.
                     </p>
                   </div>
 
@@ -408,34 +524,19 @@ export default function HomePage() {
 
                 <div className="mt-5 grid gap-3 text-sm sm:grid-cols-3">
                   {[
-                    {
-                      title: "Email",
-                      value: "Office.sharkyspestcontrol@gmail.com",
-                    },
-                    {
-                      title: "Office",
-                      value: "(707) 361-5023",
-                    },
-                    {
-                      title: "Field Operations",
-                      value: "(707) 716-9469",
-                    },
+                    { title: "Email", value: "Office.sharkyspestcontrol@gmail.com" },
+                    { title: "Office", value: "(707) 361-5023" },
+                    { title: "Field Operations", value: "(707) 716-9469" },
                   ].map((item) => (
                     <div
                       key={item.title}
                       className="rounded-xl p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
                       style={{ background: "rgb(var(--card))" }}
                     >
-                      <div
-                        className="font-semibold"
-                        style={{ color: "rgb(var(--fg))" }}
-                      >
+                      <div className="font-semibold" style={{ color: "rgb(var(--fg))" }}>
                         {item.title}
                       </div>
-                      <div
-                        className="mt-1 break-all"
-                        style={{ color: "rgb(var(--muted))" }}
-                      >
+                      <div className="mt-1 break-all" style={{ color: "rgb(var(--muted))" }}>
                         {item.value}
                       </div>
                     </div>
