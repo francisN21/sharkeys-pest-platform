@@ -89,7 +89,15 @@ export function InfiniteSlider({
     : {};
 
   return (
-    <div className={className ? className : "overflow-hidden"}>
+    <div
+      className={className ?? "overflow-hidden"}
+      style={{
+        maskImage:
+          "linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%)",
+        WebkitMaskImage:
+          "linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%)",
+      }}
+    >
       <motion.div
         ref={ref}
         className="flex w-max"
