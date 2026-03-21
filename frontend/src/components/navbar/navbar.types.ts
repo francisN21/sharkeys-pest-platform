@@ -6,8 +6,13 @@ export type NavItem = {
   href: string;
 };
 
-export type NavbarApiRole = "customer" | "worker" | "admin";
-export type NotificationViewerRole = "customer" | "technician" | "worker" | "admin";
+export type NavbarApiRole = "customer" | "worker" | "admin" | "superuser";
+export type NotificationViewerRole =
+  | "customer"
+  | "technician"
+  | "worker"
+  | "admin"
+  | "superuser";
 
 export type NavbarUser = {
   email: string;

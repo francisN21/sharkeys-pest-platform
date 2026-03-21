@@ -14,13 +14,13 @@ import {
 } from "lucide-react";
 import type { AppNotification } from "../../lib/api/notifications";
 
-type NotificationViewerRole = "customer" | "technician" | "worker" | "admin";
+type NotificationViewerRole = "customer" | "technician" | "worker" | "admin" | "superuser";
 type NormalizedViewerRole = "customer" | "technician" | "admin";
 
 function normalizeViewerRole(
   role: NotificationViewerRole | null | undefined
 ): NormalizedViewerRole {
-  if (role === "admin") return "admin";
+  if (role === "admin" || role === "superuser") return "admin";
   if (role === "technician" || role === "worker") return "technician";
   return "customer";
 }
@@ -178,64 +178,60 @@ function getNotificationBookingId(item: AppNotification): string | null {
   return item.booking_public_id ?? null;
 }
 
-function getNotificationHref(
-  item: AppNotification,
-  viewerRole: NormalizedViewerRole
-): string {
-  const bookingId = getNotificationBookingId(item);
+function getAdminNotificationHref(item: AppNotification, bookingId: string | null): string {
+  switch (item.kind) {
+    case "booking.created":
+    case "booking.accepted":
+    case "booking.cancelled":
+    case "booking.edited":
+      return "/account/admin/dispatch";
 
-  if (viewerRole === "admin") {
-    if (bookingId) {
-      return `/account/techbookings/bookings/${bookingId}`;
-    }
+    case "booking.assigned":
+    case "booking.reassigned":
+    case "booking.price_set":
+    case "message.new":
+      return bookingId
+        ? `/account/techbookings/bookings/${bookingId}`
+        : "/account/techbookings";
 
-    switch (item.kind) {
-      case "booking.created":
-      case "booking.accepted":
-      case "booking.cancelled":
-      case "booking.edited":
-        return "/account/admin/dispatch";
+    case "booking.completed":
+      return bookingId
+        ? `/account/techbookings/bookings/${bookingId}`
+        : "/account/admin/jobhistory";
 
-      case "booking.assigned":
-      case "booking.reassigned":
-      case "booking.price_set":
-      case "message.new":
-        return "/account/techbookings";
+    default:
+      return bookingId
+        ? `/account/techbookings/bookings/${bookingId}`
+        : "/account";
 
-      case "booking.completed":
-        return "/account/admin/jobhistory";
-
-      default:
-        return "/account";
-    }
+    
   }
 
-  if (viewerRole === "technician") {
-    if (bookingId) {
-      return `/account/technician/bookings/${bookingId}`;
-    }
+}
 
-    switch (item.kind) {
-      case "booking.assigned":
-      case "booking.reassigned":
-      case "booking.cancelled":
-      case "booking.price_set":
-      case "booking.completed":
-      case "message.new":
-      case "booking.edited":
-      case "booking.accepted":
-      case "booking.created":
-        return "/account/technician";
+function getTechnicianNotificationHref(item: AppNotification, bookingId: string | null): string {
+  switch (item.kind) {
+    case "booking.assigned":
+    case "booking.reassigned":
+    case "booking.cancelled":
+    case "booking.price_set":
+    case "booking.completed":
+    case "message.new":
+    case "booking.edited":
+    case "booking.accepted":
+    case "booking.created":
+      return bookingId
+        ? `/account/technician/bookings/${bookingId}`
+        : "/account/technician";
 
-      default:
-        return "/account/technician";
-    }
+    default:
+      return bookingId
+        ? `/account/technician/bookings/${bookingId}`
+        : "/account/technician";
   }
+}
 
-  if (bookingId) {
-    return `/account/bookings/${bookingId}`;
-  }
-
+function getCustomerNotificationHref(item: AppNotification, bookingId: string | null): string {
   switch (item.kind) {
     case "message.new":
     case "booking.accepted":
@@ -246,11 +242,28 @@ function getNotificationHref(
     case "booking.price_set":
     case "booking.edited":
     case "booking.created":
-      return "/account/bookings";
+      return bookingId ? `/account/bookings/${bookingId}` : "/account/bookings";
 
     default:
-      return "/account";
+      return bookingId ? `/account/bookings/${bookingId}` : "/account";
   }
+}
+
+function getNotificationHref(
+  item: AppNotification,
+  viewerRole: NormalizedViewerRole
+): string {
+  const bookingId = getNotificationBookingId(item);
+
+  if (viewerRole === "admin") {
+    return getAdminNotificationHref(item, bookingId);
+  }
+
+  if (viewerRole === "technician") {
+    return getTechnicianNotificationHref(item, bookingId);
+  }
+
+  return getCustomerNotificationHref(item, bookingId);
 }
 
 type NotificationDropdownProps = {

@@ -25,11 +25,13 @@ export function normalizeViewerRole(
 ): NotificationViewerRole | null {
   if (!user) return null;
 
+  if (user.user_role === "superuser") return "superuser";
   if (user.user_role === "admin") return "admin";
   if (user.user_role === "worker") return "worker";
   if (user.user_role === "customer") return "customer";
 
   const roles = user.roles ?? [];
+  if (roles.includes("superuser")) return "superuser";
   if (roles.includes("admin")) return "admin";
   if (roles.includes("worker")) return "worker";
   if (roles.includes("customer")) return "customer";
@@ -47,7 +49,6 @@ export function mapRealtimeEventToPreview(evt: RealtimeEvent): AppNotification |
         kind: evt.type,
         title: "New booking created",
         body: [evt.bookingName, evt.customerName].filter(Boolean).join(" • ") || "A new booking was submitted.",
-        booking_id: null,
         booking_public_id: evt.bookingId,
         message_id: null,
         metadata: {},
@@ -63,7 +64,6 @@ export function mapRealtimeEventToPreview(evt: RealtimeEvent): AppNotification |
         body: evt.serviceTitle
           ? `Your ${evt.serviceTitle} booking has been accepted.`
           : "Your booking has been accepted.",
-        booking_id: null,
         booking_public_id: evt.bookingId,
         message_id: null,
         metadata: {},
@@ -92,7 +92,6 @@ export function mapRealtimeEventToPreview(evt: RealtimeEvent): AppNotification |
         kind: evt.type,
         title: role === "worker" ? "New job assigned" : role === "customer" ? "Technician assigned" : "Booking assigned",
         body,
-        booking_id: null,
         booking_public_id: evt.bookingId,
         message_id: null,
         metadata: {},
@@ -109,7 +108,6 @@ export function mapRealtimeEventToPreview(evt: RealtimeEvent): AppNotification |
         body: evt.serviceTitle
           ? `${evt.serviceTitle} has been reassigned to another technician.`
           : "A booking has been reassigned to another technician.",
-        booking_id: null,
         booking_public_id: evt.bookingId,
         message_id: null,
         metadata: {},
@@ -125,7 +123,6 @@ export function mapRealtimeEventToPreview(evt: RealtimeEvent): AppNotification |
         body: evt.serviceTitle
           ? `Your ${evt.serviceTitle} booking is now cancelled.`
           : "Your booking has been cancelled.",
-        booking_id: null,
         booking_public_id: evt.bookingId,
         message_id: null,
         metadata: {},
@@ -141,7 +138,6 @@ export function mapRealtimeEventToPreview(evt: RealtimeEvent): AppNotification |
         body: evt.startsAt
           ? `Rescheduled to ${new Date(evt.startsAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}.`
           : "A booking has been updated.",
-        booking_id: null,
         booking_public_id: evt.bookingId,
         message_id: null,
         metadata: {},
@@ -163,7 +159,6 @@ export function mapRealtimeEventToPreview(evt: RealtimeEvent): AppNotification |
           evt.technicianName ? `by ${evt.technicianName}` : null,
           price ? price.replace(" • ", "") : null,
         ].filter(Boolean).join(" • ") || "A booking has been completed.",
-        booking_id: null,
         booking_public_id: evt.bookingId,
         message_id: null,
         metadata: {},
@@ -181,7 +176,6 @@ export function mapRealtimeEventToPreview(evt: RealtimeEvent): AppNotification |
         kind: evt.type,
         title: "Final price updated",
         body: priceStr ? `Final price set: ${priceStr}.` : "Final price has been updated.",
-        booking_id: null,
         booking_public_id: evt.bookingId,
         message_id: null,
         metadata: {},
@@ -196,7 +190,6 @@ export function mapRealtimeEventToPreview(evt: RealtimeEvent): AppNotification |
         kind: evt.type,
         title: evt.fromName ? `New message from ${evt.fromName}` : "New message",
         body: evt.snippet ?? "You received a new message.",
-        booking_id: null,
         booking_public_id: evt.threadId,
         message_id: null,
         metadata: { serviceTitle: evt.serviceTitle ?? null },
@@ -210,7 +203,6 @@ export function mapRealtimeEventToPreview(evt: RealtimeEvent): AppNotification |
         kind: evt.type,
         title: "System error",
         body: evt.message,
-        booking_id: null,
         booking_public_id: null,
         message_id: null,
         metadata: {},
