@@ -379,7 +379,13 @@ router.patch("/:publicId/cancel", requireAuth, requireAnyRole(["admin", "superus
     await client.query("BEGIN");
 
     const lock = await client.query(
-      `SELECT id, status FROM bookings WHERE public_id = $1 FOR UPDATE`,
+      `
+      SELECT b.id, b.status, s.title AS service_title
+      FROM bookings b
+      JOIN services s ON s.id = b.service_id
+      WHERE b.public_id = $1
+      FOR UPDATE
+      `,
       [req.params.publicId]
     );
 
@@ -436,10 +442,12 @@ router.patch("/:publicId/cancel", requireAuth, requireAnyRole(["admin", "superus
         userId: customerUserId,
         kind: "booking.cancelled",
         title: "Booking cancelled",
-        body: `Booking ${req.params.publicId} has been cancelled.`,
+        body: b.service_title
+          ? `Your ${b.service_title} booking has been cancelled.`
+          : "Your booking has been cancelled.",
         bookingId: b.id,
         bookingPublicId: req.params.publicId,
-        metadata: { bookingPublicId: req.params.publicId },
+        metadata: { bookingPublicId: req.params.publicId, serviceTitle: b.service_title ?? null },
       });
     }
 
@@ -448,10 +456,12 @@ router.patch("/:publicId/cancel", requireAuth, requireAnyRole(["admin", "superus
         userId: workerUserId,
         kind: "booking.cancelled",
         title: "Booking cancelled",
-        body: `Booking ${req.params.publicId} has been cancelled.`,
+        body: b.service_title
+          ? `Your ${b.service_title} booking has been cancelled.`
+          : "A booking has been cancelled.",
         bookingId: b.id,
         bookingPublicId: req.params.publicId,
-        metadata: { bookingPublicId: req.params.publicId },
+        metadata: { bookingPublicId: req.params.publicId, serviceTitle: b.service_title ?? null },
       });
     }
 
@@ -464,6 +474,7 @@ router.patch("/:publicId/cancel", requireAuth, requireAnyRole(["admin", "superus
         type: "booking.cancelled",
         bookingId: req.params.publicId,
         cancelledAt: updated.rows[0].cancelled_at,
+        serviceTitle: b.service_title ?? null,
       });
     }
 
@@ -472,6 +483,7 @@ router.patch("/:publicId/cancel", requireAuth, requireAnyRole(["admin", "superus
         type: "booking.cancelled",
         bookingId: req.params.publicId,
         cancelledAt: updated.rows[0].cancelled_at,
+        serviceTitle: b.service_title ?? null,
       });
     }
 
@@ -495,7 +507,13 @@ router.patch("/:publicId/accept", requireAuth, requireAnyRole(["admin", "superus
     await client.query("BEGIN");
 
     const b = await client.query(
-      `SELECT id, status, customer_user_id FROM bookings WHERE public_id = $1 FOR UPDATE`,
+      `
+      SELECT b.id, b.status, b.customer_user_id, b.starts_at, s.title AS service_title
+      FROM bookings b
+      JOIN services s ON s.id = b.service_id
+      WHERE b.public_id = $1
+      FOR UPDATE
+      `,
       [bookingPublicId]
     );
     if (b.rowCount === 0) {
@@ -531,10 +549,16 @@ router.patch("/:publicId/accept", requireAuth, requireAnyRole(["admin", "superus
         userId: booking.customer_user_id,
         kind: "booking.accepted",
         title: "Booking accepted",
-        body: `Booking ${bookingPublicId} has been accepted.`,
+        body: booking.service_title
+          ? `Your ${booking.service_title} booking has been accepted.`
+          : "Your booking has been accepted.",
         bookingId: booking.id,
         bookingPublicId,
-        metadata: { bookingPublicId },
+        metadata: {
+          bookingPublicId,
+          serviceTitle: booking.service_title ?? null,
+          startsAt: booking.starts_at ?? null,
+        },
       });
     }
 
@@ -547,6 +571,8 @@ router.patch("/:publicId/accept", requireAuth, requireAnyRole(["admin", "superus
         type: "booking.accepted",
         bookingId: bookingPublicId,
         acceptedAt: updated.rows[0].accepted_at,
+        serviceTitle: booking.service_title ?? null,
+        startsAt: booking.starts_at ?? null,
       });
     }
 
@@ -661,11 +687,18 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
     notificationRows.push({
       userId: workerUserId,
       kind: "booking.assigned",
-      title: "New booking assigned",
-      body: `Booking ${bookingPublicId} was assigned to you.`,
+      title: "New job assigned",
+      body: booking.service_title
+        ? `${booking.service_title}${customerName ? ` from ${customerName}` : ""} has been assigned to you.`
+        : "A new booking has been assigned to you.",
       bookingId: booking.id,
       bookingPublicId,
-      metadata: { bookingPublicId, workerUserId },
+      metadata: {
+        bookingPublicId,
+        serviceTitle: booking.service_title ?? null,
+        startsAt: booking.starts_at ?? null,
+        customerName,
+      },
     });
 
     if (booking.customer_user_id) {
@@ -673,10 +706,16 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
         userId: booking.customer_user_id,
         kind: "booking.assigned",
         title: "Technician assigned",
-        body: `A technician has been assigned to booking ${bookingPublicId}.`,
+        body: booking.service_title
+          ? `Your ${booking.service_title} booking is now assigned to ${technicianName ?? "a technician"}.`
+          : `Your booking is now assigned to ${technicianName ?? "a technician"}.`,
         bookingId: booking.id,
         bookingPublicId,
-        metadata: { bookingPublicId, workerUserId },
+        metadata: {
+          bookingPublicId,
+          serviceTitle: booking.service_title ?? null,
+          technicianName,
+        },
       });
     }
 
@@ -685,10 +724,17 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
         userId: previousWorkerUserId,
         kind: "booking.reassigned",
         title: "Booking reassigned",
-        body: `Booking ${bookingPublicId} has been reassigned.`,
+        body: booking.service_title
+          ? `${booking.service_title} has been reassigned to another technician.`
+          : "A booking has been reassigned to another technician.",
         bookingId: booking.id,
         bookingPublicId,
-        metadata: { bookingPublicId, previousWorkerUserId, workerUserId },
+        metadata: {
+          bookingPublicId,
+          serviceTitle: booking.service_title ?? null,
+          previousWorkerUserId,
+          workerUserId,
+        },
       });
     }
 
@@ -700,6 +746,7 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
       SELECT
         cu.email AS customer_email,
         cu.first_name AS customer_first_name,
+        cu.last_name AS customer_last_name,
         l.email AS lead_email,
         l.first_name AS lead_first_name
       FROM bookings b
@@ -711,10 +758,19 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
       [booking.id]
     );
 
+    let customerName = null;
+
     if (recipientRes.rowCount > 0) {
       emailTo = recipientRes.rows[0].customer_email || recipientRes.rows[0].lead_email || null;
       firstNameForEmail =
         recipientRes.rows[0].customer_first_name || recipientRes.rows[0].lead_first_name || null;
+      customerName = [
+        recipientRes.rows[0].customer_first_name,
+        recipientRes.rows[0].customer_last_name,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .trim() || null;
     }
 
     await createNotifications(client, notificationRows);
@@ -727,6 +783,10 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
       type: "booking.assigned",
       bookingId: bookingPublicId,
       assignedAt: assignedAtNow,
+      serviceTitle: booking.service_title ?? null,
+      startsAt: booking.starts_at ?? null,
+      customerName,
+      recipientRole: "worker",
     });
 
     if (booking.customer_user_id) {
@@ -734,6 +794,9 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
         type: "booking.assigned",
         bookingId: bookingPublicId,
         assignedAt: assignedAtNow,
+        serviceTitle: booking.service_title ?? null,
+        technicianName,
+        recipientRole: "customer",
       });
     }
 
@@ -742,6 +805,7 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
         type: "booking.reassigned",
         bookingId: bookingPublicId,
         assignedAt: assignedAtNow,
+        serviceTitle: booking.service_title ?? null,
       });
     }
 
@@ -749,6 +813,10 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
       type: "booking.assigned",
       bookingId: bookingPublicId,
       assignedAt: assignedAtNow,
+      serviceTitle: booking.service_title ?? null,
+      technicianName,
+      customerName,
+      recipientRole: "admin",
     });
 
     if (emailTo) {

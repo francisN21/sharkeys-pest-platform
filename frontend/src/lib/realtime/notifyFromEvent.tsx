@@ -10,28 +10,21 @@ import {
 } from "lucide-react";
 import type { RealtimeEvent } from "./events";
 
-function bookingDisplayName(evt: RealtimeEvent) {
-  const serviceName =
-    "bookingName" in evt && typeof evt.bookingName === "string" && evt.bookingName.trim()
-      ? evt.bookingName.trim()
-      : null;
-
-  const customerName =
-    "customerName" in evt && typeof evt.customerName === "string" && evt.customerName.trim()
-      ? evt.customerName.trim()
-      : null;
-
-  if (serviceName && customerName) return `${serviceName} • ${customerName}`;
-  if (serviceName) return serviceName;
-  if ("bookingId" in evt && typeof evt.bookingId === "string" && evt.bookingId.trim()) {
-    return `Booking ${evt.bookingId}`;
-  }
-  return "Booking";
-}
-
 function fmtMoney(cents?: number | null) {
   if (typeof cents !== "number" || !Number.isFinite(cents)) return null;
   return `$${(cents / 100).toFixed(2)}`;
+}
+
+function fmtDatetime(value?: string | null) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 /**
@@ -66,99 +59,103 @@ export function notifyFromEvent(evt: RealtimeEvent) {
       });
       return;
 
-    case "booking.accepted":
+    case "booking.accepted": {
+      const atStr = fmtDatetime(evt.startsAt);
+      const desc = evt.serviceTitle
+        ? `Your ${evt.serviceTitle}${atStr ? ` at ${atStr}` : ""} has been accepted.`
+        : "Your booking has been accepted.";
       appNotify({
         level: "success",
         toastTitle: "Booking accepted",
-        toastDescription: bookingDisplayName(evt),
+        toastDescription: desc,
         entity: "booking",
         entityId: evt.bookingId,
         at: evt.acceptedAt,
-        details: [
-          {
-            label: "Booking",
-            value: bookingDisplayName(evt),
-            icon: <Tag className="h-4 w-4" />,
-          },
-        ],
         browserTitle: "Booking accepted",
-        browserBody: bookingDisplayName(evt),
+        browserBody: desc,
         browser: true,
         browserOnlyWhenHidden: true,
       });
       return;
+    }
 
-    case "booking.assigned":
+    case "booking.assigned": {
+      const atStr = fmtDatetime(evt.startsAt);
+      const role = evt.recipientRole;
+
+      let toastTitle: string;
+      let desc: string;
+
+      if (role === "worker") {
+        toastTitle = "New job assigned";
+        desc = evt.serviceTitle
+          ? `${evt.customerName ? `Booking from ${evt.customerName}: ` : ""}${evt.serviceTitle}${atStr ? ` at ${atStr}` : ""}.`
+          : "A new booking has been assigned to you.";
+      } else if (role === "customer") {
+        toastTitle = "Technician assigned";
+        desc = evt.serviceTitle
+          ? `Your ${evt.serviceTitle} is now assigned to ${evt.technicianName ?? "a technician"}.`
+          : `Your booking is now assigned to ${evt.technicianName ?? "a technician"}.`;
+      } else {
+        // admin / default
+        toastTitle = "Booking assigned";
+        desc = evt.serviceTitle
+          ? `${evt.serviceTitle}${evt.customerName ? ` from ${evt.customerName}` : ""}${evt.technicianName ? ` → ${evt.technicianName}` : ""}.`
+          : `Booking assigned${evt.technicianName ? ` to ${evt.technicianName}` : ""}.`;
+      }
+
       appNotify({
         level: "success",
-        toastTitle: "Booking assigned",
-        toastDescription: bookingDisplayName(evt),
+        toastTitle,
+        toastDescription: desc,
         entity: "booking",
         entityId: evt.bookingId,
         at: evt.assignedAt,
-        actorName: evt.technicianName,
-        details: [
-          {
-            label: "Technician",
-            value: evt.technicianName ?? "—",
-            icon: <Wrench className="h-4 w-4" />,
-          },
-        ],
-        browserTitle: "New job assigned",
-        browserBody: `${bookingDisplayName(evt)} → ${evt.technicianName ?? "Technician"}`,
+        browserTitle: toastTitle,
+        browserBody: desc,
         browser: true,
         browserOnlyWhenHidden: true,
       });
       return;
+    }
 
-    case "booking.reassigned":
+    case "booking.reassigned": {
+      const desc = evt.serviceTitle
+        ? `${evt.serviceTitle} has been reassigned to another technician.`
+        : "A booking has been reassigned to another technician.";
       appNotify({
         level: "warning",
         toastTitle: "Booking reassigned",
-        toastDescription: bookingDisplayName(evt),
+        toastDescription: desc,
         entity: "booking",
         entityId: evt.bookingId,
         at: evt.assignedAt,
-        details: [
-          {
-            label: "Booking",
-            value: bookingDisplayName(evt),
-            icon: <Tag className="h-4 w-4" />,
-          },
-          {
-            label: "Status",
-            value: "Technician updated",
-            icon: <Wrench className="h-4 w-4" />,
-          },
-        ],
         browserTitle: "Booking reassigned",
-        browserBody: `${bookingDisplayName(evt)} has a new technician.`,
+        browserBody: desc,
         browser: true,
         browserOnlyWhenHidden: true,
       });
       return;
+    }
 
-    case "booking.cancelled":
+    case "booking.cancelled": {
+      const desc = evt.serviceTitle
+        ? `Your ${evt.serviceTitle} booking is now cancelled.`
+        : "Your booking has been cancelled.";
       appNotify({
         level: "warning",
         toastTitle: "Booking cancelled",
-        toastDescription: bookingDisplayName(evt),
+        toastDescription: desc,
         entity: "booking",
         entityId: evt.bookingId,
         at: evt.cancelledAt,
-        details: [
-          {
-            label: "Booking",
-            value: bookingDisplayName(evt),
-            icon: <Tag className="h-4 w-4" />,
-          },
-        ],
         browserTitle: "Booking cancelled",
-        browserBody: bookingDisplayName(evt),
+        browserBody: desc,
         browser: true,
         browserOnlyWhenHidden: true,
       });
       return;
+    }
 
     case "booking.edited":
       appNotify({

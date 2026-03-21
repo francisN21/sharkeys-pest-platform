@@ -12,24 +12,30 @@ export type RealtimeEvent =
       type: "booking.accepted";
       bookingId: string;
       acceptedAt?: string;
+      serviceTitle?: string;
+      startsAt?: string;
     }
   | {
       type: "booking.assigned";
       bookingId: string;
-      bookingName?: string;
-      technicianName?: string;
       assignedAt?: string;
+      serviceTitle?: string;
+      technicianName?: string;
+      startsAt?: string;
+      customerName?: string;
+      recipientRole?: string;
     }
   | {
       type: "booking.reassigned";
       bookingId: string;
-      bookingName?: string;
       assignedAt?: string;
+      serviceTitle?: string;
     }
   | {
       type: "booking.cancelled";
       bookingId: string;
       cancelledAt?: string;
+      serviceTitle?: string;
     }
   | {
       type: "booking.edited";

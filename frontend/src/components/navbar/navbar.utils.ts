@@ -60,7 +60,9 @@ export function mapRealtimeEventToPreview(evt: RealtimeEvent): AppNotification |
         id: Date.now(),
         kind: evt.type,
         title: "Booking accepted",
-        body: `Booking ${evt.bookingId} has been accepted.`,
+        body: evt.serviceTitle
+          ? `Your ${evt.serviceTitle} booking has been accepted.`
+          : "Your booking has been accepted.",
         booking_id: null,
         booking_public_id: evt.bookingId,
         message_id: null,
@@ -69,12 +71,27 @@ export function mapRealtimeEventToPreview(evt: RealtimeEvent): AppNotification |
         created_at: evt.acceptedAt ?? now,
       };
 
-    case "booking.assigned":
+    case "booking.assigned": {
+      const role = evt.recipientRole;
+      let body: string;
+      if (role === "worker") {
+        body = evt.serviceTitle
+          ? `${evt.customerName ? `Booking from ${evt.customerName}: ` : ""}${evt.serviceTitle}.`
+          : "A new booking has been assigned to you.";
+      } else if (role === "customer") {
+        body = evt.serviceTitle
+          ? `Your ${evt.serviceTitle} is now assigned to ${evt.technicianName ?? "a technician"}.`
+          : `Your booking is now assigned to ${evt.technicianName ?? "a technician"}.`;
+      } else {
+        body = evt.serviceTitle
+          ? `${evt.serviceTitle}${evt.customerName ? ` from ${evt.customerName}` : ""}${evt.technicianName ? ` → ${evt.technicianName}` : ""}.`
+          : `Booking assigned${evt.technicianName ? ` to ${evt.technicianName}` : ""}.`;
+      }
       return {
         id: Date.now(),
         kind: evt.type,
-        title: "Booking assigned",
-        body: `Booking ${evt.bookingId} has been assigned.`,
+        title: role === "worker" ? "New job assigned" : role === "customer" ? "Technician assigned" : "Booking assigned",
+        body,
         booking_id: null,
         booking_public_id: evt.bookingId,
         message_id: null,
@@ -82,13 +99,16 @@ export function mapRealtimeEventToPreview(evt: RealtimeEvent): AppNotification |
         read_at: null,
         created_at: evt.assignedAt ?? now,
       };
+    }
 
     case "booking.reassigned":
       return {
         id: Date.now(),
         kind: evt.type,
         title: "Booking reassigned",
-        body: `Booking ${evt.bookingId} has a new technician.`,
+        body: evt.serviceTitle
+          ? `${evt.serviceTitle} has been reassigned to another technician.`
+          : "A booking has been reassigned to another technician.",
         booking_id: null,
         booking_public_id: evt.bookingId,
         message_id: null,
@@ -102,7 +122,9 @@ export function mapRealtimeEventToPreview(evt: RealtimeEvent): AppNotification |
         id: Date.now(),
         kind: evt.type,
         title: "Booking cancelled",
-        body: `Booking ${evt.bookingId} has been cancelled.`,
+        body: evt.serviceTitle
+          ? `Your ${evt.serviceTitle} booking is now cancelled.`
+          : "Your booking has been cancelled.",
         booking_id: null,
         booking_public_id: evt.bookingId,
         message_id: null,
