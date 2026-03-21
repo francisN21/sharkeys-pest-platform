@@ -4,7 +4,6 @@ import React from "react";
 import type { TechBookingRow, TechRow } from "../../../../lib/api/adminTechBookings";
 import {
   formatAccountTypeLabel,
-  formatCreated,
   formatRange,
   getBookee,
   getKind,
@@ -70,11 +69,13 @@ export default function TechWorkerSection({
   expanded,
   onToggle,
   onOpenDetail,
+  onReassign,
 }: {
   technician: TechRow;
   expanded: boolean;
   onToggle: () => void;
   onOpenDetail: (bookingPublicId: string) => void;
+  onReassign: (bookingPublicId: string) => void;
 }) {
   const list: TechBookingWithLead[] = (technician.bookings ?? []) as TechBookingWithLead[];
 
@@ -236,6 +237,15 @@ export default function TechWorkerSection({
                     </div>
 
                     <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                      <button
+                        type="button"
+                        onClick={() => onReassign(b.public_id)}
+                        className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
+                        style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
+                      >
+                        Re-assign
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => onOpenDetail(b.public_id)}
