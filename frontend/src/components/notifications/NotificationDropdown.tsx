@@ -174,41 +174,8 @@ function getBrowserAlertButtonLabel(
   return "Turn on";
 }
 
-function readString(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const s = value.trim();
-  return s.length ? s : null;
-}
-
 function getNotificationBookingId(item: AppNotification): string | null {
-  const obj = item as Record<string, unknown>;
-
-  const directKeys = [
-    "booking_public_id",
-    "bookingPublicId",
-    "booking_id",
-    "bookingId",
-    "public_id",
-    "publicId",
-    "entity_public_id",
-    "entityPublicId",
-  ] as const;
-
-  for (const key of directKeys) {
-    const v = readString(obj[key]);
-    if (v) return v;
-  }
-
-  const data = obj.data;
-  if (data && typeof data === "object") {
-    const dataObj = data as Record<string, unknown>;
-    for (const key of directKeys) {
-      const v = readString(dataObj[key]);
-      if (v) return v;
-    }
-  }
-
-  return null;
+  return item.booking_public_id ?? null;
 }
 
 function getNotificationHref(
@@ -366,8 +333,7 @@ function NotificationCard({
                 {label}
               </span>
 
-              {item.kind === "message.new" &&
-                typeof item.metadata?.serviceTitle === "string" &&
+              {typeof item.metadata?.serviceTitle === "string" &&
                 item.metadata.serviceTitle && (
                   <span
                     className="truncate rounded-full px-2 py-1 text-[10px] font-medium"

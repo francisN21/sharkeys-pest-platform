@@ -36,7 +36,6 @@ export type AppNotification = {
   kind: string;
   title: string;
   body: string | null;
-  booking_id: number | null;
   booking_public_id: string | null;
   message_id: number | null;
   metadata: Record<string, unknown>;
