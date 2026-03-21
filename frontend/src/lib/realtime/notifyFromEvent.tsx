@@ -32,11 +32,13 @@ function fmtDatetime(value?: string | null) {
  */
 export function notifyFromEvent(evt: RealtimeEvent) {
   switch (evt.type) {
-    case "booking.created":
+    case "booking.created": {
+      const desc = [evt.bookingName, evt.customerName].filter(Boolean).join(" • ") || "A new booking was submitted.";
+      const atStr = fmtDatetime(evt.startsAt);
       appNotify({
         level: "info",
         toastTitle: "New booking created",
-        toastDescription: bookingDisplayName(evt),
+        toastDescription: desc,
         entity: "booking",
         entityId: evt.bookingId,
         at: evt.startsAt,
@@ -46,18 +48,15 @@ export function notifyFromEvent(evt: RealtimeEvent) {
             value: evt.customerName ?? "—",
             icon: <User className="h-4 w-4" />,
           },
-          {
-            label: "Starts",
-            value: evt.startsAt ?? "—",
-            icon: <Clock className="h-4 w-4" />,
-          },
+          ...(atStr ? [{ label: "Starts", value: atStr, icon: <Clock className="h-4 w-4" /> }] : []),
         ],
         browserTitle: "New booking",
-        browserBody: bookingDisplayName(evt),
+        browserBody: desc,
         browser: true,
         browserOnlyWhenHidden: true,
       });
       return;
+    }
 
     case "booking.accepted": {
       const atStr = fmtDatetime(evt.startsAt);
@@ -157,93 +156,79 @@ export function notifyFromEvent(evt: RealtimeEvent) {
       return;
     }
 
-    case "booking.edited":
+    case "booking.edited": {
+      const startsStr = fmtDatetime(evt.startsAt);
+      const endsStr = fmtDatetime(evt.endsAt);
+      const desc = startsStr ? `Rescheduled to ${startsStr}.` : "A booking has been updated.";
       appNotify({
         level: "info",
         toastTitle: "Booking updated",
-        toastDescription: bookingDisplayName(evt),
+        toastDescription: desc,
         entity: "booking",
         entityId: evt.bookingId,
         at: evt.startsAt,
         details: [
-          {
-            label: "Starts",
-            value: evt.startsAt ?? "—",
-            icon: <Clock className="h-4 w-4" />,
-          },
-          {
-            label: "Ends",
-            value: evt.endsAt ?? "—",
-            icon: <Clock className="h-4 w-4" />,
-          },
+          ...(startsStr ? [{ label: "Starts", value: startsStr, icon: <Clock className="h-4 w-4" /> }] : []),
+          ...(endsStr ? [{ label: "Ends", value: endsStr, icon: <Clock className="h-4 w-4" /> }] : []),
         ],
         browserTitle: "Booking updated",
-        browserBody: bookingDisplayName(evt),
+        browserBody: desc,
         browser: true,
         browserOnlyWhenHidden: true,
       });
       return;
+    }
 
-    case "booking.completed":
+    case "booking.completed": {
+      const priceStr = fmtMoney(evt.finalPriceCents);
+      const service = evt.bookingName ?? null;
+      const desc = [
+        service,
+        evt.technicianName ? `by ${evt.technicianName}` : null,
+        priceStr,
+      ].filter(Boolean).join(" • ") || "A booking has been completed.";
       appNotify({
         level: "success",
         toastTitle: "Booking completed",
-        toastDescription: bookingDisplayName(evt),
+        toastDescription: desc,
         entity: "booking",
         entityId: evt.bookingId,
         at: evt.completedAt,
         amountCents: evt.finalPriceCents,
         actorName: evt.technicianName,
         details: [
-          {
-            label: "Technician",
-            value: evt.technicianName ?? "—",
-            icon: <Wrench className="h-4 w-4" />,
-          },
-          {
-            label: "Booking",
-            value: bookingDisplayName(evt),
-            icon: <Tag className="h-4 w-4" />,
-          },
+          ...(evt.technicianName ? [{ label: "Technician", value: evt.technicianName, icon: <Wrench className="h-4 w-4" /> }] : []),
+          ...(service ? [{ label: "Service", value: service, icon: <Tag className="h-4 w-4" /> }] : []),
         ],
         browserTitle: "Job completed",
-        browserBody:
-          `${bookingDisplayName(evt)}` +
-          (fmtMoney(evt.finalPriceCents) ? ` • ${fmtMoney(evt.finalPriceCents)}` : ""),
+        browserBody: desc,
         browser: true,
         browserOnlyWhenHidden: true,
       });
       return;
+    }
 
-    case "booking.price_set":
+    case "booking.price_set": {
+      const priceStr = fmtMoney(evt.finalPriceCents);
+      const desc = priceStr ? `Final price set: ${priceStr}.` : "Final price has been updated.";
       appNotify({
         level: "info",
         toastTitle: "Final price updated",
-        toastDescription: bookingDisplayName(evt),
+        toastDescription: desc,
         entity: "payment",
         entityId: evt.bookingId,
         at: evt.setAt,
         amountCents: evt.finalPriceCents,
         details: [
-          {
-            label: "Type",
-            value: "Final Price",
-            icon: <DollarSign className="h-4 w-4" />,
-          },
-          {
-            label: "Booking",
-            value: bookingDisplayName(evt),
-            icon: <Tag className="h-4 w-4" />,
-          },
+          { label: "Amount", value: priceStr ?? "—", icon: <DollarSign className="h-4 w-4" /> },
         ],
         browserTitle: "Final price updated",
-        browserBody:
-          `${bookingDisplayName(evt)}` +
-          (fmtMoney(evt.finalPriceCents) ? ` • ${fmtMoney(evt.finalPriceCents)}` : ""),
+        browserBody: desc,
         browser: true,
         browserOnlyWhenHidden: true,
       });
       return;
+    }
 
     case "message.new":
       appNotify({

@@ -46,7 +46,7 @@ export function mapRealtimeEventToPreview(evt: RealtimeEvent): AppNotification |
         id: Date.now(),
         kind: evt.type,
         title: "New booking created",
-        body: evt.bookingName ?? `Booking ${evt.bookingId}`,
+        body: [evt.bookingName, evt.customerName].filter(Boolean).join(" • ") || "A new booking was submitted.",
         booking_id: null,
         booking_public_id: evt.bookingId,
         message_id: null,
@@ -138,7 +138,9 @@ export function mapRealtimeEventToPreview(evt: RealtimeEvent): AppNotification |
         id: Date.now(),
         kind: evt.type,
         title: "Booking updated",
-        body: `Booking ${evt.bookingId} was updated.`,
+        body: evt.startsAt
+          ? `Rescheduled to ${new Date(evt.startsAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}.`
+          : "A booking has been updated.",
         booking_id: null,
         booking_public_id: evt.bookingId,
         message_id: null,
@@ -147,17 +149,20 @@ export function mapRealtimeEventToPreview(evt: RealtimeEvent): AppNotification |
         created_at: evt.startsAt ?? now,
       };
 
-    case "booking.completed":
+    case "booking.completed": {
+      const price = typeof evt.finalPriceCents === "number"
+        ? ` • $${(evt.finalPriceCents / 100).toFixed(2)}`
+        : "";
+      const service = evt.bookingName ?? null;
       return {
         id: Date.now(),
         kind: evt.type,
         title: "Booking completed",
-        body:
-          `Booking ${evt.bookingId}` +
-          (evt.technicianName ? ` by ${evt.technicianName}` : "") +
-          (typeof evt.finalPriceCents === "number"
-            ? ` • $${(evt.finalPriceCents / 100).toFixed(2)}`
-            : ""),
+        body: [
+          service,
+          evt.technicianName ? `by ${evt.technicianName}` : null,
+          price ? price.replace(" • ", "") : null,
+        ].filter(Boolean).join(" • ") || "A booking has been completed.",
         booking_id: null,
         booking_public_id: evt.bookingId,
         message_id: null,
@@ -165,17 +170,17 @@ export function mapRealtimeEventToPreview(evt: RealtimeEvent): AppNotification |
         read_at: null,
         created_at: evt.completedAt ?? now,
       };
+    }
 
-    case "booking.price_set":
+    case "booking.price_set": {
+      const priceStr = typeof evt.finalPriceCents === "number"
+        ? `$${(evt.finalPriceCents / 100).toFixed(2)}`
+        : null;
       return {
         id: Date.now(),
         kind: evt.type,
         title: "Final price updated",
-        body:
-          `Booking ${evt.bookingId}` +
-          (typeof evt.finalPriceCents === "number"
-            ? ` • $${(evt.finalPriceCents / 100).toFixed(2)}`
-            : ""),
+        body: priceStr ? `Final price set: ${priceStr}.` : "Final price has been updated.",
         booking_id: null,
         booking_public_id: evt.bookingId,
         message_id: null,
@@ -183,6 +188,7 @@ export function mapRealtimeEventToPreview(evt: RealtimeEvent): AppNotification |
         read_at: null,
         created_at: evt.setAt ?? now,
       };
+    }
 
     case "message.new":
       return {
