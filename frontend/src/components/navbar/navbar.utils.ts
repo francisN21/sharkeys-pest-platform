@@ -171,7 +171,7 @@ export function mapRealtimeEventToPreview(evt: RealtimeEvent): AppNotification |
         booking_id: null,
         booking_public_id: evt.threadId,
         message_id: null,
-        metadata: {},
+        metadata: { serviceTitle: evt.serviceTitle ?? null },
         read_at: null,
         created_at: evt.at ?? now,
       };

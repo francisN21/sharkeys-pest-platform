@@ -56,6 +56,7 @@ export type RealtimeEvent =
       threadId: string;
       fromName?: string;
       snippet?: string;
+      serviceTitle?: string;
       at?: string;
     }
   | {

@@ -355,15 +355,32 @@ function NotificationCard({
           </div>
 
           <div className="mt-3 flex items-center justify-between gap-3">
-            <span
-              className="inline-flex items-center rounded-full px-2 py-1 text-[10px] font-semibold"
-              style={{
-                background: accent.bg,
-                color: accent.color,
-              }}
-            >
-              {label}
-            </span>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span
+                className="inline-flex items-center rounded-full px-2 py-1 text-[10px] font-semibold"
+                style={{
+                  background: accent.bg,
+                  color: accent.color,
+                }}
+              >
+                {label}
+              </span>
+
+              {item.kind === "message.new" &&
+                typeof item.metadata?.serviceTitle === "string" &&
+                item.metadata.serviceTitle && (
+                  <span
+                    className="truncate rounded-full px-2 py-1 text-[10px] font-medium"
+                    style={{
+                      background: "rgb(var(--bg))",
+                      color: "rgb(var(--muted))",
+                      border: "1px solid rgb(var(--border))",
+                    }}
+                  >
+                    {item.metadata.serviceTitle}
+                  </span>
+                )}
+            </div>
 
             <span
               className="shrink-0 text-[11px]"

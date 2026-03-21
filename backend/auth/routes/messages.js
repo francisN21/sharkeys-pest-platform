@@ -297,6 +297,7 @@ router.post("/admin/bookings/:publicId/messages", requireAuth, async (req, res, 
         at: msg.created_at,
         snippet: msg.body,
         fromName,
+        serviceTitle,
       },
       {
         includeAdminRoles: true,

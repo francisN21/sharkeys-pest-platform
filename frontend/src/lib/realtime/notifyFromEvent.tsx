@@ -7,7 +7,6 @@ import {
   User,
   Clock,
   DollarSign,
-  MessageSquare,
 } from "lucide-react";
 import type { RealtimeEvent } from "./events";
 
@@ -252,25 +251,16 @@ export function notifyFromEvent(evt: RealtimeEvent) {
     case "message.new":
       appNotify({
         level: "info",
-        toastTitle: "New message",
+        toastTitle: evt.fromName ? `New message from ${evt.fromName}` : "New message",
         toastDescription: evt.snippet ?? "You received a message.",
         entity: "message",
         entityId: evt.threadId,
         at: evt.at,
-        details: [
-          {
-            label: "From",
-            value: evt.fromName ?? "—",
-            icon: <User className="h-4 w-4" />,
-          },
-          {
-            label: "Thread",
-            value: evt.threadId,
-            icon: <MessageSquare className="h-4 w-4" />,
-          },
-        ],
-        browserTitle: `Message from ${evt.fromName ?? "someone"}`,
-        browserBody: evt.snippet ?? "Open the app to reply.",
+        details: evt.serviceTitle
+          ? [{ label: "Service", value: evt.serviceTitle, icon: <Wrench className="h-4 w-4" /> }]
+          : [],
+        browserTitle: evt.fromName ? `Message from ${evt.fromName}` : "New message",
+        browserBody: [evt.snippet, evt.serviceTitle].filter(Boolean).join(" • ") || "Open the app to reply.",
         browser: true,
         browserOnlyWhenHidden: true,
       });
