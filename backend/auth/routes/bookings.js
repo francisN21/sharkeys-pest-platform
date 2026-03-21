@@ -5,7 +5,7 @@ const { requireAuth } = require("../middleware/requireAuth");
 const { requireRole } = require("../middleware/requireRole");
 const { broadcastToRoles, broadcastToUser } = require("../src/realtime");
 const { createNotifications } = require("../src/notifications");
-const { sendBookingConfirmationEmail } = require("../src/email/mailer");
+const { sendBookingCreatedCustomerEmail } = require("../src/email/mailer");
 
 const router = express.Router();
 
@@ -119,6 +119,7 @@ async function assertBookingWindowAllowed(client, startsAt, endsAt) {
 
 router.post("/", requireAuth, async (req, res, next) => {
   const client = await pool.connect();
+
   try {
     const { servicePublicId, startsAt, endsAt, address, notes } =
       createBookingSchema.parse(req.body);
@@ -133,6 +134,7 @@ router.post("/", requireAuth, async (req, res, next) => {
       `SELECT id, title FROM services WHERE public_id = $1 AND is_active = true`,
       [servicePublicId]
     );
+
     if (s.rowCount === 0) {
       await client.query("ROLLBACK");
       return res.status(400).json({ ok: false, message: "Invalid service" });
@@ -161,8 +163,11 @@ router.post("/", requireAuth, async (req, res, next) => {
 
     const customerEmail = customerRes.rows[0]?.email ?? null;
     const customerFirstName = customerRes.rows[0]?.first_name ?? null;
-    const customerName = [customerRes.rows[0]?.first_name, customerRes.rows[0]?.last_name]
-      .filter(Boolean).join(" ").trim() || null;
+    const customerName =
+      [customerRes.rows[0]?.first_name, customerRes.rows[0]?.last_name]
+        .filter(Boolean)
+        .join(" ")
+        .trim() || null;
 
     const adminUserIds = await getAdminAndSuperUserIds(client);
 
@@ -175,7 +180,12 @@ router.post("/", requireAuth, async (req, res, next) => {
         : "A new booking was created.",
       bookingId: booking.id,
       bookingPublicId: booking.public_id,
-      metadata: { bookingPublicId: booking.public_id, serviceTitle, customerName, createdByUserId: userId },
+      metadata: {
+        bookingPublicId: booking.public_id,
+        serviceTitle,
+        customerName,
+        createdByUserId: userId,
+      },
     }));
 
     await createNotifications(client, notificationRows);
@@ -191,16 +201,20 @@ router.post("/", requireAuth, async (req, res, next) => {
     });
 
     if (customerEmail) {
-      await sendBookingConfirmationEmail({
-        to: customerEmail,
-        firstName: customerFirstName,
-        bookingPublicId: booking.public_id,
-        serviceTitle,
-        startsAt: booking.starts_at,
-        endsAt: booking.ends_at,
-        address: booking.address,
-        notes: booking.notes,
-      });
+      try {
+        await sendBookingCreatedCustomerEmail({
+          to: customerEmail,
+          firstName: customerFirstName,
+          bookingPublicId: booking.public_id,
+          serviceTitle,
+          startsAt: booking.starts_at,
+          endsAt: booking.ends_at,
+          address: booking.address,
+          notes: booking.notes,
+        });
+      } catch (emailErr) {
+        console.error("Booking created but customer email failed:", emailErr);
+      }
     }
 
     return res.status(201).json({
@@ -582,10 +596,7 @@ router.get("/availability", async (req, res, next) => {
     const localMidday = new Date(Date.UTC(y, m - 1, d, 12, 0, 0, 0) + tzOffsetMinutes * 60_000);
     const isSunday = localMidday.getUTCDay() === 0;
 
-    const intervals = [
-      ...bookingRes.rows,
-      ...blockRes.rows,
-    ];
+    const intervals = [...bookingRes.rows, ...blockRes.rows];
 
     if (isSunday) {
       intervals.push({

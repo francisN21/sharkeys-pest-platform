@@ -8,8 +8,8 @@ const {
 } = require("../src/realtime");
 const { createNotifications } = require("../src/notifications");
 const {
-  sendBookingConfirmationEmail,
-  sendBookingAssignedEmail,
+  sendBookingCreatedCustomerEmail,
+  sendBookingAssignedCustomerEmail,
 } = require("../src/email/mailer");
 
 const router = express.Router();
@@ -188,7 +188,7 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
           account_type = COALESCE(EXCLUDED.account_type, leads.account_type),
           address    = COALESCE(EXCLUDED.address, leads.address),
           updated_at = now()
-        RETURNING id, address, email, first_name
+        RETURNING id, address, email, first_name, last_name
         `,
         [
           lead.email,
@@ -272,16 +272,20 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
     }
 
     if (emailTo) {
-      await sendBookingConfirmationEmail({
-        to: emailTo,
-        firstName: firstNameForEmail,
-        bookingPublicId: booking.public_id,
-        serviceTitle,
-        startsAt: booking.starts_at,
-        endsAt: booking.ends_at,
-        address: booking.address,
-        notes: booking.notes,
-      });
+      try {
+        await sendBookingCreatedCustomerEmail({
+          to: emailTo,
+          firstName: firstNameForEmail,
+          bookingPublicId: booking.public_id,
+          serviceTitle,
+          startsAt: booking.starts_at,
+          endsAt: booking.ends_at,
+          address: booking.address,
+          notes: booking.notes,
+        });
+      } catch (emailErr) {
+        console.error("Admin-created booking succeeded but customer email failed:", emailErr);
+      }
     }
 
     return res.status(201).json({
@@ -667,6 +671,42 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
     const technicianName = [worker.first_name, worker.last_name].filter(Boolean).join(" ").trim() || null;
     const technicianPhone = worker.phone ?? null;
 
+    let emailTo = null;
+    let firstNameForEmail = null;
+    let customerName = null;
+
+    const recipientRes = await client.query(
+      `
+      SELECT
+        cu.email AS customer_email,
+        cu.first_name AS customer_first_name,
+        cu.last_name AS customer_last_name,
+        l.email AS lead_email,
+        l.first_name AS lead_first_name,
+        l.last_name AS lead_last_name
+      FROM bookings b
+      LEFT JOIN users cu ON cu.id = b.customer_user_id
+      LEFT JOIN leads l ON l.id = b.lead_id
+      WHERE b.id = $1
+      LIMIT 1
+      `,
+      [booking.id]
+    );
+
+    if (recipientRes.rowCount > 0) {
+      const row = recipientRes.rows[0];
+
+      emailTo = row.customer_email || row.lead_email || null;
+      firstNameForEmail = row.customer_first_name || row.lead_first_name || null;
+      customerName = [
+        row.customer_first_name || row.lead_first_name || null,
+        row.customer_last_name || row.lead_last_name || null,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .trim() || null;
+    }
+
     await client.query(
       `
       INSERT INTO booking_assignments (booking_id, worker_user_id, assigned_by_user_id, assigned_at)
@@ -749,41 +789,6 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
       });
     }
 
-    let emailTo = null;
-    let firstNameForEmail = null;
-
-    const recipientRes = await client.query(
-      `
-      SELECT
-        cu.email AS customer_email,
-        cu.first_name AS customer_first_name,
-        cu.last_name AS customer_last_name,
-        l.email AS lead_email,
-        l.first_name AS lead_first_name
-      FROM bookings b
-      LEFT JOIN users cu ON cu.id = b.customer_user_id
-      LEFT JOIN leads l ON l.id = b.lead_id
-      WHERE b.id = $1
-      LIMIT 1
-      `,
-      [booking.id]
-    );
-
-    let customerName = null;
-
-    if (recipientRes.rowCount > 0) {
-      emailTo = recipientRes.rows[0].customer_email || recipientRes.rows[0].lead_email || null;
-      firstNameForEmail =
-        recipientRes.rows[0].customer_first_name || recipientRes.rows[0].lead_first_name || null;
-      customerName = [
-        recipientRes.rows[0].customer_first_name,
-        recipientRes.rows[0].customer_last_name,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .trim() || null;
-    }
-
     await createNotifications(client, notificationRows);
 
     await client.query("COMMIT");
@@ -831,17 +836,21 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
     });
 
     if (emailTo) {
-      await sendBookingAssignedEmail({
-        to: emailTo,
-        firstName: firstNameForEmail,
-        bookingPublicId,
-        serviceTitle: booking.service_title,
-        startsAt: booking.starts_at,
-        endsAt: booking.ends_at,
-        address: booking.address,
-        technicianName,
-        technicianPhone,
-      });
+      try {
+        await sendBookingAssignedCustomerEmail({
+          to: emailTo,
+          firstName: firstNameForEmail,
+          bookingPublicId,
+          serviceTitle: booking.service_title,
+          startsAt: booking.starts_at,
+          endsAt: booking.ends_at,
+          address: booking.address,
+          technicianName,
+          technicianPhone,
+        });
+      } catch (emailErr) {
+        console.error("Booking assignment succeeded but customer email failed:", emailErr);
+      }
     }
 
     res.json({ ok: true, booking: updated.rows[0] });

@@ -4,7 +4,7 @@ const { requireAuth } = require("../middleware/requireAuth");
 const { requireRole } = require("../middleware/requireRole");
 const { broadcastToBookingParticipants } = require("../src/realtime");
 const { createNotifications } = require("../src/notifications");
-const { sendBookingCompletedEmail } = require("../src/email/mailer");
+const { sendBookingCompletedCustomerEmail } = require("../src/email/mailer");
 
 const router = express.Router();
 
@@ -242,11 +242,6 @@ router.patch("/:id/complete", requireAuth, requireRole("worker"), async (req, re
       completed_worker_user_id: workerId,
     });
 
-    /**
-     * Enrich completion payload for nicer realtime toast:
-     * - technician name
-     * - final price
-     */
     const enrichRes = await client.query(
       `
       SELECT
@@ -286,9 +281,10 @@ router.patch("/:id/complete", requireAuth, requireRole("worker"), async (req, re
 
     const adminUserIds = await getAdminAndSuperUserIds(client);
 
-    const priceLabel = typeof finalPriceCents === "number"
-      ? ` for $${(finalPriceCents / 100).toFixed(2)}`
-      : "";
+    const priceLabel =
+      typeof finalPriceCents === "number"
+        ? ` for $${(finalPriceCents / 100).toFixed(2)}`
+        : "";
 
     const notificationRows = adminUserIds.map((adminUserId) => ({
       userId: adminUserId,
@@ -299,7 +295,13 @@ router.patch("/:id/complete", requireAuth, requireRole("worker"), async (req, re
         : `Booking completed${technicianName ? ` by ${technicianName}` : ""}${priceLabel}.`,
       bookingId: booking.id,
       bookingPublicId,
-      metadata: { bookingPublicId, serviceTitle, completedByUserId: workerId, technicianName, finalPriceCents },
+      metadata: {
+        bookingPublicId,
+        serviceTitle,
+        completedByUserId: workerId,
+        technicianName,
+        finalPriceCents,
+      },
     }));
 
     if (booking.customer_user_id) {
@@ -312,7 +314,13 @@ router.patch("/:id/complete", requireAuth, requireRole("worker"), async (req, re
           : `Your booking has been completed${technicianName ? ` by ${technicianName}` : ""}${priceLabel}.`,
         bookingId: booking.id,
         bookingPublicId,
-        metadata: { bookingPublicId, serviceTitle, completedByUserId: workerId, technicianName, finalPriceCents },
+        metadata: {
+          bookingPublicId,
+          serviceTitle,
+          completedByUserId: workerId,
+          technicianName,
+          finalPriceCents,
+        },
       });
     }
 
@@ -338,15 +346,19 @@ router.patch("/:id/complete", requireAuth, requireRole("worker"), async (req, re
     );
 
     if (emailTo) {
-      await sendBookingCompletedEmail({
-        to: emailTo,
-        firstName: firstNameForEmail,
-        bookingPublicId,
-        serviceTitle,
-        completedAt: updated.rows[0].completed_at,
-        technicianName,
-        finalPriceCents,
-      });
+      try {
+        await sendBookingCompletedCustomerEmail({
+          to: emailTo,
+          firstName: firstNameForEmail,
+          bookingPublicId,
+          serviceTitle,
+          completedAt: updated.rows[0].completed_at,
+          technicianName,
+          finalPriceCents,
+        });
+      } catch (emailErr) {
+        console.error("Booking completion succeeded but customer email failed:", emailErr);
+      }
     }
 
     res.json({ ok: true, booking: updated.rows[0] });

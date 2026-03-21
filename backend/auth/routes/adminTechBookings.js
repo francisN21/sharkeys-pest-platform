@@ -4,7 +4,7 @@ const { z } = require("zod");
 const { requireAuth } = require("../middleware/requireAuth");
 const { broadcastToUsers } = require("../src/realtime");
 const { createNotifications } = require("../src/notifications");
-const { sendBookingAssignedEmail } = require("../src/email/mailer");
+const { sendBookingAssignedCustomerEmail } = require("../src/email/mailer");
 
 const router = express.Router();
 
@@ -503,17 +503,21 @@ router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, 
     );
 
     if (emailTo) {
-      await sendBookingAssignedEmail({
-        to: emailTo,
-        firstName: firstNameForEmail,
-        bookingPublicId,
-        serviceTitle: booking.service_title,
-        startsAt: booking.starts_at,
-        endsAt: booking.ends_at,
-        address: booking.address,
-        technicianName,
-        technicianPhone,
-      });
+      try {
+        await sendBookingAssignedCustomerEmail({
+          to: emailTo,
+          firstName: firstNameForEmail,
+          bookingPublicId,
+          serviceTitle: booking.service_title,
+          startsAt: booking.starts_at,
+          endsAt: booking.ends_at,
+          address: booking.address,
+          technicianName,
+          technicianPhone,
+        });
+      } catch (emailErr) {
+        console.error("Booking reassignment succeeded but customer email failed:", emailErr);
+      }
     }
 
     return res.json({ ok: true });
