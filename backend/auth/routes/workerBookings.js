@@ -286,25 +286,20 @@ router.patch("/:id/complete", requireAuth, requireRole("worker"), async (req, re
 
     const adminUserIds = await getAdminAndSuperUserIds(client);
 
+    const priceLabel = typeof finalPriceCents === "number"
+      ? ` for $${(finalPriceCents / 100).toFixed(2)}`
+      : "";
+
     const notificationRows = adminUserIds.map((adminUserId) => ({
       userId: adminUserId,
       kind: "booking.completed",
       title: "Booking completed",
-      body:
-        `Booking ${bookingPublicId} was completed` +
-        (technicianName ? ` by ${technicianName}` : "") +
-        (typeof finalPriceCents === "number"
-          ? ` for $${(finalPriceCents / 100).toFixed(2)}`
-          : "") +
-        ".",
+      body: serviceTitle
+        ? `${serviceTitle}${technicianName ? ` completed by ${technicianName}` : " completed"}${priceLabel}.`
+        : `Booking completed${technicianName ? ` by ${technicianName}` : ""}${priceLabel}.`,
       bookingId: booking.id,
       bookingPublicId,
-      metadata: {
-        bookingPublicId,
-        completedByUserId: workerId,
-        technicianName,
-        finalPriceCents,
-      },
+      metadata: { bookingPublicId, serviceTitle, completedByUserId: workerId, technicianName, finalPriceCents },
     }));
 
     if (booking.customer_user_id) {
@@ -312,21 +307,12 @@ router.patch("/:id/complete", requireAuth, requireRole("worker"), async (req, re
         userId: booking.customer_user_id,
         kind: "booking.completed",
         title: "Your booking is complete",
-        body:
-          `Booking ${bookingPublicId} has been completed` +
-          (technicianName ? ` by ${technicianName}` : "") +
-          (typeof finalPriceCents === "number"
-            ? ` for $${(finalPriceCents / 100).toFixed(2)}`
-            : "") +
-          ".",
+        body: serviceTitle
+          ? `Your ${serviceTitle} has been completed${technicianName ? ` by ${technicianName}` : ""}${priceLabel}.`
+          : `Your booking has been completed${technicianName ? ` by ${technicianName}` : ""}${priceLabel}.`,
         bookingId: booking.id,
         bookingPublicId,
-        metadata: {
-          bookingPublicId,
-          completedByUserId: workerId,
-          technicianName,
-          finalPriceCents,
-        },
+        metadata: { bookingPublicId, serviceTitle, completedByUserId: workerId, technicianName, finalPriceCents },
       });
     }
 
@@ -340,6 +326,7 @@ router.patch("/:id/complete", requireAuth, requireRole("worker"), async (req, re
       {
         type: "booking.completed",
         bookingId: bookingPublicId,
+        bookingName: serviceTitle,
         completedAt: updated.rows[0].completed_at,
         technicianName,
         finalPriceCents,

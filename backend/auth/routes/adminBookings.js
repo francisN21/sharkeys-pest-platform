@@ -148,10 +148,11 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
     let finalAddress = null;
     let emailTo = null;
     let firstNameForEmail = null;
+    let customerName = null;
 
     if (payload.customerPublicId) {
       const u = await client.query(
-        `SELECT id, address, email, first_name FROM users WHERE public_id = $1`,
+        `SELECT id, address, email, first_name, last_name FROM users WHERE public_id = $1`,
         [payload.customerPublicId]
       );
       if (u.rowCount === 0) {
@@ -164,6 +165,7 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
       finalAddress = String(payload.address || "").trim() || customerAddress;
       emailTo = u.rows[0].email ?? null;
       firstNameForEmail = u.rows[0].first_name ?? null;
+      customerName = [u.rows[0].first_name, u.rows[0].last_name].filter(Boolean).join(" ").trim() || null;
 
       if (!finalAddress || finalAddress.length < 5) {
         await client.query("ROLLBACK");
@@ -202,6 +204,10 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
       finalAddress = String(payload.address || "").trim() || String(up.rows[0].address || "").trim();
       emailTo = up.rows[0].email ?? payload.lead.email ?? null;
       firstNameForEmail = up.rows[0].first_name ?? payload.lead.first_name ?? null;
+      customerName = [
+        up.rows[0].first_name ?? payload.lead.first_name ?? null,
+        up.rows[0].last_name ?? payload.lead.last_name ?? null,
+      ].filter(Boolean).join(" ").trim() || null;
 
       if (!finalAddress || finalAddress.length < 5) {
         await client.query("ROLLBACK");
@@ -235,10 +241,12 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
         userId: customerUserId,
         kind: "booking.created",
         title: "Booking created",
-        body: `A booking was created for ${booking.public_id}.`,
+        body: serviceTitle
+          ? `Your ${serviceTitle} booking has been created.`
+          : "Your booking has been created.",
         bookingId: booking.id,
         bookingPublicId: booking.public_id,
-        metadata: { bookingPublicId: booking.public_id },
+        metadata: { bookingPublicId: booking.public_id, serviceTitle, startsAt: booking.starts_at },
       });
     }
 
@@ -249,6 +257,8 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
     broadcastToRoles(["admin", "superuser"], {
       type: "booking.created",
       bookingId: booking.public_id,
+      bookingName: serviceTitle,
+      customerName,
       startsAt: booking.starts_at,
     });
 
@@ -256,6 +266,7 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
       broadcastToUser(customerUserId, {
         type: "booking.created",
         bookingId: booking.public_id,
+        bookingName: serviceTitle,
         startsAt: booking.starts_at,
       });
     }

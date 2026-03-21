@@ -294,15 +294,21 @@ router.post("/", async (req, res, next) => {
       `
     );
 
+    const leadName = [leadRow.first_name, leadRow.last_name].filter(Boolean).join(" ").trim() || null;
+
     const notificationRows = adminUsersRes.rows.map((r) => ({
       userId: r.user_id,
       kind: "booking.created",
       title: "New public booking",
-      body: `A new booking ${booking.public_id} was created by a new customer.`,
+      body: serviceTitle
+        ? `New ${serviceTitle} booking from ${leadName ?? "a new customer"}.`
+        : `New booking from ${leadName ?? "a new customer"}.`,
       bookingId: booking.id,
       bookingPublicId: booking.public_id,
       metadata: {
         bookingPublicId: booking.public_id,
+        serviceTitle,
+        customerName: leadName,
         source: "public",
         leadEmail: normalizedEmail,
         matchedBy,
@@ -316,6 +322,8 @@ router.post("/", async (req, res, next) => {
     broadcastToRoles(["admin", "superuser"], {
       type: "booking.created",
       bookingId: booking.public_id,
+      bookingName: serviceTitle,
+      customerName: leadName,
       startsAt: booking.starts_at,
       source: "public",
     });

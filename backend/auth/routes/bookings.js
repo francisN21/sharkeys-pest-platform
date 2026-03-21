@@ -154,33 +154,29 @@ router.post("/", requireAuth, async (req, res, next) => {
 
     await addEvent(client, booking.id, userId, "created", {});
 
+    const customerRes = await client.query(
+      `SELECT email, first_name, last_name FROM users WHERE id = $1 LIMIT 1`,
+      [userId]
+    );
+
+    const customerEmail = customerRes.rows[0]?.email ?? null;
+    const customerFirstName = customerRes.rows[0]?.first_name ?? null;
+    const customerName = [customerRes.rows[0]?.first_name, customerRes.rows[0]?.last_name]
+      .filter(Boolean).join(" ").trim() || null;
+
     const adminUserIds = await getAdminAndSuperUserIds(client);
 
     const notificationRows = adminUserIds.map((adminUserId) => ({
       userId: adminUserId,
       kind: "booking.created",
       title: "New booking created",
-      body: `Customer created booking ${booking.public_id}.`,
+      body: serviceTitle
+        ? `New ${serviceTitle} booking from ${customerName ?? "a customer"}.`
+        : "A new booking was created.",
       bookingId: booking.id,
       bookingPublicId: booking.public_id,
-      metadata: {
-        bookingPublicId: booking.public_id,
-        createdByUserId: userId,
-      },
+      metadata: { bookingPublicId: booking.public_id, serviceTitle, customerName, createdByUserId: userId },
     }));
-
-    const customerRes = await client.query(
-      `
-      SELECT email, first_name
-      FROM users
-      WHERE id = $1
-      LIMIT 1
-      `,
-      [userId]
-    );
-
-    const customerEmail = customerRes.rows[0]?.email ?? null;
-    const customerFirstName = customerRes.rows[0]?.first_name ?? null;
 
     await createNotifications(client, notificationRows);
 
@@ -189,6 +185,8 @@ router.post("/", requireAuth, async (req, res, next) => {
     broadcastToRoles(["admin", "superuser"], {
       type: "booking.created",
       bookingId: booking.public_id,
+      bookingName: serviceTitle,
+      customerName,
       startsAt: booking.starts_at,
     });
 
@@ -256,9 +254,10 @@ router.patch("/:publicId", requireAuth, requireRole("customer"), async (req, res
 
     const bRes = await client.query(
       `
-      SELECT id, status
-      FROM bookings
-      WHERE public_id = $1 AND customer_user_id = $2
+      SELECT b.id, b.status, s.title AS service_title
+      FROM bookings b
+      JOIN services s ON s.id = b.service_id
+      WHERE b.public_id = $1 AND b.customer_user_id = $2
       FOR UPDATE
       `,
       [bookingPublicId, userId]
@@ -342,15 +341,20 @@ router.patch("/:publicId", requireAuth, requireRole("customer"), async (req, res
 
     const adminUserIds = await getAdminAndSuperUserIds(client);
 
+    const editServiceTitle = booking.service_title ?? null;
+
     const notificationRows = adminUserIds.map((adminUserId) => ({
       userId: adminUserId,
       kind: "booking.edited",
       title: "Booking updated",
-      body: `Customer updated booking ${updatedBooking.public_id}.`,
+      body: editServiceTitle
+        ? `${editServiceTitle} booking has been updated.`
+        : "A booking has been updated.",
       bookingId: booking.id,
       bookingPublicId: updatedBooking.public_id,
       metadata: {
         bookingPublicId: updatedBooking.public_id,
+        serviceTitle: editServiceTitle,
         startsAt: updatedBooking.starts_at,
         endsAt: updatedBooking.ends_at,
       },
@@ -363,6 +367,7 @@ router.patch("/:publicId", requireAuth, requireRole("customer"), async (req, res
     broadcastToRoles(["admin", "superuser"], {
       type: "booking.edited",
       bookingId: updatedBooking.public_id,
+      bookingName: editServiceTitle,
       startsAt: updatedBooking.starts_at,
       endsAt: updatedBooking.ends_at,
     });
@@ -401,9 +406,10 @@ router.patch("/:publicId/cancel", requireAuth, requireRole("customer"), async (r
 
     const b = await client.query(
       `
-      SELECT id, status
-      FROM bookings
-      WHERE public_id = $1 AND customer_user_id = $2
+      SELECT b.id, b.status, s.title AS service_title
+      FROM bookings b
+      JOIN services s ON s.id = b.service_id
+      WHERE b.public_id = $1 AND b.customer_user_id = $2
       FOR UPDATE
       `,
       [publicId, userId]
@@ -452,17 +458,20 @@ router.patch("/:publicId/cancel", requireAuth, requireRole("customer"), async (r
     const workerUserId = participantsRes.rows[0]?.worker_user_id ?? null;
     const adminUserIds = await getAdminAndSuperUserIds(client);
 
+    const cancelServiceTitle = booking.service_title ?? null;
+    const cancelPublicId = updated.rows[0].public_id;
+    const cancelledAt = updated.rows[0].cancelled_at;
+
     const notificationRows = adminUserIds.map((adminUserId) => ({
       userId: adminUserId,
       kind: "booking.cancelled",
       title: "Booking cancelled",
-      body: `Customer cancelled booking ${updated.rows[0].public_id}.`,
+      body: cancelServiceTitle
+        ? `${cancelServiceTitle} booking has been cancelled by the customer.`
+        : "A booking has been cancelled by the customer.",
       bookingId: booking.id,
-      bookingPublicId: updated.rows[0].public_id,
-      metadata: {
-        bookingPublicId: updated.rows[0].public_id,
-        cancelledByUserId: userId,
-      },
+      bookingPublicId: cancelPublicId,
+      metadata: { bookingPublicId: cancelPublicId, serviceTitle: cancelServiceTitle, cancelledByUserId: userId },
     }));
 
     if (workerUserId) {
@@ -470,13 +479,12 @@ router.patch("/:publicId/cancel", requireAuth, requireRole("customer"), async (r
         userId: workerUserId,
         kind: "booking.cancelled",
         title: "Booking cancelled",
-        body: `Booking ${updated.rows[0].public_id} has been cancelled.`,
+        body: cancelServiceTitle
+          ? `Your ${cancelServiceTitle} booking has been cancelled.`
+          : "A booking has been cancelled.",
         bookingId: booking.id,
-        bookingPublicId: updated.rows[0].public_id,
-        metadata: {
-          bookingPublicId: updated.rows[0].public_id,
-          cancelledByUserId: userId,
-        },
+        bookingPublicId: cancelPublicId,
+        metadata: { bookingPublicId: cancelPublicId, serviceTitle: cancelServiceTitle, cancelledByUserId: userId },
       });
     }
 
@@ -486,15 +494,17 @@ router.patch("/:publicId/cancel", requireAuth, requireRole("customer"), async (r
 
     broadcastToRoles(["admin", "superuser"], {
       type: "booking.cancelled",
-      bookingId: updated.rows[0].public_id,
-      cancelledAt: updated.rows[0].cancelled_at,
+      bookingId: cancelPublicId,
+      cancelledAt,
+      serviceTitle: cancelServiceTitle,
     });
 
     if (workerUserId) {
       broadcastToUser(workerUserId, {
         type: "booking.cancelled",
-        bookingId: updated.rows[0].public_id,
-        cancelledAt: updated.rows[0].cancelled_at,
+        bookingId: cancelPublicId,
+        cancelledAt,
+        serviceTitle: cancelServiceTitle,
       });
     }
 
