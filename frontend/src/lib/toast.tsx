@@ -8,7 +8,6 @@ import {
   XCircle,
   Info,
   Clock,
-  Hash,
   DollarSign,
   User,
   Wrench,
@@ -217,21 +216,7 @@ function AppToastContent(opts: AppToastOptions) {
   const money = formatMoneyFromCents(opts.amountCents);
   const entity = entityConfig(opts.entity);
 
-  const normalizedDetails: ToastDetail[] = [
-    ...(opts.entityId != null
-      ? [{ label: "ID", value: String(opts.entityId), icon: <Hash className="h-3.5 w-3.5" /> }]
-      : []),
-    ...(money
-      ? [{ label: "Amount", value: money, icon: <DollarSign className="h-3.5 w-3.5" /> }]
-      : []),
-    ...(opts.actorName
-      ? [{ label: "By", value: opts.actorName, icon: <User className="h-3.5 w-3.5" /> }]
-      : []),
-    ...(when
-      ? [{ label: "When", value: when, icon: <Clock className="h-3.5 w-3.5" /> }]
-      : []),
-    ...(opts.details ?? []),
-  ];
+  const normalizedDetails: ToastDetail[] = opts.details ?? [];
 
   return (
     <div
@@ -282,16 +267,10 @@ function AppToastContent(opts: AppToastOptions) {
             ) : null}
           </div>
 
-          {(opts.entityId != null || when || money || opts.actorName) ? (
+          {(money || when) ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {opts.entityId != null ? (
-                <MetaChip icon={<Hash className="h-3.5 w-3.5" />} text={String(opts.entityId)} />
-              ) : null}
               {money ? (
                 <MetaChip icon={<DollarSign className="h-3.5 w-3.5" />} text={money} />
-              ) : null}
-              {opts.actorName ? (
-                <MetaChip icon={<User className="h-3.5 w-3.5" />} text={opts.actorName} />
               ) : null}
               {when ? (
                 <MetaChip icon={<Clock className="h-3.5 w-3.5" />} text={when} />
