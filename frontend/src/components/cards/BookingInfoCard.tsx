@@ -1,7 +1,19 @@
-// frontend/src/components/cards/BookingInfoCard.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
+import {
+  BadgeDollarSign,
+  Briefcase,
+  ClipboardList,
+  Copy,
+  Mail,
+  MapPin,
+  NotebookPen,
+  Phone,
+  ShieldCheck,
+  User,
+  Wrench,
+} from "lucide-react";
 import type { TechBookingDetail } from "../../lib/api/adminTechBookings";
 import type { WorkerBookingRow } from "../../lib/api/workerBookings";
 import { me as apiMe } from "../../lib/api/auth";
@@ -49,7 +61,6 @@ function hasKey(obj: unknown, key: string): boolean {
 }
 
 /**
- * ✅ IMPORTANT:
  * Customer bookings can have `address` and `notes`,
  * so don't use those to identify WorkerBookingRow.
  */
@@ -70,14 +81,16 @@ function isWorkerRow(b: BookingLike): b is WorkerBookingRow {
 }
 
 function isAdminDetail(b: BookingLike): b is TechBookingDetail {
-  return isRecord(b) && typeof b.public_id === "string" && (hasKey(b, "address_line1") || hasKey(b, "initial_notes"));
+  return (
+    isRecord(b) &&
+    typeof b.public_id === "string" &&
+    (hasKey(b, "address_line1") || hasKey(b, "initial_notes"))
+  );
 }
 
-/**
- * ✅ Revert to prior semantics (no "adminish"):
- * This matches your previously working logic.
- */
-function normalizeViewerRole(role?: ViewerRole): "admin" | "superuser" | "worker" | "customer" | "unknown" {
+function normalizeViewerRole(
+  role?: ViewerRole
+): "admin" | "superuser" | "worker" | "customer" | "unknown" {
   const r = String(role ?? "").trim().toLowerCase();
   if (r === "admin") return "admin";
   if (r === "superuser") return "superuser";
@@ -86,7 +99,7 @@ function normalizeViewerRole(role?: ViewerRole): "admin" | "superuser" | "worker
   return "unknown";
 }
 
-/** ------------------ Me cache (prevents refetch spam) ------------------ */
+/** ------------------ Me cache ------------------ */
 type MeLite = { user_role?: string; roles?: string[] } | null;
 const ME_CACHE: { status: "idle" | "loading" | "ready"; value: MeLite } = {
   status: "idle",
@@ -110,7 +123,9 @@ async function getMeCached(): Promise<MeLite> {
 
     const rolesRaw =
       isRecord(user) && Array.isArray((user as Record<string, unknown>).roles)
-        ? ((user as Record<string, unknown>).roles as unknown[]).filter((x): x is string => typeof x === "string")
+        ? ((user as Record<string, unknown>).roles as unknown[]).filter(
+            (x): x is string => typeof x === "string"
+          )
         : undefined;
 
     const userRole =
@@ -128,7 +143,7 @@ async function getMeCached(): Promise<MeLite> {
   return ME_CACHE.value;
 }
 
-/** ------------------ Price API helpers (reuses env + fetch style) ------------------ */
+/** ------------------ Price API helpers ------------------ */
 
 type ApiErrorShape = { message?: string; error?: string; ok?: boolean };
 
@@ -136,7 +151,9 @@ const API_BASE = process.env.NEXT_PUBLIC_AUTH_API_BASE;
 
 function resolveUrl(path: string) {
   if (!API_BASE && !path.startsWith("http")) {
-    throw new Error("Missing NEXT_PUBLIC_AUTH_API_BASE. Set it in .env.local (e.g. http://localhost:4000).");
+    throw new Error(
+      "Missing NEXT_PUBLIC_AUTH_API_BASE. Set it in .env.local (e.g. http://localhost:4000)."
+    );
   }
   return path.startsWith("http") ? path : `${API_BASE}${path}`;
 }
@@ -153,7 +170,10 @@ async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const data = (await res.json().catch(() => ({}))) as T & ApiErrorShape;
 
   if (!res.ok) {
-    const msg = (data as ApiErrorShape)?.message || (data as ApiErrorShape)?.error || `Request failed (${res.status})`;
+    const msg =
+      (data as ApiErrorShape)?.message ||
+      (data as ApiErrorShape)?.error ||
+      `Request failed (${res.status})`;
     throw new Error(msg);
   }
 
@@ -193,14 +213,46 @@ function parseDollarInputToCents(raw: string): number | null {
 
 /** ------------------ UI helpers ------------------ */
 
+function InfoShell({
+  title,
+  icon,
+  actions,
+  children,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02]">
+      <div className="border-b border-white/[0.07] bg-white/[0.03] px-4 py-4 sm:px-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-[rgb(var(--muted))]">
+              {icon}
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-[rgb(var(--fg))] sm:text-base">{title}</h3>
+            </div>
+          </div>
+          {actions ? <div className="shrink-0">{actions}</div> : null}
+        </div>
+      </div>
+      <div className="p-4 sm:p-5">{children}</div>
+    </section>
+  );
+}
+
 function KindPill({ kind }: { kind: PersonKind }) {
   const isLead = kind === "lead";
   return (
     <span
-      className="rounded-full border px-2 py-1 text-xs font-semibold"
+      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold"
       style={{
-        borderColor: "rgb(var(--border))",
-        background: isLead ? "rgba(245, 158, 11, 0.18)" : "rgba(var(--bg), 0.20)",
+        borderColor: isLead ? "rgba(245,158,11,0.35)" : "rgba(255,255,255,0.12)",
+        background: isLead ? "rgba(245,158,11,0.14)" : "rgba(255,255,255,0.05)",
+        color: isLead ? "rgb(253 230 138)" : "rgb(var(--muted))",
       }}
       title={isLead ? "Unregistered lead" : "Registered customer"}
     >
@@ -214,21 +266,42 @@ function TagPill({ tag }: { tag: string | null | undefined }) {
   if (!t) return null;
 
   const key = t.toLowerCase();
-  const bg =
+
+  const meta =
     key === "vip"
-      ? "rgba(34, 197, 94, 0.16)"
-      : key === "hot"
-      ? "rgba(239, 68, 68, 0.16)"
-      : key === "warm"
-      ? "rgba(245, 158, 11, 0.16)"
-      : key === "cold"
-      ? "rgba(59, 130, 246, 0.14)"
-      : "rgba(59, 130, 246, 0.14)";
+      ? {
+          bg: "rgba(34,197,94,0.16)",
+          border: "rgba(34,197,94,0.30)",
+          text: "rgb(187 247 208)",
+        }
+      : key === "hot" || key === "bad"
+      ? {
+          bg: "rgba(239,68,68,0.16)",
+          border: "rgba(239,68,68,0.30)",
+          text: "rgb(254 202 202)",
+        }
+      : key === "warm" || key === "regular"
+      ? {
+          bg: "rgba(245,158,11,0.14)",
+          border: "rgba(245,158,11,0.30)",
+          text: "rgb(253 230 138)",
+        }
+      : key === "cold" || key === "good"
+      ? {
+          bg: "rgba(59,130,246,0.14)",
+          border: "rgba(59,130,246,0.30)",
+          text: "rgb(191 219 254)",
+        }
+      : {
+          bg: "rgba(255,255,255,0.05)",
+          border: "rgba(255,255,255,0.12)",
+          text: "rgb(var(--muted))",
+        };
 
   return (
     <span
-      className="rounded-full border px-2 py-1 text-xs font-semibold"
-      style={{ borderColor: "rgb(var(--border))", background: bg }}
+      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+      style={{ borderColor: meta.border, background: meta.bg, color: meta.text }}
       title={`CRM Tag: ${t}`}
     >
       {t}
@@ -242,29 +315,29 @@ function formatRange(startsAt: string | null | undefined, endsAt: string | null 
   const e = new Date(endsAt);
   if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return `${startsAt} → ${endsAt}`;
 
-  const date = s.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  const date = s.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
   const start = s.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   const end = e.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   return `${date} • ${start}–${end}`;
 }
 
 function CopyIcon({ copied }: { copied: boolean }) {
-  return (
-    <span
-      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border text-sm font-semibold"
-      style={{
-        borderColor: copied ? "rgb(34 197 94)" : "rgb(var(--border))",
-        background: copied ? "rgba(34,197,94,0.12)" : "rgba(var(--bg), 0.20)",
-        color: copied ? "rgb(34 197 94)" : "rgb(var(--text))",
-      }}
-      aria-hidden
-    >
-      {copied ? "✓" : "⧉"}
-    </span>
-  );
+  return copied ? <span className="text-sm font-bold">✓</span> : <Copy className="h-4 w-4" />;
 }
 
-function CopyField({ label, value }: { label: string; value: string | null | undefined }) {
+function CopyField({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | null | undefined;
+}) {
   const [copied, setCopied] = useState(false);
 
   async function onCopy() {
@@ -294,49 +367,66 @@ function CopyField({ label, value }: { label: string; value: string | null | und
   const disabled = !String(value ?? "").trim();
 
   return (
-    <div
-      className="rounded-xl flex items-center border p-3 justify-between gap-3"
-      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.20)" }}
-    >
-      <div className="min-w-0">
-        <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-          {label}
+    <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted))]">
+            {icon}
+            <span>{label}</span>
+          </div>
+          <div className="mt-1 break-words text-sm text-[rgb(var(--fg))]">{normalizeText(value)}</div>
         </div>
-        <div className="text-sm truncate">{normalizeText(value)}</div>
+
+        <button
+          type="button"
+          onClick={onCopy}
+          disabled={disabled}
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition hover:bg-white/[0.06] disabled:opacity-60"
+          style={{
+            borderColor: copied ? "rgba(34,197,94,0.40)" : "rgba(255,255,255,0.12)",
+            background: copied ? "rgba(34,197,94,0.12)" : "rgba(255,255,255,0.03)",
+            color: copied ? "rgb(34 197 94)" : "rgb(var(--muted))",
+          }}
+          title={copied ? "Copied" : "Copy"}
+        >
+          <CopyIcon copied={copied} />
+        </button>
       </div>
-
-      <button
-        type="button"
-        onClick={onCopy}
-        disabled={disabled}
-        className="hover:opacity-90 disabled:opacity-60"
-        title={copied ? "Copied" : "Copy"}
-      >
-        <CopyIcon copied={copied} />
-      </button>
     </div>
   );
 }
 
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+function MetaStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: "rgb(var(--border))" }}>
-      <div className="text-sm font-semibold">{title}</div>
-      {children}
+    <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted))]">
+        {label}
+      </div>
+      <div className="mt-1 text-sm font-semibold text-[rgb(var(--fg))]">{value}</div>
     </div>
   );
 }
 
-function MoneyRow({ label, value }: { label: string; value: string }) {
+function MoneyRow({
+  label,
+  value,
+  emphasized = false,
+}: {
+  label: string;
+  value: string;
+  emphasized?: boolean;
+}) {
   return (
-    <div className="flex items-center justify-between gap-3 text-sm">
-      <div style={{ color: "rgb(var(--muted))" }}>{label}</div>
-      <div className="font-semibold">{value}</div>
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+      <div className="text-sm text-[rgb(var(--muted))]">{label}</div>
+      <div className={emphasized ? "text-base font-bold text-[rgb(var(--fg))]" : "text-sm font-semibold text-[rgb(var(--fg))]"}>
+        {value}
+      </div>
     </div>
   );
 }
 
-/** ------------------ Price card (uses service_base_price_cents fallback) ------------------ */
+/** ------------------ Price card ------------------ */
 
 function PriceCard({
   publicId,
@@ -362,9 +452,12 @@ function PriceCard({
     setErr(null);
     setLoading(true);
     try {
-      const res = await jsonFetch<{ ok: boolean; price: BookingPrice }>(`/bookings/${encodeURIComponent(publicId)}/price`, {
-        method: "GET",
-      });
+      const res = await jsonFetch<{ ok: boolean; price: BookingPrice }>(
+        `/bookings/${encodeURIComponent(publicId)}/price`,
+        {
+          method: "GET",
+        }
+      );
 
       const p = res.price;
       setPrice(p);
@@ -404,13 +497,22 @@ function PriceCard({
     setSaving(true);
     setErr(null);
     try {
-      const res = await jsonFetch<{ ok: boolean; price: BookingPrice }>(`/bookings/${encodeURIComponent(publicId)}/price`, {
-        method: "PATCH",
-        body: JSON.stringify({ final_price_cents: cents }),
-      });
+      const res = await jsonFetch<{ ok: boolean; price: BookingPrice }>(
+        `/bookings/${encodeURIComponent(publicId)}/price`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ final_price_cents: cents }),
+        }
+      );
 
       setPrice(res.price);
-      setEditAmount(centsToDollarInput(res.price.final_price_cents ?? res.price.initial_price_cents ?? serviceBasePriceCents));
+      setEditAmount(
+        centsToDollarInput(
+          res.price.final_price_cents ??
+            res.price.initial_price_cents ??
+            serviceBasePriceCents
+        )
+      );
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to save price");
     } finally {
@@ -427,68 +529,74 @@ function PriceCard({
 
   const finalCents = price?.final_price_cents ?? null;
   const totalDollars = centsToDollarsLabel(finalCents ?? initialCents);
-
   const previewCents = parseDollarInputToCents(editAmount);
 
   return (
-    <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: "rgb(var(--border))" }}>
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-sm font-semibold">Pricing</div>
-        <span
-          className="rounded-full border px-2 py-1 text-xs font-semibold"
-          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.20)" }}
-          title="Currency"
-        >
-          {currency}
-        </span>
-      </div>
-
-      {err ? (
-        <div
-          className="rounded-xl border p-3 text-sm"
-          style={{ borderColor: "rgb(239 68 68)", background: "rgba(239, 68, 68, 0.06)" }}
-        >
-          {err}
-        </div>
-      ) : null}
-
-      {loading ? (
-        <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-          Loading price…
-        </div>
-      ) : (
-        <>
-          <div className="space-y-2">
-            <MoneyRow label="Initial (from service)" value={centsToDollarsLabel(initialCents)} />
-            <MoneyRow label="Final (set on-site)" value={finalCents === null ? "—" : centsToDollarsLabel(finalCents)} />
+    <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02]">
+      <div className="border-b border-white/[0.07] bg-white/[0.03] px-4 py-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-[rgb(var(--muted))]">
+              <BadgeDollarSign className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-[rgb(var(--fg))]">Pricing</div>
+              <div className="text-xs text-[rgb(var(--muted))]">Initial service price and final on-site total</div>
+            </div>
           </div>
 
-          <div className="pt-2 border-t space-y-2" style={{ borderColor: "rgb(var(--border))" }}>
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-semibold">Current Total</div>
-              <div className="text-lg font-bold">{totalDollars}</div>
+          <span
+            className="inline-flex items-center rounded-full border border-white/[0.12] bg-white/[0.05] px-2.5 py-1 text-[11px] font-semibold text-[rgb(var(--muted))]"
+            title="Currency"
+          >
+            {currency}
+          </span>
+        </div>
+      </div>
+
+      <div className="p-4 space-y-4">
+        {err ? (
+          <div className="rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            {err}
+          </div>
+        ) : null}
+
+        {loading ? (
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-4 py-4 text-sm text-[rgb(var(--muted))]">
+            Loading price…
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-2">
+              <MoneyRow label="Initial price" value={centsToDollarsLabel(initialCents)} />
+              <MoneyRow
+                label="Final price"
+                value={finalCents === null ? "—" : centsToDollarsLabel(finalCents)}
+              />
+              <MoneyRow label="Current total" value={totalDollars} emphasized />
             </div>
 
             {canEdit ? (
-              <div className="mt-2 space-y-2">
-                <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-                  Set Final Price
+              <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4 space-y-3">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-[rgb(var(--muted))]">
+                    Set final price
+                  </div>
+                  <div className="mt-1 text-sm text-[rgb(var(--muted))]">
+                    Update the completed on-site total for this booking.
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2 flex-wrap">
-                  <div className="relative">
-                    <span
-                      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold"
-                      style={{ color: "rgb(var(--muted))" }}
-                    >
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <div className="relative w-full sm:w-44">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-[rgb(var(--muted))]">
                       $
                     </span>
 
                     <input
                       value={editAmount}
                       onChange={(e) => setEditAmount(e.target.value)}
-                      className="w-40 rounded-xl border py-2 pl-7 pr-3 text-sm"
-                      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                      className="w-full rounded-xl border border-white/[0.12] bg-white/[0.04] py-2.5 pl-7 pr-3 text-sm text-[rgb(var(--fg))] outline-none transition focus:border-white/[0.20]"
                       inputMode="decimal"
                       placeholder="e.g. 129.99"
                       disabled={saving}
@@ -499,38 +607,39 @@ function PriceCard({
                     type="button"
                     onClick={onSave}
                     disabled={saving || editAmount.trim() === ""}
-                    className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-                    style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                    className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm font-semibold transition hover:bg-white/[0.06] disabled:opacity-60"
                     title="Save final price"
                   >
-                    {saving ? "Saving…" : "Save"}
+                    {saving ? "Saving…" : "Save price"}
                   </button>
 
                   <button
                     type="button"
                     onClick={load}
                     disabled={saving}
-                    className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-                    style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                    className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm font-medium transition hover:bg-white/[0.06] disabled:opacity-60"
                     title="Refresh price"
                   >
                     Refresh
                   </button>
                 </div>
 
-                <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                  Display: {previewCents === null ? "—" : centsToDollarsLabel(previewCents)}
+                <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] px-3 py-2 text-xs text-[rgb(var(--muted))]">
+                  Preview total:{" "}
+                  <span className="font-semibold text-[rgb(var(--fg))]">
+                    {previewCents === null ? "—" : centsToDollarsLabel(previewCents)}
+                  </span>
                 </div>
               </div>
             ) : (
-              <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                (Customer view — pricing updates appear here after technician sets the final price.)
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-4 py-3 text-xs text-[rgb(var(--muted))]">
+                Customer view — pricing updates appear here after the technician sets the final price.
               </div>
             )}
-          </div>
-        </>
-      )}
-    </div>
+          </>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -553,7 +662,9 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
       }
 
       const roles = me?.roles ?? [];
-      const lower = roles.map((r) => String(r ?? "").trim().toLowerCase()).filter(Boolean);
+      const lower = roles
+        .map((r) => String(r ?? "").trim().toLowerCase())
+        .filter(Boolean);
 
       if (lower.includes("superuser")) setViewerRole("superuser");
       else if (lower.includes("admin")) setViewerRole("admin");
@@ -569,8 +680,10 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
 
   const viewer = normalizeViewerRole(viewerRole);
 
-  const showCustomerSection = viewer === "admin" || viewer === "superuser" || viewer === "worker" || viewer === "unknown";
-  const showTechSection = viewer === "admin" || viewer === "superuser" || viewer === "customer" || viewer === "unknown";
+  const showCustomerSection =
+    viewer === "admin" || viewer === "superuser" || viewer === "worker" || viewer === "unknown";
+  const showTechSection =
+    viewer === "admin" || viewer === "superuser" || viewer === "customer" || viewer === "unknown";
 
   const publicId = getString(booking, "public_id") ?? "—";
   const serviceTitle = getString(booking, "service_title") ?? "—";
@@ -665,30 +778,55 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
     const full = [cf, cl].filter(Boolean).join(" ").trim();
     if (full) return full;
 
-    const email = getString(booking, "customer_email") ?? getString(booking, "lead_email") ?? getString(booking, "email");
+    const email =
+      getString(booking, "customer_email") ??
+      getString(booking, "lead_email") ??
+      getString(booking, "email");
+
     return String(email ?? "—").trim() || "—";
   })();
 
   const customerEmail = (() => {
     if (isAdminDetail(booking)) return booking.customer_email ?? booking.lead_email ?? null;
     if (isWorkerRow(booking)) {
-      return (booking.lead_public_id ? booking.lead_email : booking.customer_email) ?? booking.customer_email ?? booking.lead_email ?? null;
+      return (booking.lead_public_id ? booking.lead_email : booking.customer_email) ??
+        booking.customer_email ??
+        booking.lead_email ??
+        null;
     }
-    return getNullableString(booking, "customer_email") ?? getNullableString(booking, "lead_email") ?? getNullableString(booking, "email") ?? null;
+    return (
+      getNullableString(booking, "customer_email") ??
+      getNullableString(booking, "lead_email") ??
+      getNullableString(booking, "email") ??
+      null
+    );
   })();
 
   const customerPhone = (() => {
     if (isAdminDetail(booking)) return booking.customer_phone ?? booking.lead_phone ?? null;
     if (isWorkerRow(booking)) {
-      return (booking.lead_public_id ? booking.lead_phone : booking.customer_phone) ?? booking.customer_phone ?? booking.lead_phone ?? null;
+      return (booking.lead_public_id ? booking.lead_phone : booking.customer_phone) ??
+        booking.customer_phone ??
+        booking.lead_phone ??
+        null;
     }
-    return getNullableString(booking, "customer_phone") ?? getNullableString(booking, "lead_phone") ?? getNullableString(booking, "phone") ?? null;
+    return (
+      getNullableString(booking, "customer_phone") ??
+      getNullableString(booking, "lead_phone") ??
+      getNullableString(booking, "phone") ??
+      null
+    );
   })();
 
   const accountType = (() => {
     if (isAdminDetail(booking)) return booking.customer_account_type ?? booking.lead_account_type ?? null;
     if (isWorkerRow(booking)) {
-      return (booking.lead_public_id ? booking.lead_account_type : booking.customer_account_type) ?? booking.customer_account_type ?? booking.lead_account_type ?? null;
+      return (booking.lead_public_id
+        ? booking.lead_account_type
+        : booking.customer_account_type) ??
+        booking.customer_account_type ??
+        booking.lead_account_type ??
+        null;
     }
     return (
       getNullableString(booking, "customer_account_type") ??
@@ -735,7 +873,10 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
     if (isAdminDetail(booking)) return booking.worker_email ?? null;
     if (viewer === "worker" && isWorkerRow(booking)) return null;
 
-    const a = getNullableString(booking, "assigned_worker_email") ?? getNullableString(booking, "assigned_to_email") ?? null;
+    const a =
+      getNullableString(booking, "assigned_worker_email") ??
+      getNullableString(booking, "assigned_to_email") ??
+      null;
     if (a && String(a).trim()) return a;
 
     return getNullableString(booking, "worker_email") ?? null;
@@ -745,7 +886,10 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
     if (isAdminDetail(booking)) return booking.worker_phone ?? null;
     if (viewer === "worker" && isWorkerRow(booking)) return null;
 
-    const a = getNullableString(booking, "assigned_worker_phone") ?? getNullableString(booking, "assigned_to_phone") ?? null;
+    const a =
+      getNullableString(booking, "assigned_worker_phone") ??
+      getNullableString(booking, "assigned_to_phone") ??
+      null;
     if (a && String(a).trim()) return a;
 
     return getNullableString(booking, "worker_phone") ?? null;
@@ -753,89 +897,113 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border p-4" style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}>
-        <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="min-w-0 space-y-3">
-            <div className="flex items-start justify-between gap-3">
+      <section className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4 sm:p-5">
+        <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="min-w-0 space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
-                <div className="text-base font-semibold truncate">{normalizeText(serviceTitle)}</div>
-                <div className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="text-base font-semibold text-[rgb(var(--fg))] sm:text-lg">
+                    {normalizeText(serviceTitle)}
+                  </div>
+                  <KindPill kind={kind} />
+                  <TagPill tag={crmTag} />
+                </div>
+
+                <div className="mt-1.5 text-sm text-[rgb(var(--muted))]">
                   {formatRange(startsAt, endsAt)}
                 </div>
               </div>
 
-              <span className="rounded-full border px-2 py-1 text-xs" style={{ borderColor: "rgb(var(--border))" }}>
+              <span className="inline-flex items-center rounded-full border border-white/[0.12] bg-white/[0.05] px-2.5 py-1 text-[11px] font-semibold text-[rgb(var(--muted))]">
                 {status}
               </span>
             </div>
 
-            <CopyField label="Service Address" value={addressText || null} />
-
-            <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.20)" }}>
-              <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-                Notes
-              </div>
-              <div className="mt-1 whitespace-pre-wrap break-words">{notesText}</div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <MetaStat label="Status" value={status} />
+              <MetaStat label="Type" value={kind === "lead" ? "Lead" : "Registered"} />
+              <MetaStat label="Account" value={normalizeText(accountType)} />
+              <MetaStat label="Booking" value={publicId === "—" ? "—" : publicId.slice(-8)} />
             </div>
 
-            <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-              Booking ID: <span className="font-mono">{publicId}</span>
+            <CopyField icon={<MapPin className="h-3 w-3" />} label="Service address" value={addressText || null} />
+
+            <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-3">
+              <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted))]">
+                <NotebookPen className="h-3 w-3" />
+                <span>Notes</span>
+              </div>
+              <div className="mt-1.5 whitespace-pre-wrap break-words text-sm text-[rgb(var(--fg))]">
+                {notesText}
+              </div>
+            </div>
+
+            <div className="text-xs text-[rgb(var(--muted))]">
+              Booking ID: <span className="font-mono text-[rgb(var(--fg))]">{publicId}</span>
             </div>
           </div>
 
           <div className="lg:pl-2">
-            <PriceCard publicId={publicId} viewer={viewer} serviceBasePriceCents={serviceBasePriceCents} />
+            <PriceCard
+              publicId={publicId}
+              viewer={viewer}
+              serviceBasePriceCents={serviceBasePriceCents}
+            />
           </div>
         </div>
-      </div>
+      </section>
 
       <div className="grid gap-4 md:grid-cols-2">
         {showCustomerSection ? (
-          <SectionCard title="Customer">
-            <div className="space-y-2">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold truncate">{displayName}</div>
-                  <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                    Account type: {normalizeText(accountType)}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <KindPill kind={kind} />
-                  <TagPill tag={crmTag} />
+          <InfoShell
+            title="Customer"
+            icon={<User className="h-5 w-5" />}
+            actions={
+              <div className="flex items-center gap-2">
+                <KindPill kind={kind} />
+                <TagPill tag={crmTag} />
+              </div>
+            }
+          >
+            <div className="space-y-3">
+              <div>
+                <div className="text-sm font-semibold text-[rgb(var(--fg))]">{displayName}</div>
+                <div className="mt-1 text-sm text-[rgb(var(--muted))]">
+                  Account type: {normalizeText(accountType)}
                 </div>
               </div>
 
-              <div className="grid gap-3 pt-1">
-                <CopyField label="Phone" value={customerPhone} />
-                <CopyField label="Email" value={customerEmail} />
+              <div className="grid gap-3">
+                <CopyField icon={<Phone className="h-3 w-3" />} label="Phone" value={customerPhone} />
+                <CopyField icon={<Mail className="h-3 w-3" />} label="Email" value={customerEmail} />
               </div>
             </div>
-          </SectionCard>
+          </InfoShell>
         ) : (
           <div className="hidden md:block" />
         )}
 
         {showTechSection ? (
-          <SectionCard title="Assigned Technician">
-            <div className="space-y-2">
-              <div className="text-sm font-semibold truncate">
-                {normalizeText(techName) === "—" ? "Pending assignment" : normalizeText(techName)}
-              </div>
-
-              <div className="grid gap-3 pt-1">
-                <CopyField label="Phone" value={techPhone} />
-                <CopyField label="Email" value={techEmail} />
-              </div>
-
-              {viewer === "worker" ? (
-                <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                  (Technician view — showing your assignment)
+          <InfoShell title="Assigned Technician" icon={<Wrench className="h-5 w-5" />}>
+            <div className="space-y-3">
+              <div>
+                <div className="text-sm font-semibold text-[rgb(var(--fg))]">
+                  {normalizeText(techName) === "—" ? "Pending assignment" : normalizeText(techName)}
                 </div>
-              ) : null}
+                {viewer === "worker" ? (
+                  <div className="mt-1 text-xs text-[rgb(var(--muted))]">
+                    Technician view — showing your assignment
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="grid gap-3">
+                <CopyField icon={<Phone className="h-3 w-3" />} label="Phone" value={techPhone} />
+                <CopyField icon={<Mail className="h-3 w-3" />} label="Email" value={techEmail} />
+              </div>
             </div>
-          </SectionCard>
+          </InfoShell>
         ) : (
           <div className="hidden md:block" />
         )}
