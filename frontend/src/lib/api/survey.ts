@@ -5,7 +5,9 @@ const API_BASE = process.env.NEXT_PUBLIC_AUTH_API_BASE;
 
 function resolveUrl(path: string) {
   if (!API_BASE && !path.startsWith("http")) {
-    throw new Error("Missing NEXT_PUBLIC_AUTH_API_BASE. Set it in .env.local (e.g. http://localhost:4000).");
+    throw new Error(
+      "Missing NEXT_PUBLIC_AUTH_API_BASE. Set it in .env.local (e.g. http://localhost:4000)."
+    );
   }
   return path.startsWith("http") ? path : `${API_BASE}${path}`;
 }
@@ -29,7 +31,13 @@ async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
-export type SurveyCode = "linkedin" | "google" | "instagram" | "facebook" | "referred" | "other";
+export type SurveyCode =
+  | "linkedin"
+  | "google"
+  | "instagram"
+  | "facebook"
+  | "referral"
+  | "other";
 
 export type SurveyNeededResponse = { ok: boolean; needed: boolean };
 

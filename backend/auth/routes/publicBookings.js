@@ -3,7 +3,7 @@ const { z } = require("zod");
 const { pool } = require("../src/db");
 const { broadcastToRoles } = require("../src/realtime");
 const { createNotifications } = require("../src/notifications");
-const { sendBookingConfirmationEmail } = require("../src/email/mailer");
+const { sendBookingCreatedCustomerEmail } = require("../src/email/mailer");
 
 const router = express.Router();
 
@@ -329,7 +329,7 @@ router.post("/", async (req, res, next) => {
     });
 
     if (leadRow.email) {
-      await sendBookingConfirmationEmail({
+      await sendBookingCreatedCustomerEmail({
         to: leadRow.email,
         firstName: leadRow.first_name,
         bookingPublicId: booking.public_id,

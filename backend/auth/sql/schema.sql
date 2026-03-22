@@ -966,3 +966,35 @@ CREATE INDEX IF NOT EXISTS idx_booking_survey_submitted_at
   ON booking_survey_responses (submitted_at DESC);
 
 COMMIT;
+
+
+-- ============================================================
+-- CUSTOMER TAGS (CRM tagging for users + leads)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS customer_tags (
+  id BIGSERIAL PRIMARY KEY,
+
+  -- distinguishes whether this is a registered user or a lead
+  kind TEXT NOT NULL
+    CHECK (kind IN ('registered', 'lead')),
+
+  -- references either users.id or leads.id depending on kind
+  entity_id BIGINT NOT NULL,
+
+  tag TEXT NULL,
+  note TEXT NULL,
+
+  updated_by_user_id BIGINT NULL
+    REFERENCES users(id)
+    ON DELETE SET NULL,
+
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+  UNIQUE (kind, entity_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_customer_tags_kind_entity
+  ON customer_tags (kind, entity_id);
+
+CREATE INDEX IF NOT EXISTS idx_customer_tags_updated_at
+  ON customer_tags (updated_at DESC);

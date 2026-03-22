@@ -41,7 +41,6 @@ router.get("/admin/metrics/survey", requireAuth, async (req, res, next) => {
     const ok = await requireSuperUserByDb(userId);
     if (!ok) return res.status(403).json({ ok: false, message: "Forbidden" });
 
-    // ✅ Default: last 30 days rolling ending today (exclusive)
     const now = new Date();
     const endDefault = toISODateOnlyLocal(now);
     const startDefault = toISODateOnlyLocal(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
@@ -61,8 +60,6 @@ router.get("/admin/metrics/survey", requireAuth, async (req, res, next) => {
       return res.status(400).json({ ok: false, message: `Range too large (max ${maxDays} days)` });
     }
 
-    // Your table: booking_survey_responses(user_id, heard_from, referrer_name, other_text, submitted_at)
-    // We want fixed categories: linkedin/google/instagram/facebook/referred/other
     const countsRes = await pool.query(
       `
       WITH params AS (
@@ -75,7 +72,7 @@ router.get("/admin/metrics/survey", requireAuth, async (req, res, next) => {
           ('google'::text, 'Google'::text, 20::int),
           ('instagram'::text, 'Instagram'::text, 30::int),
           ('facebook'::text, 'Facebook'::text, 40::int),
-          ('referred'::text, 'Referred'::text, 50::int),
+          ('referral'::text, 'Referral'::text, 50::int),
           ('other'::text, 'Other'::text, 60::int)
         ) AS v(code, label, sort_order)
       ),
@@ -83,12 +80,12 @@ router.get("/admin/metrics/survey", requireAuth, async (req, res, next) => {
         SELECT
           CASE
             WHEN heard_from IS NULL THEN 'other'
-            WHEN lower(trim(heard_from)) IN ('linkedin') THEN 'linkedin'
-            WHEN lower(trim(heard_from)) IN ('google') THEN 'google'
+            WHEN lower(trim(heard_from)) = 'linkedin' THEN 'linkedin'
+            WHEN lower(trim(heard_from)) = 'google' THEN 'google'
             WHEN lower(trim(heard_from)) IN ('instagram','ig') THEN 'instagram'
             WHEN lower(trim(heard_from)) IN ('facebook','fb') THEN 'facebook'
-            WHEN lower(trim(heard_from)) IN ('referred','referral','word of mouth','word-of-mouth') THEN 'referred'
-            WHEN lower(trim(heard_from)) IN ('other') THEN 'other'
+            WHEN lower(trim(heard_from)) IN ('referred','referral','word of mouth','word-of-mouth') THEN 'referral'
+            WHEN lower(trim(heard_from)) = 'other' THEN 'other'
             ELSE 'other'
           END AS code,
           other_text
@@ -123,7 +120,7 @@ router.get("/admin/metrics/survey", requireAuth, async (req, res, next) => {
           AND (
             heard_from IS NULL
             OR lower(trim(heard_from)) = 'other'
-            OR lower(trim(heard_from)) NOT IN ('linkedin','google','instagram','facebook','referred')
+            OR lower(trim(heard_from)) NOT IN ('linkedin','google','instagram','facebook','referral')
           )
       )
       SELECT val, COUNT(*)::int AS count
@@ -143,7 +140,6 @@ router.get("/admin/metrics/survey", requireAuth, async (req, res, next) => {
     const counts = countsRes.rows || [];
     const total = counts.reduce((sum, r) => sum + Number(r.count || 0), 0);
 
-    // ✅ We intentionally do NOT expose referrer_name
     return res.json({
       ok: true,
       range: { start: startDate, end_exclusive: endDate, days: diffDays },

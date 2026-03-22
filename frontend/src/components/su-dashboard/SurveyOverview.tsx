@@ -11,6 +11,15 @@ function todayISO() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function tomorrowISO() {
+  const now = new Date();
+  const d = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 function daysAgoISO(days: number) {
   const now = new Date();
   const d = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
@@ -25,9 +34,11 @@ function fmt(n: number) {
 }
 
 export default function SurveyOverview() {
-  // ✅ Default: last 30 days
+  // last 30 days INCLUDING today:
+  // start = 30 days ago
+  // end_exclusive = tomorrow
   const [start, setStart] = useState<string>(() => daysAgoISO(30));
-  const [end, setEnd] = useState<string>(() => todayISO()); // exclusive end in API
+  const [end, setEnd] = useState<string>(() => tomorrowISO());
 
   const [data, setData] = useState<SurveyMetricsResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -62,13 +73,10 @@ export default function SurveyOverview() {
   const counts = useMemo(() => data?.counts ?? [], [data?.counts]);
   const topOther = data?.top_other ?? [];
 
-  // Build pie segments (CSS conic-gradient)
-  // We don’t hardcode colors; we use subtle opacity steps of current text color.
   const pieStyle = useMemo(() => {
     if (!total || counts.length === 0) return undefined;
 
     let acc = 0;
-    // Use varying alpha to visually separate slices with same base color
     const stops = counts
       .filter((c) => c.count > 0)
       .map((c, i) => {
@@ -77,8 +85,8 @@ export default function SurveyOverview() {
         const endPct = acc + pct;
         acc = endPct;
 
-        const alpha = 0.12 + (i % 6) * 0.06; // 0.12..0.42 repeating
-        return `rgba(var(--text), ${alpha}) ${startPct.toFixed(2)}% ${endPct.toFixed(2)}%`;
+        const alpha = 0.12 + (i % 6) * 0.06;
+        return `rgba(var(--fg), ${alpha}) ${startPct.toFixed(2)}% ${endPct.toFixed(2)}%`;
       });
 
     if (stops.length === 0) return undefined;
@@ -94,7 +102,7 @@ export default function SurveyOverview() {
         <div>
           <div className="text-base font-semibold">Survey sources</div>
           <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-            Where customers heard about you (default: last 30 days)
+            Where customers heard about you (default: last 30 days, including today)
           </div>
         </div>
 
@@ -130,11 +138,11 @@ export default function SurveyOverview() {
             type="button"
             onClick={() => {
               setStart(daysAgoISO(30));
-              setEnd(todayISO());
+              setEnd(tomorrowISO());
             }}
             className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
             style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-            title="Reset to last 30 days"
+            title="Reset to last 30 days including today"
           >
             Reset 30d
           </button>
@@ -160,7 +168,6 @@ export default function SurveyOverview() {
         </div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
-          {/* Pie */}
           <div
             className="rounded-2xl border p-5"
             style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
@@ -198,7 +205,7 @@ export default function SurveyOverview() {
                           className="inline-block h-3 w-3 rounded-sm border"
                           style={{
                             borderColor: "rgb(var(--border))",
-                            background: `rgba(var(--text), ${alpha})`,
+                            background: `rgba(var(--fg), ${alpha})`,
                           }}
                         />
                         <span className="truncate">{c.label}</span>
@@ -213,7 +220,6 @@ export default function SurveyOverview() {
             </div>
           </div>
 
-          {/* Top Other */}
           <div
             className="rounded-2xl border p-5"
             style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
@@ -243,7 +249,7 @@ export default function SurveyOverview() {
             </div>
 
             <div className="mt-4 text-xs" style={{ color: "rgb(var(--muted))" }}>
-              Note: “Referred” names are intentionally not shown here (we’ll handle referral attribution later).
+              Note: Referral names are intentionally not shown here.
             </div>
           </div>
         </div>

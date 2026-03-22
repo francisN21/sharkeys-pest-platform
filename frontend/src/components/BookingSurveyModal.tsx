@@ -41,7 +41,7 @@ export default function BookingSurveyModal(props: Props) {
   } = props;
 
   const needsOther = heardFrom === "other";
-  const needsRef = heardFrom === "referred";
+  const needsRef = heardFrom === "referral";
 
   const canSubmit = useMemo(() => {
     if (!heardFrom) return false;
@@ -54,7 +54,6 @@ export default function BookingSurveyModal(props: Props) {
 
   return (
     <div className="fixed inset-0 z-50">
-      {/* overlay */}
       <button
         type="button"
         onClick={onClose}
@@ -62,7 +61,6 @@ export default function BookingSurveyModal(props: Props) {
         aria-label="Close survey"
       />
 
-      {/* modal */}
       <div className="relative mx-auto mt-24 w-[92%] max-w-lg">
         <div
           className="rounded-2xl border p-5 sm:p-6 shadow-lg"
@@ -95,13 +93,13 @@ export default function BookingSurveyModal(props: Props) {
             <RadioRow label="Google" value="google" checked={heardFrom === "google"} onChange={setHeardFrom} />
             <RadioRow label="Instagram" value="instagram" checked={heardFrom === "instagram"} onChange={setHeardFrom} />
             <RadioRow label="Facebook" value="facebook" checked={heardFrom === "facebook"} onChange={setHeardFrom} />
-            <RadioRow label="Referred" value="referred" checked={heardFrom === "referred"} onChange={setHeardFrom} />
+            <RadioRow label="Referral" value="referral" checked={heardFrom === "referral"} onChange={setHeardFrom} />
             <RadioRow label="Other" value="other" checked={heardFrom === "other"} onChange={setHeardFrom} />
 
             {needsRef ? (
               <div className="space-y-1 pt-2">
                 <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-                  Who referred you? (optional for now)
+                  Who referred you?
                 </div>
                 <input
                   value={referrerName}
@@ -171,7 +169,8 @@ function RadioRow({
   onChange: (v: SurveyCode) => void;
 }) {
   return (
-    <label className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-sm"
+    <label
+      className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-sm"
       style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
     >
       <span>{label}</span>

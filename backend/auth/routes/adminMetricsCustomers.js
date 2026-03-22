@@ -41,9 +41,8 @@ router.get("/admin/metrics/customers", requireAuth, async (req, res, next) => {
     const ok = await requireSuperUserByDb(userId);
     if (!ok) return res.status(403).json({ ok: false, message: "Forbidden" });
 
-    // Default: last 30 days rolling
     const now = new Date();
-    const endDefault = toISODateOnlyLocal(now); // end exclusive (today 00:00Z)
+    const endDefault = toISODateOnlyLocal(now);
     const startDefault = toISODateOnlyLocal(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
 
     const startDate = parseDateOnly(start || "") || startDefault;
@@ -61,40 +60,79 @@ router.get("/admin/metrics/customers", requireAuth, async (req, res, next) => {
       return res.status(400).json({ ok: false, message: `Range too large (max ${maxDays} days)` });
     }
 
-    // customers = users with role 'customer'
     const r = await pool.query(
       `
       WITH params AS (
         SELECT $1::date AS start_date, $2::date AS end_date
       ),
-      customer_users AS (
-        SELECT u.*
+      registered_customers AS (
+        SELECT
+          u.id,
+          u.account_type,
+          u.created_at
         FROM users u
         JOIN user_roles ur ON ur.user_id = u.id AND ur.role = 'customer'
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM user_roles urx
+          WHERE urx.user_id = u.id
+            AND urx.role IN ('admin', 'superuser', 'worker')
+        )
+      ),
+      active_leads AS (
+        SELECT
+          l.id,
+          l.account_type,
+          l.created_at
+        FROM leads l
+      ),
+      all_people AS (
+        SELECT 'registered'::text AS kind, id, account_type, created_at
+        FROM registered_customers
+
+        UNION ALL
+
+        SELECT 'lead'::text AS kind, id, account_type, created_at
+        FROM active_leads
       ),
       lead_converted_customers AS (
-        -- conversion rows whose resulting user is a customer
         SELECT lc.*
         FROM lead_conversions lc
-        JOIN customer_users cu ON cu.id = lc.user_id
+        JOIN registered_customers rc ON rc.id = lc.user_id
       ),
       all_time AS (
         SELECT
-          COUNT(*)::int AS customers_all_time,
+          COUNT(*)::int AS people_all_time,
+          COUNT(*) FILTER (WHERE kind = 'registered')::int AS customers_all_time,
+          COUNT(*) FILTER (WHERE kind = 'lead')::int AS leads_all_time,
+
           COUNT(*) FILTER (WHERE account_type = 'residential')::int AS residential_all_time,
           COUNT(*) FILTER (WHERE account_type = 'business')::int AS business_all_time,
-          COUNT(*) FILTER (WHERE account_type IS NULL OR account_type NOT IN ('residential','business'))::int AS unknown_all_time,
+          COUNT(*) FILTER (
+            WHERE account_type IS NULL OR account_type NOT IN ('residential','business')
+          )::int AS unknown_all_time,
 
-          -- conversions (all time)
           (SELECT COUNT(*)::int FROM lead_converted_customers) AS lead_conversions_all_time
-        FROM customer_users
+        FROM all_people
       ),
       in_range AS (
         SELECT
           COUNT(*) FILTER (
             WHERE created_at >= (SELECT start_date FROM params)
               AND created_at <  (SELECT end_date   FROM params)
+          )::int AS new_people_in_range,
+
+          COUNT(*) FILTER (
+            WHERE kind = 'registered'
+              AND created_at >= (SELECT start_date FROM params)
+              AND created_at <  (SELECT end_date   FROM params)
           )::int AS new_customers_in_range,
+
+          COUNT(*) FILTER (
+            WHERE kind = 'lead'
+              AND created_at >= (SELECT start_date FROM params)
+              AND created_at <  (SELECT end_date   FROM params)
+          )::int AS new_leads_in_range,
 
           COUNT(*) FILTER (
             WHERE created_at >= (SELECT start_date FROM params)
@@ -114,13 +152,12 @@ router.get("/admin/metrics/customers", requireAuth, async (req, res, next) => {
               AND (account_type IS NULL OR account_type NOT IN ('residential','business'))
           )::int AS new_unknown_in_range,
 
-          -- conversions in range (based on converted_at)
           (SELECT COUNT(*)::int
            FROM lead_converted_customers lc
            WHERE lc.converted_at >= (SELECT start_date FROM params)
              AND lc.converted_at <  (SELECT end_date   FROM params)
           ) AS lead_conversions_in_range
-        FROM customer_users
+        FROM all_people
       )
       SELECT
         (SELECT row_to_json(all_time) FROM all_time) AS all_time,
@@ -133,17 +170,16 @@ router.get("/admin/metrics/customers", requireAuth, async (req, res, next) => {
     const allTime = row.all_time || {};
     const inRange = row.in_range || {};
 
-    const customersAll = Number(allTime.customers_all_time || 0);
+    const peopleAll = Number(allTime.people_all_time || 0);
     const resAll = Number(allTime.residential_all_time || 0);
     const bizAll = Number(allTime.business_all_time || 0);
 
-    const pctResAll = customersAll > 0 ? Math.round((resAll / customersAll) * 1000) / 10 : 0;
-    const pctBizAll = customersAll > 0 ? Math.round((bizAll / customersAll) * 1000) / 10 : 0;
+    const pctResAll = peopleAll > 0 ? Math.round((resAll / peopleAll) * 1000) / 10 : 0;
+    const pctBizAll = peopleAll > 0 ? Math.round((bizAll / peopleAll) * 1000) / 10 : 0;
 
-    // conversion rate within the selected range
-    const newCustomers = Number(inRange.new_customers_in_range || 0);
+    const newPeople = Number(inRange.new_people_in_range || 0);
     const leadConversions = Number(inRange.lead_conversions_in_range || 0);
-    const leadConversionRate = newCustomers > 0 ? Math.round((leadConversions / newCustomers) * 1000) / 10 : 0;
+    const leadConversionRate = newPeople > 0 ? Math.round((leadConversions / newPeople) * 1000) / 10 : 0;
 
     return res.json({
       ok: true,

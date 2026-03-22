@@ -315,7 +315,8 @@ export default function BookPage() {
       setError("Please specify 'Other' (at least 2 characters).");
       return;
     }
-    if (surveyHeardFrom === "referred" && surveyReferrerName.trim().length < 2) {
+
+    if (surveyHeardFrom === "referral" && surveyReferrerName.trim().length < 2) {
       setError("Please enter a name (at least 2 characters).");
       return;
     }
@@ -324,12 +325,22 @@ export default function BookPage() {
       setSurveySubmitting(true);
       setError(null);
 
-      await submitSurvey({
+      const payload = {
         bookingPublicId: createdBookingPublicId ?? undefined,
         heard_from: surveyHeardFrom,
-        referrer_name: surveyHeardFrom === "referred" ? surveyReferrerName.trim() : undefined,
-        other_text: surveyHeardFrom === "other" ? surveyOtherText.trim() : undefined,
-      });
+        referrer_name:
+          surveyHeardFrom === "referral"
+            ? surveyReferrerName.trim()
+            : undefined,
+        other_text:
+          surveyHeardFrom === "other"
+            ? surveyOtherText.trim()
+            : undefined,
+      };
+
+      console.log("survey payload", payload);
+
+      await submitSurvey(payload);
 
       setSurveyOpen(false);
       router.push("/account");
