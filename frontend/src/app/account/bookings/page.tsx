@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Calendar, ClipboardList, Clock, RefreshCw, X } from "lucide-react";
 
 import {
   cancelBooking,
@@ -111,7 +112,11 @@ export default function BookingsPage() {
 
         const user = meRes.user ?? null;
         const idNum = safeToNumber(user?.id);
-        const role = String(user?.user_role ?? (Array.isArray(user?.roles) ? user?.roles[0] : "")).trim().toLowerCase();
+        const role = String(
+          user?.user_role ?? (Array.isArray(user?.roles) ? user?.roles[0] : "")
+        )
+          .trim()
+          .toLowerCase();
 
         if (user && idNum) {
           setMe({
@@ -161,41 +166,35 @@ export default function BookingsPage() {
 
   if (!authResolved || (loading && forbidden)) {
     return (
-      <div className="space-y-4 sm:space-y-6">
-        <div
-          className="rounded-2xl border p-4 text-sm"
-          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
-        >
-          Loading…
-        </div>
+      <div className="flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-6 text-sm text-[rgb(var(--muted))]">
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+        Loading…
       </div>
     );
   }
 
   if (forbidden) {
     return (
-      <div className="space-y-4 sm:space-y-6">
-        <SectionCard
-          title="Customers only"
-          subtitle="This bookings page is only available for customer accounts. Staff and admin accounts are redirected to the main account area."
-          actions={
-            <Link
-              href="/account"
-              className="inline-flex items-center justify-center rounded-xl border px-4 py-2 text-sm font-semibold hover:opacity-90"
-              style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-            >
-              Go to Account
-            </Link>
-          }
-        >
-          <div />
-        </SectionCard>
-      </div>
+      <SectionCard
+        icon={<ClipboardList className="h-5 w-5" />}
+        title="Customers only"
+        subtitle="This bookings page is only available for customer accounts. Staff and admin accounts are redirected to the main account area."
+        actions={
+          <Link
+            href="/account"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-medium transition hover:bg-white/[0.06]"
+          >
+            Go to Account
+          </Link>
+        }
+      >
+        <div />
+      </SectionCard>
     );
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-5">
       <ConfirmCancelModal
         open={!!confirmCancelId}
         bookingId={confirmCancelId}
@@ -205,50 +204,60 @@ export default function BookingsPage() {
         onClose={closeCancelModal}
       />
 
+      {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-xl font-bold">Bookings</h2>
-          <p className="text-sm" style={{ color: "rgb(var(--muted))" }}>
+          <h2 className="text-xl font-bold text-[rgb(var(--fg))]">My Bookings</h2>
+          <p className="mt-1 text-sm text-[rgb(var(--muted))]">
             Your pending requests, upcoming appointments, and booking history.
           </p>
         </div>
 
-        <Link
-          href="/book"
-          className="rounded-xl border px-4 py-2 text-sm font-semibold hover:opacity-90"
-          style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-        >
-          Book a Service
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-medium transition hover:bg-white/[0.06] disabled:opacity-60"
+            disabled={loading}
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </button>
+
+          <Link
+            href="/book"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-semibold transition hover:bg-white/[0.06]"
+          >
+            Book a Service
+          </Link>
+        </div>
       </div>
 
       {err ? (
-        <div
-          className="rounded-xl border p-3 text-sm"
-          style={{ borderColor: "rgb(239 68 68 / 0.75)", background: "rgb(127 29 29 / 0.16)" }}
-        >
-          {err}
+        <div className="flex items-center justify-between rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          <span>{err}</span>
+          <button type="button" onClick={() => setErr(null)}>
+            <X className="h-4 w-4" />
+          </button>
         </div>
       ) : null}
 
       {loading ? (
-        <div
-          className="rounded-2xl border p-4 text-sm"
-          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
-        >
-          Loading…
+        <div className="flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-6 text-sm text-[rgb(var(--muted))]">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+          Loading bookings…
         </div>
       ) : null}
 
       {!loading && !hasAny ? (
         <SectionCard
+          icon={<Calendar className="h-5 w-5" />}
           title="No bookings yet"
-          subtitle="Book your first service and it’ll show up here."
+          subtitle="Book your first service and it'll show up here."
           actions={
             <Link
               href="/book"
-              className="inline-flex items-center justify-center rounded-xl border px-4 py-2 text-sm font-semibold hover:opacity-90"
-              style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-semibold transition hover:bg-white/[0.06]"
             >
               Book a Service
             </Link>
@@ -259,8 +268,11 @@ export default function BookingsPage() {
       ) : null}
 
       {!loading && pending.length > 0 ? (
-        <section className="space-y-3">
-          <h3 className="text-base font-semibold">Pending</h3>
+        <SectionCard
+          icon={<Clock className="h-5 w-5" />}
+          title="Pending"
+          subtitle={`${pending.length} ${pending.length === 1 ? "request" : "requests"} awaiting acceptance`}
+        >
           <div className="grid gap-3">
             {pending.map((b) => (
               <BookingCardUI
@@ -273,12 +285,15 @@ export default function BookingsPage() {
               />
             ))}
           </div>
-        </section>
+        </SectionCard>
       ) : null}
 
       {!loading && upcoming.length > 0 ? (
-        <section className="space-y-3">
-          <h3 className="text-base font-semibold">Upcoming</h3>
+        <SectionCard
+          icon={<Calendar className="h-5 w-5" />}
+          title="Upcoming"
+          subtitle={`${upcoming.length} scheduled ${upcoming.length === 1 ? "appointment" : "appointments"}`}
+        >
           <div className="grid gap-3">
             {upcoming.map((b) => (
               <BookingCardUI
@@ -291,12 +306,15 @@ export default function BookingsPage() {
               />
             ))}
           </div>
-        </section>
+        </SectionCard>
       ) : null}
 
       {!loading && history.length > 0 ? (
-        <section className="space-y-3">
-          <h3 className="text-base font-semibold">History</h3>
+        <SectionCard
+          icon={<ClipboardList className="h-5 w-5" />}
+          title="History"
+          subtitle={`${history.length} completed ${history.length === 1 ? "booking" : "bookings"}`}
+        >
           <div className="grid gap-3">
             {history.map((b) => (
               <BookingCardUI
@@ -307,7 +325,7 @@ export default function BookingsPage() {
               />
             ))}
           </div>
-        </section>
+        </SectionCard>
       ) : null}
     </div>
   );

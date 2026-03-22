@@ -109,52 +109,45 @@ export default function BookingCardUI({
   const completedAtPretty = bb.completed_at ? new Date(bb.completed_at).toLocaleString() : null;
 
   return (
-    <div
-      className="rounded-2xl border p-3 sm:p-4"
-      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.10)" }}
-    >
+    <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4">
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <div className="min-w-0 truncate text-sm font-semibold sm:text-base">{b.service_title}</div>
+              <div className="min-w-0 truncate text-sm font-semibold text-[rgb(var(--fg))] sm:text-base">
+                {b.service_title}
+              </div>
               <StatusPill status={b.status} />
             </div>
 
-            <div className="mt-2 text-sm break-words" style={{ color: "rgb(var(--muted))" }}>
+            <div className="mt-2 break-words text-sm text-[rgb(var(--muted))]">
               {editing && canEditSchedule ? (
                 <div className="space-y-2">
                   <div className="grid gap-2 sm:grid-cols-2">
                     <div className="space-y-1">
-                      <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-                        Start
-                      </div>
+                      <div className="text-xs font-semibold text-[rgb(var(--muted))]">Start</div>
                       <input
                         type="datetime-local"
                         value={startsLocal}
                         onChange={(e) => setStartsLocal(e.target.value)}
-                        className="w-full rounded-lg border px-3 py-2 text-sm"
-                        style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                        className="h-9 w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 text-sm text-[rgb(var(--fg))] focus:border-white/20 focus:outline-none focus:ring-2 focus:ring-white/10 transition disabled:opacity-60"
                         disabled={saving}
                       />
                     </div>
 
                     <div className="space-y-1">
-                      <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-                        End
-                      </div>
+                      <div className="text-xs font-semibold text-[rgb(var(--muted))]">End</div>
                       <input
                         type="datetime-local"
                         value={endsLocal}
                         onChange={(e) => setEndsLocal(e.target.value)}
-                        className="w-full rounded-lg border px-3 py-2 text-sm"
-                        style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                        className="h-9 w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 text-sm text-[rgb(var(--fg))] focus:border-white/20 focus:outline-none focus:ring-2 focus:ring-white/10 transition disabled:opacity-60"
                         disabled={saving}
                       />
                     </div>
                   </div>
 
-                  <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                  <div className="text-xs text-[rgb(var(--muted))]">
                     {formatBookingTimeRange(
                       fromDateTimeLocalValue(startsLocal) ?? b.starts_at,
                       fromDateTimeLocalValue(endsLocal) ?? b.ends_at
@@ -166,9 +159,7 @@ export default function BookingCardUI({
               )}
             </div>
 
-            <div className="mt-2 text-sm break-words" style={{ color: "rgb(var(--muted))" }}>
-              {b.address}
-            </div>
+            <div className="mt-2 break-words text-sm text-[rgb(var(--muted))]">{b.address}</div>
           </div>
         </div>
 
@@ -190,32 +181,26 @@ export default function BookingCardUI({
           showEvenIfEmpty={!!completedAtPretty}
           footer={
             completedAtPretty ? (
-              <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                Completed at: {completedAtPretty}
-              </div>
+              <div className="text-xs text-[rgb(var(--muted))]">Completed at: {completedAtPretty}</div>
             ) : null
           }
         />
 
         {localErr ? (
-          <div
-            className="rounded-xl border p-3 text-sm"
-            style={{ borderColor: "rgb(239 68 68 / 0.75)", background: "rgb(127 29 29 / 0.16)" }}
-          >
+          <div className="rounded-xl border border-red-500/25 bg-red-500/10 px-3 py-3 text-sm text-red-300">
             {localErr}
           </div>
         ) : null}
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-xs break-words" style={{ color: "rgb(var(--muted))" }}>
-            Booking ID: <span className="font-mono">{b.public_id}</span>
+          <div className="break-words text-xs text-[rgb(var(--muted))]">
+            Booking ID: <span className="font-mono text-[rgb(var(--fg))]">{b.public_id}</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              className="rounded-lg border px-3 py-1.5 text-xs font-semibold hover:opacity-90 disabled:opacity-60"
-              style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+              className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-semibold transition hover:bg-white/[0.06] disabled:opacity-60"
               onClick={() => onOpenDetail(b.public_id)}
               disabled={saving || !!cancelling}
             >
@@ -227,8 +212,7 @@ export default function BookingCardUI({
                 <>
                   <button
                     type="button"
-                    className="rounded-lg border px-3 py-1.5 text-xs font-semibold hover:opacity-90 disabled:opacity-60"
-                    style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                    className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-semibold transition hover:bg-white/[0.06] disabled:opacity-60"
                     onClick={onSave}
                     disabled={saving}
                   >
@@ -237,8 +221,7 @@ export default function BookingCardUI({
 
                   <button
                     type="button"
-                    className="rounded-lg border px-3 py-1.5 text-xs font-semibold hover:opacity-90 disabled:opacity-60"
-                    style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                    className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-semibold transition hover:bg-white/[0.06] disabled:opacity-60"
                     onClick={onCancelEdit}
                     disabled={saving}
                   >
@@ -248,8 +231,7 @@ export default function BookingCardUI({
               ) : (
                 <button
                   type="button"
-                  className="rounded-lg border px-3 py-1.5 text-xs font-semibold hover:opacity-90 disabled:opacity-60"
-                  style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                  className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-semibold transition hover:bg-white/[0.06] disabled:opacity-60"
                   onClick={() => setEditing(true)}
                   disabled={saving}
                 >
@@ -261,8 +243,7 @@ export default function BookingCardUI({
             {!editing && canCancel && onCancel ? (
               <button
                 type="button"
-                className="rounded-lg border px-3 py-1.5 text-xs font-semibold hover:opacity-90 disabled:opacity-60"
-                style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                className="rounded-xl border border-red-500/25 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-300 transition hover:bg-red-500/15 disabled:opacity-60"
                 onClick={() => onCancel(b.public_id)}
                 disabled={!!cancelling || saving}
               >

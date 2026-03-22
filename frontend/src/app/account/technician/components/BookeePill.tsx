@@ -7,10 +7,11 @@ export function BookeePill({ kind }: { kind: BookeeKind }) {
   const isLead = kind === "lead";
   return (
     <span
-      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold sm:text-xs"
+      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold"
       style={{
-        borderColor: "rgb(var(--border))",
-        background: isLead ? "rgba(245, 158, 11, 0.18)" : "rgba(var(--bg), 0.20)",
+        borderColor: isLead ? "rgba(245,158,11,0.35)" : "rgba(255,255,255,0.12)",
+        background: isLead ? "rgba(245,158,11,0.14)" : "rgba(255,255,255,0.05)",
+        color: isLead ? "rgb(253 230 138)" : "rgb(var(--muted))",
       }}
       title={isLead ? "Unregistered lead" : "Registered customer"}
     >
@@ -28,10 +29,10 @@ export function GroupCountPill({
 }) {
   return (
     <span
-      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold sm:text-xs"
+      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold"
       style={{
-        borderColor: tone === "danger" ? "rgb(239 68 68 / 0.55)" : "rgb(var(--border))",
-        background: tone === "danger" ? "rgb(127 29 29 / 0.18)" : "rgba(var(--bg), 0.18)",
+        borderColor: tone === "danger" ? "rgba(239,68,68,0.45)" : "rgba(255,255,255,0.12)",
+        background: tone === "danger" ? "rgba(127,29,29,0.18)" : "rgba(255,255,255,0.05)",
         color: tone === "danger" ? "rgb(254 202 202)" : "rgb(var(--muted))",
       }}
     >

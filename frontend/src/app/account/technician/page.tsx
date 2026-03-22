@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Briefcase, ClipboardList, RefreshCw, X } from "lucide-react";
 import type { WorkerBookingRow } from "../../../lib/api/workerBookings";
 import {
   workerCompleteBooking,
@@ -141,7 +142,10 @@ export default function WorkerJobsPage() {
       try {
         await sendBookingMessage(bookingId, completionMsg);
       } catch (error: unknown) {
-        setErr((prev) => prev ?? getErrorMessage(error, "Completed, but failed to post completion message in chat."));
+        setErr(
+          (prev) =>
+            prev ?? getErrorMessage(error, "Completed, but failed to post completion message in chat.")
+        );
       }
 
       await refresh({ historyPage: 1 });
@@ -195,13 +199,11 @@ export default function WorkerJobsPage() {
 
   const sortedHistory = useMemo(() => {
     const copy = [...historyRows];
-    copy.sort((a, b) => {
-      const at = new Date(a.created_at).getTime();
-      const bt = new Date(b.created_at).getTime();
-      return sortBy === "scheduled"
+    copy.sort((a, b) =>
+      sortBy === "scheduled"
         ? new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime()
-        : bt - at;
-    });
+        : new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
     return copy;
   }, [historyRows, sortBy]);
 
@@ -224,7 +226,7 @@ export default function WorkerJobsPage() {
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-5">
       <CompleteWithPriceModal
         open={modalOpen}
         busy={modalBusy}
@@ -239,28 +241,26 @@ export default function WorkerJobsPage() {
         onConfirm={confirmCompleteWithPrice}
       />
 
+      {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-xl font-bold">Jobs</h2>
-          <p className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-            Assigned jobs require a final price before you can complete them. Completed jobs appear in Job History.
+          <h2 className="text-xl font-bold text-[rgb(var(--fg))]">Jobs</h2>
+          <p className="mt-1 text-sm text-[rgb(var(--muted))]">
+            Assigned jobs require a final price before you can complete them. Completed jobs appear in
+            Job History.
           </p>
         </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-2">
-            <label className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-              Sort by
-            </label>
-
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+            <label className="text-xs text-[rgb(var(--muted))]">Sort</label>
             <select
               value={sortBy}
               onChange={(e) => {
                 const v = e.target.value;
                 setSortBy(v === "created" ? "created" : "scheduled");
               }}
-              className="rounded-xl border px-3 py-2 text-sm"
-              style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+              className="bg-transparent text-sm text-[rgb(var(--fg))] focus:outline-none"
             >
               <option value="scheduled">Scheduled</option>
               <option value="created">Created</option>
@@ -269,61 +269,68 @@ export default function WorkerJobsPage() {
 
           <button
             type="button"
-            onClick={() => refresh()}
-            className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+            onClick={() => void refresh()}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-medium transition hover:bg-white/[0.06] disabled:opacity-60"
             disabled={loading || !!busyId}
           >
+            <RefreshCw className="h-4 w-4" />
             Refresh
           </button>
         </div>
       </div>
 
-      <div className="inline-flex rounded-base shadow-xs -space-x-px" role="group">
+      {/* Tab switcher */}
+      <div className="flex gap-1 rounded-xl border border-white/[0.08] bg-white/[0.02] p-1">
         <button
           type="button"
-          className="text-body bg-neutral-primary-soft border border-default hover:bg-neutral-secondary-medium hover:text-heading focus:ring-3 focus:ring-neutral-tertiary-soft font-medium leading-5 rounded-s-base text-sm px-3 py-2 focus:outline-none"
           onClick={() => setTab("assigned")}
-          style={{ opacity: tab === "assigned" ? 1 : 0.75 }}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition"
+          style={
+            tab === "assigned"
+              ? { background: "rgba(255,255,255,0.08)", color: "rgb(var(--fg))" }
+              : { color: "rgb(var(--muted))" }
+          }
         >
+          <Briefcase className="h-3.5 w-3.5" />
           Assigned
         </button>
+
         <button
           type="button"
-          className="text-body bg-neutral-primary-soft border border-default hover:bg-neutral-secondary-medium hover:text-heading focus:ring-3 focus:ring-neutral-tertiary-soft font-medium leading-5 rounded-e-base text-sm px-3 py-2 focus:outline-none"
           onClick={() => setTab("history")}
-          style={{ opacity: tab === "history" ? 1 : 0.75 }}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition"
+          style={
+            tab === "history"
+              ? { background: "rgba(255,255,255,0.08)", color: "rgb(var(--fg))" }
+              : { color: "rgb(var(--muted))" }
+          }
         >
+          <ClipboardList className="h-3.5 w-3.5" />
           Job History
         </button>
       </div>
 
       {err ? (
-        <div
-          className="rounded-xl border p-3 text-sm"
-          style={{ borderColor: "rgb(239 68 68 / 0.75)", background: "rgb(127 29 29 / 0.16)" }}
-        >
-          {err}
+        <div className="flex items-center justify-between rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          <span>{err}</span>
+          <button type="button" onClick={() => setErr(null)}>
+            <X className="h-4 w-4" />
+          </button>
         </div>
       ) : null}
 
       {loading ? (
-        <div
-          className="rounded-2xl border p-4 text-sm"
-          style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
-        >
-          Loading…
+        <div className="flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-6 text-sm text-[rgb(var(--muted))]">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+          Loading jobs…
         </div>
       ) : null}
 
       {!loading && tab === "assigned" ? (
         assignedGroups.every((g) => g.rows.length === 0) ? (
-          <div
-            className="rounded-2xl border p-6 text-sm space-y-2"
-            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
-          >
-            <div className="font-semibold">No assigned jobs</div>
-            <div style={{ color: "rgb(var(--muted))" }}>
+          <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-8 text-center">
+            <div className="text-sm font-semibold text-[rgb(var(--fg))]">No assigned jobs</div>
+            <div className="mt-1 text-sm text-[rgb(var(--muted))]">
               When an admin assigns you a booking, it will appear here.
             </div>
           </div>
@@ -351,12 +358,9 @@ export default function WorkerJobsPage() {
 
       {!loading && tab === "history" ? (
         sortedHistory.length === 0 ? (
-          <div
-            className="rounded-2xl border p-6 text-sm space-y-2"
-            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
-          >
-            <div className="font-semibold">No job history</div>
-            <div style={{ color: "rgb(var(--muted))" }}>
+          <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-8 text-center">
+            <div className="text-sm font-semibold text-[rgb(var(--fg))]">No job history</div>
+            <div className="mt-1 text-sm text-[rgb(var(--muted))]">
               Completed jobs will appear here after you complete them.
             </div>
           </div>
@@ -384,13 +388,12 @@ export default function WorkerJobsPage() {
                     await refresh({ historyPage: nextPage });
                   }}
                   disabled={!canPrev || !!busyId}
-                  className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-                  style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                  className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium transition hover:bg-white/[0.06] disabled:opacity-60"
                 >
-                  Prev
+                  ← Prev
                 </button>
 
-                <div className="text-center text-xs" style={{ color: "rgb(var(--muted))" }}>
+                <div className="text-center text-xs text-[rgb(var(--muted))]">
                   Page {historyPage} of {historyTotalPages} • {fmtNum(historyTotal)} total
                 </div>
 
@@ -403,10 +406,9 @@ export default function WorkerJobsPage() {
                     await refresh({ historyPage: nextPage });
                   }}
                   disabled={!canNext || !!busyId}
-                  className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-                  style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                  className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium transition hover:bg-white/[0.06] disabled:opacity-60"
                 >
-                  Next
+                  Next →
                 </button>
               </div>
             ) : null}
