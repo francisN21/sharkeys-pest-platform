@@ -10,6 +10,8 @@ import CustomersOverview from "../../components/su-dashboard/CustomersOverview";
 import SurveyOverview from "../../components/su-dashboard/SurveyOverview";
 import ServicesOverview from "../../components/su-dashboard/ServicesOverview";
 import RevenueOverview from "../../components/su-dashboard/RevenueOverview";
+import ServiceRevenueOverview from "../../components/su-dashboard/ServiceRevenueOverview";
+import TechnicianPerformanceOverview from "../../components/su-dashboard/TechnicianPerformanceOverview";
 import OwnerRouteTabs from "./_components/owner-route-tabs";
 
 type MeUserWithRoles = NonNullable<MeResponse["user"]> & {
@@ -181,6 +183,26 @@ export default function OwnerDashboardPage() {
           }}
         >
           <ServicesOverview />
+        </div>
+
+        <div
+          className="rounded-2xl border p-6"
+          style={{
+            borderColor: "rgb(var(--border))",
+            background: "rgb(var(--card))",
+          }}
+        >
+          <ServiceRevenueOverview />
+        </div>
+
+        <div
+          className="rounded-2xl border p-6"
+          style={{
+            borderColor: "rgb(var(--border))",
+            background: "rgb(var(--card))",
+          }}
+        >
+          <TechnicianPerformanceOverview />
         </div>
       </div>
     </main>

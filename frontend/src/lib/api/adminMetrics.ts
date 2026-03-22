@@ -193,6 +193,84 @@ export function getSurveyMetrics(range?: { start?: string; end?: string }) {
   return jsonFetch<SurveyMetricsResponse>(path, { method: "GET" });
 }
 
+// ─── Revenue by Service ───────────────────────────────────────────────────────
+
+export type RevenueByServiceMonthRow = {
+  service_id: number;
+  service_name: string;
+  month_start: string; // YYYY-MM-01
+  completed_count: number;
+  revenue_cents: number;
+};
+
+export type RevenueByServiceTotalRow = {
+  service_id: number;
+  service_name: string;
+  completed_count: number;
+  revenue_cents: number;
+};
+
+export type RevenueByServiceResponse = {
+  ok: boolean;
+  range: { start: string; end_exclusive: string; tzOffsetMinutes: number };
+  by_service_month: RevenueByServiceMonthRow[];
+  by_service_total: RevenueByServiceTotalRow[];
+};
+
+export function getRevenueByService(range?: {
+  start?: string;
+  end?: string;
+  tzOffsetMinutes?: number;
+}) {
+  const params = new URLSearchParams();
+  if (range?.start) params.set("start", range.start);
+  if (range?.end) params.set("end", range.end);
+  if (range?.tzOffsetMinutes !== undefined)
+    params.set("tzOffsetMinutes", String(range.tzOffsetMinutes));
+
+  const qs = params.toString();
+  const path = qs
+    ? `/admin/metrics/revenue-by-service?${qs}`
+    : `/admin/metrics/revenue-by-service`;
+
+  return jsonFetch<RevenueByServiceResponse>(path, { method: "GET" });
+}
+
+// ─── Technician Performance ───────────────────────────────────────────────────
+
+export type TechnicianPerformanceRow = {
+  worker_id: number;
+  first_name: string;
+  last_name: string;
+  total_assigned: number;
+  completed_count: number;
+  cancelled_count: number;
+  active_count: number;
+  revenue_cents: number;
+  avg_completion_hours: number | null;
+};
+
+export type TechnicianPerformanceResponse = {
+  ok: boolean;
+  range: { start: string; end_exclusive: string };
+  technicians: TechnicianPerformanceRow[];
+};
+
+export function getTechnicianPerformance(range?: { start?: string; end?: string }) {
+  const params = new URLSearchParams();
+  if (range?.start) params.set("start", range.start);
+  if (range?.end) params.set("end", range.end);
+
+  const qs = params.toString();
+  const path = qs
+    ? `/admin/metrics/technician-performance?${qs}`
+    : `/admin/metrics/technician-performance`;
+
+  return jsonFetch<TechnicianPerformanceResponse>(path, { method: "GET" });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function downloadCompletedBookingsCsv(range?: { start?: string; end?: string }) {
   const params = new URLSearchParams();
   if (range?.start) params.set("start", range.start);
