@@ -587,52 +587,84 @@ export default function LogsPage() {
   const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
-    me().then((res) => {
-      setMeRes(res);
-      if (!isSuperUser(res)) router.replace("/account");
-    }).catch(() => {
-      router.replace("/login");
-    }).finally(() => {
-      setAuthLoading(false);
-    });
+    let alive = true;
+    (async () => {
+      try {
+        const res = await me();
+        if (!alive) return;
+        if (!res?.ok || !res.user) { router.replace("/login"); return; }
+        setMeRes(res);
+        if (!isSuperUser(res)) { router.replace("/account"); return; }
+      } finally {
+        if (alive) setAuthLoading(false);
+      }
+    })();
+    return () => { alive = false; };
   }, [router]);
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "rgb(var(--bg))" }}>
-        <RefreshCcw className="h-6 w-6 animate-spin" style={{ color: "rgb(var(--muted))" }} />
-      </div>
+      <>
+        <Navbar />
+        <main className="mx-auto max-w-6xl px-4 py-16 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-8 w-8 rounded-full border-2 animate-spin"
+              style={{ borderColor: "rgb(var(--border))", borderTopColor: "transparent" }} />
+            <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>Loading…</div>
+          </div>
+        </main>
+      </>
     );
   }
 
   if (!meRes || !isSuperUser(meRes)) return null;
 
   return (
-    <div className="min-h-screen" style={{ background: "rgb(var(--bg))", color: "rgb(var(--fg))" }}>
+    <div className="min-h-screen" style={{ background: "rgb(var(--background))" }}>
       <Navbar />
-      <div className="mx-auto max-w-6xl px-4 py-8 space-y-6">
-        {/* Header */}
-        <div className="border-b pb-5" style={{ borderColor: "rgb(var(--border))" }}>
-          <div className="flex items-center gap-3 mb-1">
-            <ShieldAlert className="h-5 w-5" style={{ color: "rgb(var(--muted))" }} />
-            <h1 className="text-xl font-bold">System Logs</h1>
+
+      {/* Page header */}
+      <div className="border-b" style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}>
+        <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl border"
+                style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--fg), 0.05)" }}>
+                <i className="fa-solid fa-shield-halved text-sm" style={{ color: "rgb(var(--muted))" }} />
+              </div>
+              <div>
+                <h1 className="text-lg font-bold tracking-tight">System Logs</h1>
+                <p className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                  Sharkeys Pest Control · Sessions, tokens &amp; security events
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => router.push("/account")}
+                className="rounded-xl border px-3 py-1.5 text-xs font-semibold hover:opacity-80 transition-opacity"
+                style={{ borderColor: "rgb(var(--border))", background: "transparent" }}>
+                ← Back to Account
+              </button>
+            </div>
           </div>
-          <p className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-            Active sessions, pending tokens, and security events
-          </p>
+
+          {/* Tabs */}
+          <div className="mt-4 -mx-4 overflow-x-auto px-4 sm:-mx-6 sm:px-6">
+            <div className="min-w-max">
+              <OwnerRouteTabs pathname={pathname} loading={false} />
+            </div>
+          </div>
         </div>
+      </div>
 
-        <OwnerRouteTabs pathname={pathname} />
-
-        {/* Divider helper */}
-        <div className="h-px" style={{ background: "rgb(var(--border))" }} />
-
+      <main className="mx-auto max-w-6xl px-4 py-8 space-y-6 sm:px-6">
         <SessionsSection />
         <div className="h-px" style={{ background: "rgb(var(--border))" }} />
         <TokensSection />
         <div className="h-px" style={{ background: "rgb(var(--border))" }} />
         <SuspiciousLogSection />
-      </div>
+      </main>
     </div>
   );
 }
