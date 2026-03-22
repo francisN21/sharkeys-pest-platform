@@ -17,6 +17,7 @@ import {
 import type { TechBookingDetail } from "../../lib/api/adminTechBookings";
 import type { WorkerBookingRow } from "../../lib/api/workerBookings";
 import { me as apiMe } from "../../lib/api/auth";
+import { jsonFetch } from "../../lib/api/http";
 
 function normalizeText(v: string | null | undefined) {
   const s = String(v ?? "").trim();
@@ -144,41 +145,6 @@ async function getMeCached(): Promise<MeLite> {
 }
 
 /** ------------------ Price API helpers ------------------ */
-
-type ApiErrorShape = { message?: string; error?: string; ok?: boolean };
-
-const API_BASE = process.env.NEXT_PUBLIC_AUTH_API_BASE;
-
-function resolveUrl(path: string) {
-  if (!API_BASE && !path.startsWith("http")) {
-    throw new Error(
-      "Missing NEXT_PUBLIC_AUTH_API_BASE. Set it in .env.local (e.g. http://localhost:4000)."
-    );
-  }
-  return path.startsWith("http") ? path : `${API_BASE}${path}`;
-}
-
-async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const url = resolveUrl(path);
-
-  const res = await fetch(url, {
-    ...init,
-    headers: { ...(init?.headers || {}), "Content-Type": "application/json" },
-    credentials: "include",
-  });
-
-  const data = (await res.json().catch(() => ({}))) as T & ApiErrorShape;
-
-  if (!res.ok) {
-    const msg =
-      (data as ApiErrorShape)?.message ||
-      (data as ApiErrorShape)?.error ||
-      `Request failed (${res.status})`;
-    throw new Error(msg);
-  }
-
-  return data as T;
-}
 
 type BookingPrice = {
   initial_price_cents: number;
