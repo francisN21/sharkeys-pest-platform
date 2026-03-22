@@ -4,7 +4,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { RefreshCcw } from "lucide-react";
 import { getRepeatCustomers, type TopRepeatCustomerRow } from "../../lib/api/adminMetrics";
-import RangeDropdown, { type RangePreset } from "./RangeDropdown";
+import { RangeDropdown, type RangePreset } from "./RangeDropdown";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 function dateOnly(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
