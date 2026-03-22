@@ -768,6 +768,4 @@ router.patch("/:kind/:publicId/tag", requireAuth, requireAdminOrSuperuser, async
   }
 });
 
-
-
 module.exports = router;

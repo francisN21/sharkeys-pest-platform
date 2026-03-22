@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ClipboardList, RefreshCw, Users, Wrench, X } from "lucide-react";
+import { RefreshCw, X } from "lucide-react";
 import {
   getAdminTechBookings,
   reassignBooking,
@@ -12,8 +12,7 @@ import {
 import { me as apiMe } from "../../../lib/api/auth";
 import type { MeApiResponse } from "./types";
 import { getErrorMessage, userToMe } from "./helpers";
-import SectionCard from "./components/SectionCard";
-import TechWorkerSection from "./components/TechWorkerSection";
+import AssignTechCards from "../../../components/cards/AssignTechCards";
 import ReassignTechModal from "./components/ReassignTechModal";
 
 type ReassignState = {
@@ -36,17 +35,6 @@ const INITIAL_REASSIGN_STATE: ReassignState = {
   endsAt: null,
 };
 
-function StatBox({ label, value }: { label: string; value: number | string }) {
-  return (
-    <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 text-center">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted))]">
-        {label}
-      </div>
-      <div className="mt-1 text-sm font-bold text-[rgb(var(--fg))]">{value}</div>
-    </div>
-  );
-}
-
 export default function TechBookingsPage() {
   const router = useRouter();
 
@@ -58,7 +46,6 @@ export default function TechBookingsPage() {
   const [reassigningBookingId, setReassigningBookingId] = useState<string | null>(null);
   const [reassignState, setReassignState] = useState<ReassignState>(INITIAL_REASSIGN_STATE);
 
-  const [expandedTechs, setExpandedTechs] = useState<Record<number, boolean>>({});
   const [, setMe] = useState<{ id: number; first_name?: string | null; last_name?: string | null } | null>(null);
 
   async function refresh() {
@@ -69,15 +56,6 @@ export default function TechBookingsPage() {
       const data = await getAdminTechBookings();
       const nextTechs = data.technicians ?? [];
       setTechnicians(nextTechs);
-
-      setExpandedTechs((prev) => {
-        const next: Record<number, boolean> = {};
-        for (const tech of nextTechs) {
-          const count = tech.bookings?.length ?? 0;
-          next[Number(tech.user_id)] = prev[Number(tech.user_id)] ?? (count > 0 && count <= 2);
-        }
-        return next;
-      });
     } catch (error: unknown) {
       setPageErr(getErrorMessage(error, "Failed to load technician bookings"));
     } finally {
@@ -105,14 +83,6 @@ export default function TechBookingsPage() {
       alive = false;
     };
   }, []);
-
-  const totalAssigned = useMemo(() => {
-    return technicians.reduce((sum, tech) => sum + (tech.bookings?.length ?? 0), 0);
-  }, [technicians]);
-
-  const activeTechnicians = useMemo(() => {
-    return technicians.filter((tech) => (tech.bookings?.length ?? 0) > 0).length;
-  }, [technicians]);
 
   const technicianOptions = useMemo(() => {
     return technicians.map((tech) => ({
@@ -277,62 +247,12 @@ export default function TechBookingsPage() {
           </div>
         ) : null}
 
-        <SectionCard
-          title="Assignment Overview"
-          subtitle="Current technician workload across active assigned bookings."
-          icon={<ClipboardList className="h-5 w-5" />}
-        >
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatBox label="Technicians" value={technicians.length} />
-            <StatBox label="Active Techs" value={activeTechnicians} />
-            <StatBox label="Assigned Jobs" value={totalAssigned} />
-            <StatBox label="Unassigned View" value="Per Tech" />
-          </div>
-        </SectionCard>
-
-        <SectionCard
-          title="Technician Assignments"
-          subtitle="Expand a technician to review assigned bookings, customer info, and location details."
-          icon={<Users className="h-5 w-5" />}
-          actions={
-            <span className="inline-flex items-center rounded-full border border-white/[0.12] bg-white/[0.05] px-2.5 py-1 text-[11px] font-semibold text-[rgb(var(--muted))]">
-              {totalAssigned} total assigned
-            </span>
-          }
-        >
-          {technicians.length === 0 ? (
-            <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-8 text-center">
-              <div className="text-sm font-semibold text-[rgb(var(--fg))]">No technician bookings found</div>
-              <div className="mt-1 text-sm text-[rgb(var(--muted))]">
-                Assigned bookings will appear here once dispatch activity begins.
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {technicians.map((tech) => {
-                const techId = Number(tech.user_id);
-
-                return (
-                  <TechWorkerSection
-                    key={tech.user_id}
-                    technician={tech}
-                    expanded={!!expandedTechs[techId]}
-                    onToggle={() =>
-                      setExpandedTechs((prev) => ({
-                        ...prev,
-                        [techId]: !prev[techId],
-                      }))
-                    }
-                    onOpenDetail={(publicId) =>
-                      router.push(`/account/techbookings/bookings/${publicId}`)
-                    }
-                    onReassign={openReassignModal}
-                  />
-                );
-              })}
-            </div>
-          )}
-        </SectionCard>
+        <AssignTechCards
+          technicians={technicians}
+          onRefresh={refresh}
+          onExpand={(publicId) => router.push(`/account/techbookings/bookings/${publicId}`)}
+          onReassign={openReassignModal}
+        />
       </main>
 
       <ReassignTechModal
