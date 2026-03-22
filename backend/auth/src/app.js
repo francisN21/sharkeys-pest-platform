@@ -54,6 +54,26 @@ const app = express();
 app.set("trust proxy", 1);
 
 // -----------------------------------------------------------
+// Request timeout — respond 503 if handler takes too long
+// -----------------------------------------------------------
+
+app.use((req, res, next) => {
+  const timer = setTimeout(() => {
+    if (!res.headersSent) {
+      res.status(503).json({
+        ok: false,
+        error: "ServiceUnavailable",
+        message: "Request timed out",
+      });
+    }
+  }, 30_000);
+
+  res.on("finish", () => clearTimeout(timer));
+  res.on("close", () => clearTimeout(timer));
+  next();
+});
+
+// -----------------------------------------------------------
 // Rate limiters — applied per-IP before route handlers
 // -----------------------------------------------------------
 

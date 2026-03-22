@@ -377,9 +377,16 @@ router.post("/login", async (req, res, next) => {
       return res.status(401).json({ ok: false, message: "Invalid email or password" });
     }
 
+    // Session rotation: invalidate any existing session before issuing a new one
+    // to prevent session fixation attacks.
+    const cookieName = process.env.SESSION_COOKIE_NAME || "sid";
+    const existingSid = req.cookies?.[cookieName];
+    if (existingSid) {
+      await deleteSession(existingSid);
+    }
+
     const { sessionId, expiresAt } = await createSession(user.id);
 
-    const cookieName = process.env.SESSION_COOKIE_NAME || "sid";
     res.cookie(cookieName, sessionId, {
       ...getCookieOptions(),
       expires: new Date(expiresAt),
