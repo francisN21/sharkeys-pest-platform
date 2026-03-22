@@ -169,8 +169,10 @@ router.get("/admin/metrics/survey/referrals", requireAuth, async (req, res, next
     const { start, end } = querySchema.parse(req.query);
 
     const now = new Date();
-    const endDefault = toISODateOnlyLocal(now);
-    // Default: all-time (very large start)
+    // Default end: tomorrow (exclusive) so today's submissions are included
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const endDefault = toISODateOnlyLocal(tomorrow);
+    // Default start: all-time
     const startDate = parseDateOnly(start || "") || "2000-01-01";
     const endDate = parseDateOnly(end || "") || endDefault;
 
