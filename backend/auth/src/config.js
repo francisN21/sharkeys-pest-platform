@@ -15,6 +15,7 @@ const config = {
   APP_BASE_URL: String(process.env.APP_BASE_URL || "").trim(),
   EMAIL_VERIFY_PATH: String(process.env.EMAIL_VERIFY_PATH || "/verify-email").trim(),
   PASSWORD_RESET_PATH: String(process.env.PASSWORD_RESET_PATH || "/reset-password").trim(),
+  EMAIL_VERIFY_PATH: String(process.env.NEW_ACC_SETUP_PATH || "/new-account-setup").trim(),
 };
 
 module.exports = { config };

@@ -115,6 +115,12 @@ export type ResetPasswordResponse = {
   message?: string;
 };
 
+export type NewAccountSetupCompleteResponse = {
+  ok: boolean;
+  user: AuthUser;
+  session: AuthSession;
+};
+
 // -----------------------------
 // API calls
 // -----------------------------
@@ -186,6 +192,16 @@ export function forgotPassword(email: string) {
 
 export function resetPassword(payload: { token: string; password: string }) {
   return jsonFetch<ResetPasswordResponse>("/auth/password/reset", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function completeNewAccountSetup(payload: {
+  token: string;
+  password: string;
+}) {
+  return jsonFetch<NewAccountSetupCompleteResponse>("/auth/new-account-setup/complete", {
     method: "POST",
     body: JSON.stringify(payload),
   });

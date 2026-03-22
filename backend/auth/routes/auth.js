@@ -155,6 +155,11 @@ const resetPasswordSchema = z.object({
   password: strongPasswordSchema,
 });
 
+const newAccountSetupCompleteSchema = z.object({
+  token: z.string().trim().min(20).max(500),
+  password: strongPasswordSchema,
+});
+
 /**
  * POST /auth/signup
  */
@@ -628,7 +633,7 @@ router.post("/password/forgot", async (req, res, next) => {
         email: user.email,
       });
 
-      const emailResult = await sendPasswordResetEmail({
+      await sendPasswordResetEmail({
         to: user.email,
         firstName: user.first_name,
         resetUrl,
@@ -663,7 +668,7 @@ router.post("/password/reset", async (req, res, next) => {
     const tokenHash = hashValue(token);
 
     await client.query("BEGIN");
-    console.log("Here")
+
     const tokenRes = await client.query(
       `
       SELECT prt.id, prt.user_id
@@ -780,6 +785,206 @@ router.post("/password/reset", async (req, res, next) => {
     await client.query("COMMIT");
 
     return res.json({ ok: true });
+  } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * POST /auth/new-account-setup/complete
+ * Similar to password reset, but:
+ * - ensures customer role exists
+ * - marks email verified if not already verified
+ * - signs the user in immediately
+ */
+router.post("/new-account-setup/complete", async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { token, password } = newAccountSetupCompleteSchema.parse(req.body);
+    const tokenHash = hashValue(token);
+
+    await client.query("BEGIN");
+
+    const tokenRes = await client.query(
+      `
+      SELECT prt.id, prt.user_id
+      FROM password_reset_tokens prt
+      WHERE prt.token_hash = $1
+        AND prt.consumed_at IS NULL
+        AND prt.expires_at > now()
+      ORDER BY prt.created_at DESC
+      LIMIT 1
+      FOR UPDATE
+      `,
+      [tokenHash]
+    );
+
+    const setupRow = tokenRes.rows[0] || null;
+    if (!setupRow) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ ok: false, message: "Invalid or expired setup token" });
+    }
+
+    const userRes = await client.query(
+      `
+      SELECT
+        u.id,
+        u.public_id,
+        u.email,
+        u.password_hash,
+        u.first_name,
+        u.last_name,
+        u.phone,
+        u.account_type,
+        u.address,
+        u.email_verified_at,
+        u.created_at
+      FROM users u
+      WHERE u.id = $1
+      LIMIT 1
+      FOR UPDATE
+      `,
+      [setupRow.user_id]
+    );
+
+    const user = userRes.rows[0] || null;
+    if (!user) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ ok: false, message: "Account not found" });
+    }
+
+    if (user.password_hash) {
+      const sameAsCurrent = await argon2.verify(user.password_hash, password);
+      if (sameAsCurrent) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({
+          ok: false,
+          message: "New password must be different from your current password and recent passwords",
+        });
+      }
+    }
+
+    const historyRes = await client.query(
+      `
+      SELECT password_hash
+      FROM user_password_history
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT 5
+      `,
+      [user.id]
+    );
+
+    for (const row of historyRes.rows) {
+      if (!row?.password_hash) continue;
+
+      const reused = await argon2.verify(row.password_hash, password);
+      if (reused) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({
+          ok: false,
+          message: "New password must be different from your current password and recent passwords",
+        });
+      }
+    }
+
+    if (user.password_hash) {
+      await client.query(
+        `
+        INSERT INTO user_password_history (user_id, password_hash)
+        VALUES ($1, $2)
+        `,
+        [user.id, user.password_hash]
+      );
+    }
+
+    const passwordHash = await argon2.hash(password);
+
+    await client.query(
+      `
+      UPDATE users
+      SET
+        password_hash = $2,
+        email_verified_at = COALESCE(email_verified_at, now()),
+        updated_at = now()
+      WHERE id = $1
+      `,
+      [user.id, passwordHash]
+    );
+
+    await client.query(
+      `
+      INSERT INTO user_roles (user_id, role)
+      VALUES ($1, 'customer')
+      ON CONFLICT DO NOTHING
+      `,
+      [user.id]
+    );
+
+    await client.query(
+      `UPDATE password_reset_tokens SET consumed_at = now() WHERE id = $1`,
+      [setupRow.id]
+    );
+
+    await client.query(
+      `
+      DELETE FROM user_password_history
+      WHERE id IN (
+        SELECT id
+        FROM user_password_history
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+        OFFSET 5
+      )
+      `,
+      [user.id]
+    );
+
+    await client.query("COMMIT");
+
+    const { sessionId, expiresAt } = await createSession(user.id);
+
+    const cookieName = process.env.SESSION_COOKIE_NAME || "sid";
+    res.cookie(cookieName, sessionId, {
+      ...getCookieOptions(),
+      expires: new Date(expiresAt),
+    });
+
+    const rolesRes = await pool.query(
+      `SELECT role FROM user_roles WHERE user_id = $1`,
+      [user.id]
+    );
+    const roles = rolesRes.rows.map((r) => r.role);
+    const user_role = roles.includes("superuser")
+      ? "superuser"
+      : roles.includes("admin")
+      ? "admin"
+      : roles.includes("worker")
+      ? "worker"
+      : "customer";
+
+    return res.json({
+      ok: true,
+      user: {
+        public_id: user.public_id,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        phone: user.phone,
+        account_type: user.account_type,
+        address: user.address,
+        email_verified_at: new Date().toISOString(),
+        created_at: user.created_at,
+        roles,
+        user_role,
+      },
+      session: { expiresAt },
+    });
   } catch (err) {
     try {
       await client.query("ROLLBACK");
