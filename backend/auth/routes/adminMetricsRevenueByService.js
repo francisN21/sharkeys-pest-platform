@@ -122,4 +122,69 @@ router.get("/admin/metrics/revenue-by-service", requireAuth, async (req, res, ne
   }
 });
 
+/**
+ * GET /admin/metrics/revenue-by-service/export
+ * Superuser only. Returns same data as the JSON endpoint as a CSV download.
+ * Columns: service, month, completed_jobs, revenue_usd
+ */
+router.get("/admin/metrics/revenue-by-service/export", requireAuth, async (req, res, next) => {
+  try {
+    const userId = req.user?.id ?? req.auth?.userId ?? null;
+    if (!userId) return res.status(401).json({ ok: false, message: "Not authenticated" });
+
+    const ok = await requireSuperUserByDb(userId);
+    if (!ok) return res.status(403).json({ ok: false, message: "Forbidden" });
+
+    const parsed = querySchema.parse(req.query);
+    const start = parsed.start ?? dateOnlyMonthsAgoUtc(6);
+    const endExclusive = parsed.end ?? dateOnlyTodayUtc();
+    const tzOffsetMinutes = Number.isFinite(parsed.tzOffsetMinutes) ? parsed.tzOffsetMinutes : 0;
+
+    const startMs = new Date(`${start}T00:00:00Z`).getTime();
+    const endMs = new Date(`${endExclusive}T00:00:00Z`).getTime();
+    if (!(endMs > startMs)) {
+      return res.status(400).json({ ok: false, message: "Invalid range: end must be after start" });
+    }
+
+    const r = await pool.query(
+      `
+      SELECT
+        s.title         AS service_name,
+        date_trunc('month', (b.completed_at - make_interval(mins => $3)))::date AS month_start,
+        COUNT(*)::int        AS completed_count,
+        SUM(COALESCE(bp.final_price_cents, bp.initial_price_cents, s.base_price_cents, 0))::bigint AS revenue_cents
+      FROM bookings b
+      JOIN services s ON s.id = b.service_id
+      LEFT JOIN booking_prices bp ON bp.booking_id = b.id
+      WHERE
+        b.status = 'completed'
+        AND b.completed_at IS NOT NULL
+        AND (b.completed_at - make_interval(mins => $3)) >= ($1::date)::timestamp
+        AND (b.completed_at - make_interval(mins => $3)) <  ($2::date)::timestamp
+      GROUP BY s.title, month_start
+      ORDER BY s.title ASC, month_start ASC
+      `,
+      [start, endExclusive, tzOffsetMinutes]
+    );
+
+    const rows = r.rows;
+    const lines = ["service,month,completed_jobs,revenue_usd"];
+    for (const row of rows) {
+      const service = `"${String(row.service_name).replace(/"/g, '""')}"`;
+      const month = row.month_start ? String(row.month_start).slice(0, 7) : "";
+      const jobs = Number(row.completed_count || 0);
+      const revenue = (Number(row.revenue_cents || 0) / 100).toFixed(2);
+      lines.push(`${service},${month},${jobs},${revenue}`);
+    }
+
+    const csv = lines.join("\r\n");
+    const filename = `revenue_by_service_${start}_to_${endExclusive}.csv`;
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    return res.send(csv);
+  } catch (e) {
+    next(e);
+  }
+});
+
 module.exports = router;

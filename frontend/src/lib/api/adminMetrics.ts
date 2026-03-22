@@ -269,6 +269,38 @@ export function getTechnicianPerformance(range?: { start?: string; end?: string 
   return jsonFetch<TechnicianPerformanceResponse>(path, { method: "GET" });
 }
 
+export function exportRevenueByServiceCsv(range?: {
+  start?: string;
+  end?: string;
+  tzOffsetMinutes?: number;
+}) {
+  const params = new URLSearchParams();
+  if (range?.start) params.set("start", range.start);
+  if (range?.end) params.set("end", range.end);
+  if (range?.tzOffsetMinutes !== undefined)
+    params.set("tzOffsetMinutes", String(range.tzOffsetMinutes));
+
+  const qs = params.toString();
+  const path = qs
+    ? `/admin/metrics/revenue-by-service/export?${qs}`
+    : `/admin/metrics/revenue-by-service/export`;
+
+  return fetch(resolveUrl(path), { method: "GET", credentials: "include" });
+}
+
+export function exportTechnicianPerformanceCsv(range?: { start?: string; end?: string }) {
+  const params = new URLSearchParams();
+  if (range?.start) params.set("start", range.start);
+  if (range?.end) params.set("end", range.end);
+
+  const qs = params.toString();
+  const path = qs
+    ? `/admin/metrics/technician-performance/export?${qs}`
+    : `/admin/metrics/technician-performance/export`;
+
+  return fetch(resolveUrl(path), { method: "GET", credentials: "include" });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function downloadCompletedBookingsCsv(range?: { start?: string; end?: string }) {

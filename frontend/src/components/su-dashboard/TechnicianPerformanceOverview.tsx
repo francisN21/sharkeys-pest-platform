@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { RefreshCcw } from "lucide-react";
 import {
   getTechnicianPerformance,
+  exportTechnicianPerformanceCsv,
   type TechnicianPerformanceRow,
 } from "../../lib/api/adminMetrics";
 
@@ -61,10 +62,10 @@ function fmtHours(h: number | null | undefined) {
  * Preset helpers
  ---------------------------- */
 
-type Preset = "3m" | "6m" | "12m";
+type Preset = "1m" | "3m" | "6m" | "12m";
 
 function presetRange(preset: Preset): { start: string; end: string } {
-  const months = preset === "3m" ? 3 : preset === "6m" ? 6 : 12;
+  const months = preset === "1m" ? 1 : preset === "3m" ? 3 : preset === "6m" ? 6 : 12;
   return { start: monthsAgoFirstDay(months), end: dateOnlyToday() };
 }
 
@@ -74,6 +75,7 @@ function presetRange(preset: Preset): { start: string; end: string } {
 
 export default function TechnicianPerformanceOverview() {
   const [preset, setPreset] = useState<Preset>("6m");
+  const [exporting, setExporting] = useState(false);
   const [technicians, setTechnicians] = useState<TechnicianPerformanceRow[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -141,6 +143,27 @@ export default function TechnicianPerformanceOverview() {
     [technicians]
   );
 
+  async function onExportCsv() {
+    try {
+      setExporting(true);
+      const res = await exportTechnicianPerformanceCsv(range);
+      if (!res.ok) throw new Error(`Export failed (${res.status})`);
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `technician_performance_${range.start}_to_${range.end}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <section className="space-y-3">
       {/* Header */}
@@ -153,9 +176,19 @@ export default function TechnicianPerformanceOverview() {
         </div>
 
         <div className="flex flex-wrap items-end gap-2">
-          {(["3m", "6m", "12m"] as Preset[]).map((p) => (
+          {(["1m", "3m", "6m", "12m"] as Preset[]).map((p) => (
             <PresetButton key={p} label={p.toUpperCase()} active={preset === p} onClick={() => setPreset(p)} />
           ))}
+
+          <button
+            type="button"
+            onClick={onExportCsv}
+            disabled={exporting || loading}
+            className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+          >
+            {exporting ? "Exporting…" : "Export CSV"}
+          </button>
 
           <button
             type="button"

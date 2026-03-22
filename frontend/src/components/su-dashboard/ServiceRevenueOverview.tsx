@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { RefreshCcw } from "lucide-react";
 import {
   getRevenueByService,
+  exportRevenueByServiceCsv,
   type RevenueByServiceMonthRow,
   type RevenueByServiceTotalRow,
 } from "../../lib/api/adminMetrics";
@@ -62,10 +63,10 @@ function fmtMonth(ymd: string) {
  * Preset helpers
  ---------------------------- */
 
-type Preset = "3m" | "6m" | "12m";
+type Preset = "1m" | "3m" | "6m" | "12m";
 
 function presetRange(preset: Preset): { start: string; end: string } {
-  const months = preset === "3m" ? 3 : preset === "6m" ? 6 : 12;
+  const months = preset === "1m" ? 1 : preset === "3m" ? 3 : preset === "6m" ? 6 : 12;
   return { start: monthsAgoFirstDay(months), end: dateOnlyToday() };
 }
 
@@ -75,6 +76,7 @@ function presetRange(preset: Preset): { start: string; end: string } {
 
 export default function ServiceRevenueOverview() {
   const [preset, setPreset] = useState<Preset>("6m");
+  const [exporting, setExporting] = useState(false);
   const [totals, setTotals] = useState<RevenueByServiceTotalRow[]>([]);
   const [byMonth, setByMonth] = useState<RevenueByServiceMonthRow[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -151,6 +153,28 @@ export default function ServiceRevenueOverview() {
     return map;
   }, [byMonth]);
 
+  async function onExportCsv() {
+    try {
+      setExporting(true);
+      const tzOffsetMinutes = new Date().getTimezoneOffset();
+      const res = await exportRevenueByServiceCsv({ ...range, tzOffsetMinutes });
+      if (!res.ok) throw new Error(`Export failed (${res.status})`);
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `revenue_by_service_${range.start}_to_${range.end}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <section className="space-y-3">
       {/* Header */}
@@ -163,9 +187,19 @@ export default function ServiceRevenueOverview() {
         </div>
 
         <div className="flex flex-wrap items-end gap-2">
-          {(["3m", "6m", "12m"] as Preset[]).map((p) => (
+          {(["1m", "3m", "6m", "12m"] as Preset[]).map((p) => (
             <PresetButton key={p} label={p.toUpperCase()} active={preset === p} onClick={() => setPreset(p)} />
           ))}
+
+          <button
+            type="button"
+            onClick={onExportCsv}
+            disabled={exporting || loading}
+            className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+          >
+            {exporting ? "Exporting…" : "Export CSV"}
+          </button>
 
           <button
             type="button"
