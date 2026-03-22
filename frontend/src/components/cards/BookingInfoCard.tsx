@@ -261,6 +261,32 @@ function KindPill({ kind }: { kind: PersonKind }) {
   );
 }
 
+const STATUS_PILL_META: Record<string, { bg: string; border: string; text: string }> = {
+  pending:   { bg: "rgba(245,158,11,0.12)",  border: "rgba(245,158,11,0.30)",  text: "rgb(253 230 138)" },
+  accepted:  { bg: "rgba(56,189,248,0.12)",  border: "rgba(56,189,248,0.30)",  text: "rgb(186 230 253)" },
+  assigned:  { bg: "rgba(99,102,241,0.12)",  border: "rgba(99,102,241,0.30)",  text: "rgb(199 210 254)" },
+  completed: { bg: "rgba(52,211,153,0.12)",  border: "rgba(52,211,153,0.30)",  text: "rgb(167 243 208)" },
+  cancelled: { bg: "rgba(239,68,68,0.08)",   border: "rgba(239,68,68,0.20)",   text: "rgb(252 165 165)" },
+};
+
+function StatusPill({ status }: { status: string }) {
+  const s = String(status ?? "").trim().toLowerCase();
+  const meta = STATUS_PILL_META[s] ?? {
+    bg: "rgba(255,255,255,0.05)",
+    border: "rgba(255,255,255,0.12)",
+    text: "rgb(var(--muted))",
+  };
+  const label = s ? s.charAt(0).toUpperCase() + s.slice(1) : "—";
+  return (
+    <span
+      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+      style={{ background: meta.bg, borderColor: meta.border, color: meta.text }}
+    >
+      {label}
+    </span>
+  );
+}
+
 function TagPill({ tag }: { tag: string | null | undefined }) {
   const t = (tag ?? "").trim();
   if (!t) return null;
@@ -915,9 +941,7 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
                 </div>
               </div>
 
-              <span className="inline-flex items-center rounded-full border border-white/[0.12] bg-white/[0.05] px-2.5 py-1 text-[11px] font-semibold text-[rgb(var(--muted))]">
-                {status}
-              </span>
+              <StatusPill status={status} />
             </div>
 
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -954,7 +978,7 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
         </div>
       </section>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className={`grid gap-4 ${showCustomerSection && showTechSection ? "md:grid-cols-2" : ""}`}>
         {showCustomerSection ? (
           <InfoShell
             title="Customer"
@@ -980,9 +1004,7 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
               </div>
             </div>
           </InfoShell>
-        ) : (
-          <div className="hidden md:block" />
-        )}
+        ) : null}
 
         {showTechSection ? (
           <InfoShell title="Assigned Technician" icon={<Wrench className="h-5 w-5" />}>
@@ -991,11 +1013,6 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
                 <div className="text-sm font-semibold text-[rgb(var(--fg))]">
                   {normalizeText(techName) === "—" ? "Pending assignment" : normalizeText(techName)}
                 </div>
-                {viewer === "worker" ? (
-                  <div className="mt-1 text-xs text-[rgb(var(--muted))]">
-                    Technician view — showing your assignment
-                  </div>
-                ) : null}
               </div>
 
               <div className="grid gap-3">
@@ -1004,9 +1021,7 @@ export default function BookingInfoCard({ booking }: { booking: BookingLike }) {
               </div>
             </div>
           </InfoShell>
-        ) : (
-          <div className="hidden md:block" />
-        )}
+        ) : null}
       </div>
     </div>
   );
