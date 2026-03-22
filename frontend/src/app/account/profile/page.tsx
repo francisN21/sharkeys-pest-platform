@@ -2,7 +2,24 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import {
+  BadgeCheck,
+  BarChart3,
+  CheckCircle2,
+  Clock,
+  Hash,
+  Mail,
+  MapPin,
+  Pencil,
+  Phone,
+  ShieldCheck,
+  User,
+  X,
+} from "lucide-react";
 import { me, updateMe, type MeResponse, type UpdateMePayload } from "../../../lib/api/auth";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type AccountUser = NonNullable<MeResponse["user"]>;
 type AccountType = "" | "residential" | "business";
@@ -24,6 +41,8 @@ type MeResponseWithRoles = MeResponse & {
   user?: MeUserWithRoles;
 };
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function displayName(u: AccountUser) {
   const first = (u.first_name ?? "").trim();
   const last = (u.last_name ?? "").trim();
@@ -32,26 +51,34 @@ function displayName(u: AccountUser) {
 }
 
 function firstNameOrFallback(u: AccountUser) {
+  return (u.first_name ?? "").trim() || "there";
+}
+
+function initials(u: AccountUser) {
   const first = (u.first_name ?? "").trim();
-  return first || "there";
+  const last = (u.last_name ?? "").trim();
+  const out = `${first ? first[0] : ""}${last ? last[0] : ""}`.toUpperCase();
+  return out || (u.email?.[0] ?? "?").toUpperCase();
 }
 
 function formatDate(iso?: string | null) {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
 function formatDateTime(iso?: string | null) {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString();
+  return d.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function formatAccountType(v?: string | null): string {
@@ -81,17 +108,11 @@ function buildDiffPayload(form: FormState, user: AccountUser): UpdateMePayload {
   const uAddr = clean(user.address ?? "");
   const uType: AccountType = toAccountType(user.account_type);
 
-  const fFirst = clean(form.first_name);
-  const fLast = clean(form.last_name);
-  const fPhone = clean(form.phone);
-  const fAddr = clean(form.address);
-  const fType: AccountType = form.account_type;
-
-  if (fFirst !== uFirst) payload.first_name = fFirst || undefined;
-  if (fLast !== uLast) payload.last_name = fLast || undefined;
-  if (fPhone !== uPhone) payload.phone = fPhone || undefined;
-  if (fAddr !== uAddr) payload.address = fAddr || undefined;
-  if (fType !== uType) payload.account_type = fType || undefined;
+  if (clean(form.first_name) !== uFirst) payload.first_name = clean(form.first_name) || undefined;
+  if (clean(form.last_name) !== uLast) payload.last_name = clean(form.last_name) || undefined;
+  if (clean(form.phone) !== uPhone) payload.phone = clean(form.phone) || undefined;
+  if (clean(form.address) !== uAddr) payload.address = clean(form.address) || undefined;
+  if (form.account_type !== uType) payload.account_type = form.account_type || undefined;
 
   (Object.keys(payload) as (keyof UpdateMePayload)[]).forEach((k) => {
     if (payload[k] === undefined) delete payload[k];
@@ -102,54 +123,120 @@ function buildDiffPayload(form: FormState, user: AccountUser): UpdateMePayload {
 
 function isSuperUser(res: MeResponse | null) {
   if (!res) return false;
-
   const withRoles = res as MeResponseWithRoles;
   const rolesRaw = withRoles.user?.roles ?? null;
   if (!rolesRaw || !Array.isArray(rolesRaw)) return false;
-
   return rolesRaw.map((r) => String(r).trim().toLowerCase()).includes("superuser");
 }
 
+function deriveRole(res: MeResponse | null): "superuser" | "admin" | "technician" | "customer" {
+  if (!res) return "customer";
+  const u = res.user as MeUserWithRoles | null | undefined;
+  const roles = (u?.roles ?? []).map((r) => String(r).toLowerCase());
+  if (roles.includes("superuser") || u?.user_role === "superuser") return "superuser";
+  if (roles.includes("admin") || u?.user_role === "admin") return "admin";
+  if (roles.includes("worker") || u?.user_role === "worker") return "technician";
+  return "customer";
+}
+
+function roleDisplayMeta(role: "superuser" | "admin" | "technician" | "customer") {
+  switch (role) {
+    case "superuser":
+      return { label: "Owner", bg: "rgba(52,211,153,0.12)", border: "rgba(52,211,153,0.35)", text: "rgb(167 243 208)", ring: "rgba(52,211,153,0.45)" };
+    case "admin":
+      return { label: "Admin", bg: "rgba(52,211,153,0.12)", border: "rgba(52,211,153,0.35)", text: "rgb(167 243 208)", ring: "rgba(52,211,153,0.45)" };
+    case "technician":
+      return { label: "Technician", bg: "rgba(56,189,248,0.12)", border: "rgba(56,189,248,0.35)", text: "rgb(186 230 253)", ring: "rgba(56,189,248,0.45)" };
+    case "customer":
+    default:
+      return { label: "Customer", bg: "rgba(245,158,11,0.12)", border: "rgba(245,158,11,0.35)", text: "rgb(253 230 138)", ring: "rgba(245,158,11,0.45)" };
+  }
+}
+
+// ─── Shared UI pieces ─────────────────────────────────────────────────────────
+
+const INPUT_CLS =
+  "h-10 w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 text-sm text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted))] focus:border-white/20 focus:outline-none focus:ring-2 focus:ring-white/10 transition";
+
+const SELECT_CLS =
+  "h-10 w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 text-sm text-[rgb(var(--fg))] focus:border-white/20 focus:outline-none focus:ring-2 focus:ring-white/10 transition";
+
 function SectionCard({
+  icon,
   title,
   subtitle,
+  accentClass = "bg-sky-500/10 text-sky-400",
   children,
 }: {
+  icon: React.ReactNode;
   title: string;
   subtitle?: string;
+  accentClass?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div
-      className="rounded-2xl border p-3 sm:p-4"
-      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.14)" }}
-    >
-      <div className="mb-3">
-        <div className="text-sm font-semibold sm:text-base">{title}</div>
-        {subtitle ? (
-          <div className="mt-1 text-xs sm:text-sm" style={{ color: "rgb(var(--muted))" }}>
-            {subtitle}
-          </div>
-        ) : null}
+    <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02]">
+      <div className="flex items-center gap-3 border-b border-white/10 px-5 py-4">
+        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${accentClass}`}>
+          {icon}
+        </div>
+        <div>
+          <div className="text-sm font-semibold text-[rgb(var(--fg))]">{title}</div>
+          {subtitle ? <div className="text-xs text-[rgb(var(--muted))]">{subtitle}</div> : null}
+        </div>
       </div>
+      <div className="p-5">{children}</div>
+    </div>
+  );
+}
+
+function InfoTile({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted))]">
+        {label}
+      </div>
+      <div className={`mt-1 break-words text-sm text-[rgb(var(--fg))] ${mono ? "font-mono text-[13px]" : ""}`}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function FieldLabel({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <div className="text-xs font-semibold text-[rgb(var(--muted))]">{label}</div>
       {children}
     </div>
   );
 }
 
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function AccountViewPage() {
   const router = useRouter();
+  const shouldReduceMotion = useReducedMotion();
 
   const [data, setData] = useState<MeResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
-
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
 
   const user = data?.user ?? null;
   const isSU = useMemo(() => isSuperUser(data), [data]);
+  const role = useMemo(() => deriveRole(data), [data]);
+  const roleMeta = useMemo(() => roleDisplayMeta(role), [role]);
 
   const [form, setForm] = useState<FormState>({
     first_name: "",
@@ -161,7 +248,6 @@ export default function AccountViewPage() {
 
   useEffect(() => {
     let alive = true;
-
     (async () => {
       try {
         const res = await me();
@@ -174,7 +260,6 @@ export default function AccountViewPage() {
         }
 
         setData(res);
-
         const u = res.user as AccountUser;
         setForm({
           first_name: u.first_name ?? "",
@@ -185,23 +270,17 @@ export default function AccountViewPage() {
         });
       } catch (e: unknown) {
         if (!alive) return;
-        const msg = e instanceof Error ? e.message : "Not logged in";
-        setErr(msg);
         router.replace("/login");
       } finally {
         if (alive) setLoading(false);
       }
     })();
-
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [router]);
 
   const hasChanges = useMemo(() => {
     if (!user) return false;
-    const payload = buildDiffPayload(form, user);
-    return Object.keys(payload).length > 0;
+    return Object.keys(buildDiffPayload(form, user)).length > 0;
   }, [form, user]);
 
   function resetToUser() {
@@ -217,12 +296,8 @@ export default function AccountViewPage() {
 
   async function onSave() {
     if (!user) return;
-
     const payload = buildDiffPayload(form, user);
-    if (Object.keys(payload).length === 0) {
-      setEditing(false);
-      return;
-    }
+    if (Object.keys(payload).length === 0) { setEditing(false); return; }
 
     try {
       setSaving(true);
@@ -232,15 +307,11 @@ export default function AccountViewPage() {
       const res = await updateMe(payload);
       if (!res?.ok || !res.user) throw new Error("Failed to update profile");
 
-      setData((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          user: { ...(prev.user as AccountUser), ...(res.user as AccountUser) },
-        };
-      });
+      setData((prev) =>
+        prev ? { ...prev, user: { ...(prev.user as AccountUser), ...(res.user as AccountUser) } } : prev
+      );
 
-      setOkMsg("Profile updated.");
+      setOkMsg("Profile updated successfully.");
       router.refresh();
       setEditing(false);
     } catch (e: unknown) {
@@ -257,345 +328,383 @@ export default function AccountViewPage() {
     setEditing(false);
   }
 
+  // ─── Loading ───────────────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-6 text-sm text-[rgb(var(--muted))]">
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+        Loading profile…
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 text-sm text-[rgb(var(--muted))]">
+        No user data found.
+      </div>
+    );
+  }
+
+  // ─── Render ────────────────────────────────────────────────────────────────
+
   return (
-    <main className="mx-auto w-full max-w-5xl px-2 py-3 sm:px-4 sm:py-6">
-      <section className="space-y-4 sm:space-y-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="text-xl font-bold">Account</h1>
-            <p className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-              Manage your profile, contact details, and account information.
-            </p>
-          </div>
+    <div className="space-y-5">
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            {isSU ? (
-              <button
-                type="button"
-                onClick={() => router.push("/owner-dashboard")}
-                className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-                style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                disabled={loading || !user || saving}
-              >
-                <span className="inline-flex items-center gap-2">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M4 19V5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    <path d="M4 19H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    <path d="M8 16V11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    <path d="M12 16V7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    <path d="M16 16V9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                  Owner Dashboard
-                </span>
-              </button>
-            ) : null}
-
-            <button
-              type="button"
-              onClick={() => {
-                if (!editing) {
-                  setErr(null);
-                  setOkMsg(null);
-                  setEditing(true);
-                } else {
-                  onCancelEdit();
-                }
-              }}
-              className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-              style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-              disabled={loading || !user || saving}
-            >
-              <span className="inline-flex items-center gap-2">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M12 20h9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  <path
-                    d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                {editing ? "Cancel" : "Edit"}
-              </span>
-            </button>
-          </div>
-        </div>
-
+      {/* Banners */}
+      <AnimatePresence>
         {err ? (
-          <div
-            className="rounded-xl border p-3 text-sm"
-            style={{ borderColor: "rgb(239 68 68 / 0.75)", background: "rgb(127 29 29 / 0.16)" }}
+          <motion.div
+            key="err"
+            initial={shouldReduceMotion ? undefined : { opacity: 0, y: -6 }}
+            animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+            exit={shouldReduceMotion ? undefined : { opacity: 0, y: -6 }}
+            transition={{ duration: 0.15 }}
+            className="flex items-center justify-between rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400"
           >
-            {err}
-          </div>
+            <span>{err}</span>
+            <button type="button" onClick={() => setErr(null)}>
+              <X className="h-4 w-4" />
+            </button>
+          </motion.div>
         ) : null}
 
         {okMsg ? (
-          <div
-            className="rounded-xl border p-3 text-sm"
-            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
+          <motion.div
+            key="ok"
+            initial={shouldReduceMotion ? undefined : { opacity: 0, y: -6 }}
+            animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+            exit={shouldReduceMotion ? undefined : { opacity: 0, y: -6 }}
+            transition={{ duration: 0.15 }}
+            className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-400"
           >
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
             {okMsg}
-          </div>
+          </motion.div>
         ) : null}
+      </AnimatePresence>
 
-        {loading ? (
-          <div
-            className="rounded-2xl border p-4 text-sm"
-            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
-          >
-            Loading…
-          </div>
-        ) : user ? (
-          <div className="grid gap-3 sm:gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-            <div className="space-y-3 sm:space-y-4">
+      {/* ── Profile Hero ─────────────────────────────────────────────────────── */}
+      <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02]">
+        {/* Gradient accent */}
+        <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-r from-sky-500/10 via-indigo-500/8 to-purple-500/10" />
+
+        <div className="relative px-5 pb-5 pt-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            {/* Avatar + identity */}
+            <div className="flex items-start gap-4">
+              {/* Avatar */}
               <div
-                className="rounded-2xl border p-3 sm:p-4"
-                style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.10)" }}
+                className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-xl font-bold"
+                style={{
+                  background: roleMeta.bg,
+                  boxShadow: `0 0 0 2px ${roleMeta.ring}`,
+                  color: roleMeta.text,
+                }}
               >
-                <div className="flex flex-col gap-3">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                        Hi,{" "}
-                        <span className="font-semibold" style={{ color: "rgb(var(--text))" }}>
-                          {firstNameOrFallback(user)}
-                        </span>{" "}
-                        👋
-                      </div>
-
-                      <div className="mt-1 break-words text-lg font-semibold sm:text-xl">
-                        {displayName(user)}
-                      </div>
-
-                      <div className="mt-1 break-words text-sm" style={{ color: "rgb(var(--muted))" }}>
-                        {user.email}
-                      </div>
-                    </div>
-
-                    {editing ? (
-                      <div
-                        className="rounded-full border px-2.5 py-1 text-[11px] font-medium"
-                        style={{ borderColor: "rgb(var(--border))", color: "rgb(var(--muted))" }}
-                      >
-                        {hasChanges ? "Unsaved changes" : "No changes yet"}
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <Pill label={user.email_verified_at ? "Verified" : "Not verified"} />
-                    <Pill label={formatAccountType(user.account_type)} />
-                    <Pill label={`Joined ${formatDate(user.created_at)}`} />
-                    {isSU ? <Pill label="Superuser" /> : null}
-                  </div>
-                </div>
+                {initials(user)}
               </div>
 
-              <SectionCard
-                title="Profile details"
-                subtitle="Keep your contact details up to date for scheduling and notifications."
+              <div className="min-w-0">
+                <div className="text-xs text-[rgb(var(--muted))]">
+                  Hi, <span className="font-semibold text-[rgb(var(--fg))]">{firstNameOrFallback(user)}</span> 👋
+                </div>
+                <div className="mt-0.5 break-words text-lg font-bold text-[rgb(var(--fg))] sm:text-xl">
+                  {displayName(user)}
+                </div>
+                <div className="mt-0.5 flex items-center gap-1.5 text-sm text-[rgb(var(--muted))]">
+                  <Mail className="h-3.5 w-3.5 shrink-0" />
+                  {user.email}
+                </div>
+
+                {/* Pills */}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {/* Role badge */}
+                  <span
+                    className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+                    style={{ borderColor: roleMeta.border, background: roleMeta.bg, color: roleMeta.text }}
+                  >
+                    {roleMeta.label}
+                  </span>
+
+                  {/* Verified */}
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+                    style={
+                      user.email_verified_at
+                        ? { borderColor: "rgba(52,211,153,0.35)", background: "rgba(52,211,153,0.10)", color: "rgb(167 243 208)" }
+                        : { borderColor: "rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.04)", color: "rgb(var(--muted))" }
+                    }
+                  >
+                    {user.email_verified_at ? <BadgeCheck className="h-3 w-3" /> : null}
+                    {user.email_verified_at ? "Verified" : "Unverified"}
+                  </span>
+
+                  {/* Account type */}
+                  {user.account_type ? (
+                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold text-[rgb(var(--muted))]">
+                      {formatAccountType(user.account_type)}
+                    </span>
+                  ) : null}
+
+                  {/* Joined */}
+                  <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold text-[rgb(var(--muted))]">
+                    <Clock className="h-3 w-3" />
+                    Joined {formatDate(user.created_at)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex shrink-0 flex-wrap items-center gap-2 sm:flex-col sm:items-end">
+              {isSU ? (
+                <button
+                  type="button"
+                  onClick={() => router.push("/owner-dashboard")}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-medium text-[rgb(var(--fg))] transition hover:bg-white/[0.07]"
+                >
+                  <BarChart3 className="h-4 w-4" />
+                  Owner Dashboard
+                </button>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!editing) {
+                    setErr(null);
+                    setOkMsg(null);
+                    setEditing(true);
+                  } else {
+                    onCancelEdit();
+                  }
+                }}
+                disabled={saving}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-medium text-[rgb(var(--fg))] transition hover:bg-white/[0.07] disabled:opacity-50"
               >
-                {!editing ? (
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <Info label="First name" value={user.first_name ?? "—"} />
-                    <Info label="Last name" value={user.last_name ?? "—"} />
-                    <Info label="Phone" value={user.phone ?? "—"} />
-                    <Info label="Account type" value={formatAccountType(user.account_type)} />
-                    <div className="sm:col-span-2">
-                      <Info label="Address" value={user.address ?? "—"} />
-                    </div>
-                  </div>
+                {editing ? (
+                  <><X className="h-4 w-4" /> Cancel</>
                 ) : (
-                  <>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <Field label="First name">
-                        <input
-                          value={form.first_name}
-                          onChange={(e) => setForm((p) => ({ ...p, first_name: e.target.value }))}
-                          className="w-full rounded-xl border px-3 py-2.5 text-sm"
-                          style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                          placeholder="First name"
-                        />
-                      </Field>
-
-                      <Field label="Last name">
-                        <input
-                          value={form.last_name}
-                          onChange={(e) => setForm((p) => ({ ...p, last_name: e.target.value }))}
-                          className="w-full rounded-xl border px-3 py-2.5 text-sm"
-                          style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                          placeholder="Last name"
-                        />
-                      </Field>
-
-                      <Field label="Phone number">
-                        <input
-                          value={form.phone}
-                          onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
-                          className="w-full rounded-xl border px-3 py-2.5 text-sm"
-                          style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                          placeholder="e.g. 707-555-1234"
-                        />
-                      </Field>
-
-                      <Field label="Account type">
-                        <select
-                          value={form.account_type}
-                          onChange={(e) =>
-                            setForm((p) => ({
-                              ...p,
-                              account_type: (e.target.value as AccountType) ?? "",
-                            }))
-                          }
-                          className="w-full rounded-xl border px-3 py-2.5 text-sm"
-                          style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                        >
-                          <option value="">Select…</option>
-                          <option value="residential">Residential</option>
-                          <option value="business">Business</option>
-                        </select>
-                      </Field>
-
-                      <div className="sm:col-span-2">
-                        <Field label="Address">
-                          <input
-                            value={form.address}
-                            onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))}
-                            className="w-full rounded-xl border px-3 py-2.5 text-sm"
-                            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                            placeholder="Street, City, State"
-                          />
-                        </Field>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
-                      <button
-                        type="button"
-                        onClick={onCancelEdit}
-                        className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-                        style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-                        disabled={saving}
-                      >
-                        Cancel
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={onSave}
-                        className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-                        style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                        disabled={saving || !hasChanges}
-                        title={!hasChanges ? "No changes to save" : "Save changes"}
-                      >
-                        {saving ? "Saving…" : "Save changes"}
-                      </button>
-                    </div>
-                  </>
+                  <><Pencil className="h-4 w-4" /> Edit Profile</>
                 )}
-              </SectionCard>
-            </div>
+              </button>
 
-            <div className="space-y-3 sm:space-y-4">
-              <SectionCard title="Account info" subtitle="Read-only account metadata.">
-                <div className="grid gap-2">
-                  <Info label="Email" value={user.email} />
-                  <Info label="Email verified" value={user.email_verified_at ? "Yes" : "No"} />
-                  <Info label="Joined" value={formatDateTime(user.created_at)} />
-                  <Info label="Public ID" value={user.public_id ?? "—"} mono />
+              {editing && hasChanges ? (
+                <div className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-400">
+                  Unsaved changes
                 </div>
-              </SectionCard>
-
-              <SectionCard title="Quick summary" subtitle="Fast account overview.">
-                <div className="grid grid-cols-2 gap-2">
-                  <MiniStat label="Name" value={displayName(user)} />
-                  <MiniStat label="Type" value={formatAccountType(user.account_type)} />
-                  <MiniStat label="Phone" value={user.phone || "—"} />
-                  <MiniStat label="Status" value={user.email_verified_at ? "Verified" : "Pending"} />
-                </div>
-              </SectionCard>
+              ) : null}
             </div>
           </div>
-        ) : (
-          <div
-            className="rounded-xl border p-3 text-sm"
-            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+        </div>
+      </div>
+
+      {/* ── Main grid ────────────────────────────────────────────────────────── */}
+      <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
+
+        {/* Left: Profile Details */}
+        <SectionCard
+          icon={<User className="h-4 w-4" />}
+          title="Profile Details"
+          subtitle="Keep your contact info up to date for scheduling and notifications"
+          accentClass="bg-sky-500/10 text-sky-400"
+        >
+          <AnimatePresence mode="wait">
+            {!editing ? (
+              <motion.div
+                key="view"
+                initial={shouldReduceMotion ? undefined : { opacity: 0 }}
+                animate={shouldReduceMotion ? undefined : { opacity: 1 }}
+                exit={shouldReduceMotion ? undefined : { opacity: 0 }}
+                transition={{ duration: 0.12 }}
+                className="grid gap-2 sm:grid-cols-2"
+              >
+                <InfoTile label="First name" value={user.first_name || "—"} />
+                <InfoTile label="Last name" value={user.last_name || "—"} />
+                <InfoTile label="Phone" value={user.phone || "—"} />
+                <InfoTile label="Account type" value={formatAccountType(user.account_type)} />
+                <div className="sm:col-span-2">
+                  <InfoTile label="Address" value={user.address || "—"} />
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="edit"
+                initial={shouldReduceMotion ? undefined : { opacity: 0 }}
+                animate={shouldReduceMotion ? undefined : { opacity: 1 }}
+                exit={shouldReduceMotion ? undefined : { opacity: 0 }}
+                transition={{ duration: 0.12 }}
+                className="space-y-4"
+              >
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <FieldLabel label="First name">
+                    <input
+                      value={form.first_name}
+                      onChange={(e) => setForm((p) => ({ ...p, first_name: e.target.value }))}
+                      className={INPUT_CLS}
+                      placeholder="First name"
+                    />
+                  </FieldLabel>
+
+                  <FieldLabel label="Last name">
+                    <input
+                      value={form.last_name}
+                      onChange={(e) => setForm((p) => ({ ...p, last_name: e.target.value }))}
+                      className={INPUT_CLS}
+                      placeholder="Last name"
+                    />
+                  </FieldLabel>
+
+                  <FieldLabel label="Phone number">
+                    <input
+                      value={form.phone}
+                      onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
+                      className={INPUT_CLS}
+                      placeholder="e.g. 707-555-1234"
+                      type="tel"
+                    />
+                  </FieldLabel>
+
+                  <FieldLabel label="Account type">
+                    <select
+                      value={form.account_type}
+                      onChange={(e) => setForm((p) => ({ ...p, account_type: (e.target.value as AccountType) ?? "" }))}
+                      className={SELECT_CLS}
+                    >
+                      <option value="">Select…</option>
+                      <option value="residential">Residential</option>
+                      <option value="business">Business</option>
+                    </select>
+                  </FieldLabel>
+
+                  <div className="sm:col-span-2">
+                    <FieldLabel label="Address">
+                      <input
+                        value={form.address}
+                        onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))}
+                        className={INPUT_CLS}
+                        placeholder="Street, City, State"
+                      />
+                    </FieldLabel>
+                  </div>
+                </div>
+
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={onCancelEdit}
+                    disabled={saving}
+                    className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-4 text-sm font-medium text-[rgb(var(--fg))] transition hover:bg-white/[0.07] disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+
+                  <motion.button
+                    type="button"
+                    onClick={onSave}
+                    disabled={saving || !hasChanges}
+                    whileHover={shouldReduceMotion ? undefined : { scale: 1.01, y: -1 }}
+                    whileTap={shouldReduceMotion ? undefined : { scale: 0.99 }}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[rgb(var(--primary))] px-5 text-sm font-semibold text-[rgb(var(--primary-fg))] shadow-lg shadow-black/20 transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+                    title={!hasChanges ? "No changes to save" : "Save changes"}
+                  >
+                    {saving ? (
+                      <>
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        Saving…
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-4 w-4" />
+                        Save Changes
+                      </>
+                    )}
+                  </motion.button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </SectionCard>
+
+        {/* Right: Account Info */}
+        <div className="space-y-5">
+          <SectionCard
+            icon={<ShieldCheck className="h-4 w-4" />}
+            title="Account Info"
+            subtitle="Read-only account metadata"
+            accentClass="bg-emerald-500/10 text-emerald-400"
           >
-            No user data.
-          </div>
-        )}
-      </section>
-    </main>
-  );
-}
+            <div className="grid gap-2">
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
+                <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted))]">
+                  <Mail className="h-3 w-3" />
+                  Email
+                </div>
+                <div className="mt-1 break-all text-sm text-[rgb(var(--fg))]">{user.email}</div>
+              </div>
 
-function Pill({ label }: { label: string }) {
-  return (
-    <span
-      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold sm:text-xs"
-      style={{
-        borderColor: "rgb(var(--border))",
-        background: "rgba(var(--bg), 0.20)",
-      }}
-    >
-      {label}
-    </span>
-  );
-}
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
+                <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted))]">
+                  <BadgeCheck className="h-3 w-3" />
+                  Verification
+                </div>
+                <div className="mt-1 flex items-center gap-2">
+                  <span
+                    className="text-sm font-medium"
+                    style={{ color: user.email_verified_at ? "rgb(167 243 208)" : "rgb(var(--muted))" }}
+                  >
+                    {user.email_verified_at ? "Email verified" : "Not yet verified"}
+                  </span>
+                  {user.email_verified_at ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                  ) : null}
+                </div>
+                {user.email_verified_at ? (
+                  <div className="mt-0.5 text-xs text-[rgb(var(--muted))]">
+                    {formatDateTime(user.email_verified_at)}
+                  </div>
+                ) : null}
+              </div>
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block space-y-1.5">
-      <div
-        className="text-[11px] font-semibold uppercase tracking-wide"
-        style={{ color: "rgb(var(--muted))" }}
-      >
-        {label}
-      </div>
-      {children}
-    </label>
-  );
-}
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
+                <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted))]">
+                  <Clock className="h-3 w-3" />
+                  Member since
+                </div>
+                <div className="mt-1 text-sm text-[rgb(var(--fg))]">{formatDateTime(user.created_at)}</div>
+              </div>
 
-function Info({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div
-      className="rounded-xl border px-3 py-2.5"
-      style={{
-        borderColor: "rgb(var(--border))",
-        background: "rgba(var(--bg), 0.18)",
-      }}
-    >
-      <div
-        className="text-[11px] font-semibold uppercase tracking-wide"
-        style={{ color: "rgb(var(--muted))" }}
-      >
-        {label}
-      </div>
-      <div className={`mt-1 break-words text-sm ${mono ? "font-mono text-[13px]" : ""}`}>
-        {value}
-      </div>
-    </div>
-  );
-}
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
+                <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted))]">
+                  <MapPin className="h-3 w-3" />
+                  Address on file
+                </div>
+                <div className="mt-1 text-sm text-[rgb(var(--fg))]">{user.address || "—"}</div>
+              </div>
 
-function MiniStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div
-      className="rounded-xl border px-3 py-2.5"
-      style={{
-        borderColor: "rgb(var(--border))",
-        background: "rgba(var(--bg), 0.22)",
-      }}
-    >
-      <div
-        className="text-[11px] font-semibold uppercase tracking-wide"
-        style={{ color: "rgb(var(--muted))" }}
-      >
-        {label}
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
+                <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted))]">
+                  <Phone className="h-3 w-3" />
+                  Phone
+                </div>
+                <div className="mt-1 text-sm text-[rgb(var(--fg))]">{user.phone || "—"}</div>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
+                <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted))]">
+                  <Hash className="h-3 w-3" />
+                  Public ID
+                </div>
+                <div className="mt-1 break-all font-mono text-[13px] text-[rgb(var(--fg))]">
+                  {user.public_id ?? "—"}
+                </div>
+              </div>
+            </div>
+          </SectionCard>
+        </div>
       </div>
-      <div className="mt-1 truncate text-sm font-medium">{value}</div>
     </div>
   );
 }
