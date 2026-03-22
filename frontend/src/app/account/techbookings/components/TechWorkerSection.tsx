@@ -1,6 +1,16 @@
 "use client";
 
 import React from "react";
+import {
+  Briefcase,
+  CheckCircle2,
+  ChevronDown,
+  Mail,
+  MapPin,
+  Phone,
+  User,
+  Wrench,
+} from "lucide-react";
 import type { TechBookingRow, TechRow } from "../../../../lib/api/adminTechBookings";
 import {
   formatAccountTypeLabel,
@@ -21,14 +31,88 @@ type TechBookingWithLead = TechBookingRow & {
   lead_account_type?: string | null;
 };
 
+function normalizeTagKey(input?: string | null) {
+  return String(input ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+}
+
+function getTagMeta(tag?: string | null) {
+  const key = normalizeTagKey(tag);
+
+  if (key === "vip") {
+    return {
+      label: "VIP",
+      bg: "rgba(34,197,94,0.16)",
+      border: "rgba(34,197,94,0.35)",
+      text: "rgb(187 247 208)",
+    };
+  }
+
+  if (key === "good") {
+    return {
+      label: "Good",
+      bg: "rgba(59,130,246,0.14)",
+      border: "rgba(59,130,246,0.30)",
+      text: "rgb(191 219 254)",
+    };
+  }
+
+  if (key === "bad" || key === "hot") {
+    return {
+      label: key === "hot" ? "Hot" : "Bad",
+      bg: "rgba(239,68,68,0.16)",
+      border: "rgba(239,68,68,0.30)",
+      text: "rgb(254 202 202)",
+    };
+  }
+
+  if (key === "regular" || key === "warm") {
+    return {
+      label: key === "warm" ? "Warm" : "Regular",
+      bg: "rgba(245,158,11,0.14)",
+      border: "rgba(245,158,11,0.30)",
+      text: "rgb(253 230 138)",
+    };
+  }
+
+  if (key === "cold") {
+    return {
+      label: "Cold",
+      bg: "rgba(59,130,246,0.14)",
+      border: "rgba(59,130,246,0.30)",
+      text: "rgb(191 219 254)",
+    };
+  }
+
+  if (key === "big_spender") {
+    return {
+      label: "Big Spender",
+      bg: "rgba(168,85,247,0.18)",
+      border: "rgba(168,85,247,0.34)",
+      text: "rgb(233 213 255)",
+    };
+  }
+
+  return {
+    label: tag || "Tag",
+    bg: "rgba(255,255,255,0.05)",
+    border: "rgba(255,255,255,0.12)",
+    text: "rgb(var(--muted))",
+  };
+}
+
 function KindPill({ kind }: { kind: "lead" | "registered" }) {
   const isLead = kind === "lead";
+
   return (
     <span
-      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold sm:text-xs"
+      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold"
       style={{
-        borderColor: "rgb(var(--border))",
-        background: isLead ? "rgba(245, 158, 11, 0.18)" : "rgba(var(--bg), 0.20)",
+        borderColor: isLead ? "rgba(245,158,11,0.40)" : "rgba(255,255,255,0.12)",
+        background: isLead ? "rgba(245,158,11,0.14)" : "rgba(255,255,255,0.05)",
+        color: isLead ? "rgb(253 230 138)" : "rgb(var(--muted))",
       }}
       title={isLead ? "Unregistered lead" : "Registered customer"}
     >
@@ -41,26 +125,47 @@ function TagPill({ tag }: { tag: string | null | undefined }) {
   const t = (tag ?? "").trim();
   if (!t) return null;
 
-  const key = t.toLowerCase();
-  const bg =
-    key === "vip"
-      ? "rgba(34, 197, 94, 0.16)"
-      : key === "hot"
-        ? "rgba(239, 68, 68, 0.16)"
-        : key === "warm"
-          ? "rgba(245, 158, 11, 0.16)"
-          : key === "cold"
-            ? "rgba(59, 130, 246, 0.14)"
-            : "rgba(59, 130, 246, 0.14)";
+  const meta = getTagMeta(t);
 
   return (
     <span
-      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold sm:text-xs"
-      style={{ borderColor: "rgb(var(--border))", background: bg }}
-      title={`CRM Tag: ${t}`}
+      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+      style={{ borderColor: meta.border, background: meta.bg, color: meta.text }}
+      title={`CRM Tag: ${meta.label}`}
     >
-      {t}
+      {meta.label}
     </span>
+  );
+}
+
+function StatBox({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 text-center">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted))]">
+        {label}
+      </div>
+      <div className="mt-1 text-sm font-bold text-[rgb(var(--fg))]">{value}</div>
+    </div>
+  );
+}
+
+function DetailTile({
+  icon,
+  label,
+  children,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
+      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted))]">
+        {icon}
+        <span>{label}</span>
+      </div>
+      <div className="mt-1 text-sm break-words text-[rgb(var(--fg))]">{children}</div>
+    </div>
   );
 }
 
@@ -80,33 +185,36 @@ export default function TechWorkerSection({
   const list: TechBookingWithLead[] = (technician.bookings ?? []) as TechBookingWithLead[];
 
   return (
-    <section
-      className="rounded-2xl border p-3 sm:p-4"
-      style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.10)" }}
-    >
-      <div className="flex flex-col gap-3">
+    <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02]">
+      <div className="border-b border-white/[0.07] bg-white/[0.03] px-4 py-4">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="truncate text-sm font-semibold sm:text-base">{techLabel(technician)}</div>
-              <span
-                className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold sm:text-xs"
-                style={{
-                  borderColor: "rgb(var(--border))",
-                  background: "rgba(var(--bg), 0.18)",
-                  color: "rgb(var(--muted))",
-                }}
-              >
-                {list.length} assigned
-              </span>
-            </div>
-
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
-              <div className="text-sm break-words" style={{ color: "rgb(var(--muted))" }}>
-                <span className="font-medium">Phone:</span> {normalizeText(technician.phone)}
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-[rgb(var(--muted))]">
+                <Wrench className="h-5 w-5" />
               </div>
-              <div className="text-sm break-words" style={{ color: "rgb(var(--muted))" }}>
-                <span className="font-medium">Email:</span> {normalizeText(technician.email ?? null)}
+
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="truncate text-sm font-semibold text-[rgb(var(--fg))] sm:text-base">
+                    {techLabel(technician)}
+                  </div>
+
+                  <span className="inline-flex items-center rounded-full border border-white/[0.12] bg-white/[0.05] px-2.5 py-1 text-[11px] font-semibold text-[rgb(var(--muted))]">
+                    {list.length} assigned
+                  </span>
+                </div>
+
+                <div className="mt-2 grid gap-1 sm:grid-cols-2">
+                  <div className="flex items-center gap-1.5 text-sm text-[rgb(var(--muted))]">
+                    <Phone className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{normalizeText(technician.phone)}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-sm text-[rgb(var(--muted))]">
+                    <Mail className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{normalizeText(technician.email ?? null)}</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -115,39 +223,27 @@ export default function TechWorkerSection({
             <button
               type="button"
               onClick={onToggle}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border transition-all duration-200 hover:opacity-90"
-              style={{
-                borderColor: "rgb(var(--border))",
-                background: "rgba(var(--bg), 0.18)",
-              }}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-[rgb(var(--muted))] transition hover:bg-white/[0.06] hover:text-[rgb(var(--fg))]"
               aria-label={expanded ? "Collapse technician bookings" : "Expand technician bookings"}
             >
-              <span
-                className={`text-lg font-bold leading-none transition-transform duration-200 ${
-                  expanded ? "rotate-0" : "rotate-180"
+              <ChevronDown
+                className={`h-4 w-4 transition-transform duration-200 ${
+                  expanded ? "rotate-180" : ""
                 }`}
-              >
-                {expanded ? "−" : "+"}
-              </span>
+              />
             </button>
           ) : null}
         </div>
+      </div>
 
+      <div className="p-4">
         {list.length === 0 ? (
-          <div
-            className="rounded-xl border p-3 text-sm"
-            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.14)" }}
-          >
-            <span style={{ color: "rgb(var(--muted))" }}>No assigned bookings.</span>
+          <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 text-sm text-[rgb(var(--muted))]">
+            No assigned bookings.
           </div>
         ) : !expanded ? (
-          <div
-            className="rounded-xl border p-3 text-sm"
-            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.14)" }}
-          >
-            <span style={{ color: "rgb(var(--muted))" }}>
-              {list.length} {list.length === 1 ? "booking" : "bookings"} hidden
-            </span>
+          <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 text-sm text-[rgb(var(--muted))]">
+            {list.length} {list.length === 1 ? "booking" : "bookings"} hidden — expand to view.
           </div>
         ) : (
           <div className="grid gap-3">
@@ -158,81 +254,59 @@ export default function TechWorkerSection({
               return (
                 <div
                   key={b.public_id}
-                  className="rounded-2xl border p-3 sm:p-4"
-                  style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.08)" }}
+                  className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4"
                 >
                   <div className="flex flex-col gap-3">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <div className="min-w-0 truncate text-sm font-semibold sm:text-base">
+                          <span className="text-sm font-semibold text-[rgb(var(--fg))] sm:text-base">
                             {b.service_title}
-                          </div>
+                          </span>
                           <KindPill kind={kind} />
                           <TagPill tag={b.crm_tag} />
                         </div>
 
-                        <div className="mt-2 text-sm break-words" style={{ color: "rgb(var(--muted))" }}>
+                        <div className="mt-1.5 text-sm text-[rgb(var(--muted))]">
                           {formatRange(b.starts_at, b.ends_at)}
                         </div>
 
-                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                          <div
-                            className="rounded-xl border px-3 py-2.5"
-                            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
-                          >
-                            <div
-                              className="text-[11px] font-semibold uppercase tracking-wide"
-                              style={{ color: "rgb(var(--muted))" }}
-                            >
-                              Customer
-                            </div>
-                            <div className="mt-1 text-sm font-medium break-words">
-                              {bookee.displayName}
-                              <span className="ml-2 text-xs font-normal" style={{ color: "rgb(var(--muted))" }}>
-                                ({formatAccountTypeLabel(bookee.accountType)})
-                              </span>
-                            </div>
-                          </div>
-
-                          <div
-                            className="rounded-xl border px-3 py-2.5"
-                            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
-                          >
-                            <div
-                              className="text-[11px] font-semibold uppercase tracking-wide"
-                              style={{ color: "rgb(var(--muted))" }}
-                            >
-                              Contact
-                            </div>
-                            <div className="mt-1 text-sm break-words">
-                              Phone: {bookee.phone ?? "—"}
-                              <br />
-                              Email: {bookee.email ?? "—"}
-                            </div>
-                          </div>
-
-                          <div className="sm:col-span-2">
-                            <div
-                              className="rounded-xl border px-3 py-2.5"
-                              style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
-                            >
-                              <div
-                                className="text-[11px] font-semibold uppercase tracking-wide"
-                                style={{ color: "rgb(var(--muted))" }}
-                              >
-                                Location
-                              </div>
-                              <div className="mt-1 text-sm break-words">{b.address || "—"}</div>
-                            </div>
-                          </div>
+                        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                          <StatBox label="Type" value={formatAccountTypeLabel(bookee.accountType)} />
+                          <StatBox label="Status" value={String(b.status ?? "Assigned")} />
+                          <StatBox label="Customer" value={bookee.displayName} />
+                          <StatBox label="Booking" value={b.public_id.slice(-8)} />
                         </div>
+                      </div>
+                    </div>
 
-                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                          <div className="text-xs break-words" style={{ color: "rgb(var(--muted))" }}>
-                            Booking ID: <span className="font-mono">{b.public_id}</span>
-                          </div>
-                        </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <DetailTile icon={<User className="h-3 w-3" />} label="Customer">
+                        {bookee.displayName}
+                      </DetailTile>
+
+                      <DetailTile icon={<Briefcase className="h-3 w-3" />} label="Account type">
+                        {formatAccountTypeLabel(bookee.accountType)}
+                      </DetailTile>
+
+                      <DetailTile icon={<Phone className="h-3 w-3" />} label="Phone">
+                        {bookee.phone ?? "—"}
+                      </DetailTile>
+
+                      <DetailTile icon={<Mail className="h-3 w-3" />} label="Email">
+                        {bookee.email ?? "—"}
+                      </DetailTile>
+
+                      <div className="sm:col-span-2">
+                        <DetailTile icon={<MapPin className="h-3 w-3" />} label="Location">
+                          {b.address || "—"}
+                        </DetailTile>
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <DetailTile icon={<CheckCircle2 className="h-3 w-3" />} label="Booking ID">
+                          <span className="font-mono text-[13px]">{b.public_id}</span>
+                        </DetailTile>
                       </div>
                     </div>
 
@@ -240,8 +314,7 @@ export default function TechWorkerSection({
                       <button
                         type="button"
                         onClick={() => onReassign(b.public_id)}
-                        className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
-                        style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.18)" }}
+                        className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-medium transition hover:bg-white/[0.06]"
                       >
                         Re-assign
                       </button>
@@ -249,8 +322,7 @@ export default function TechWorkerSection({
                       <button
                         type="button"
                         onClick={() => onOpenDetail(b.public_id)}
-                        className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
-                        style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+                        className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-semibold transition hover:bg-white/[0.06]"
                       >
                         Details
                       </button>

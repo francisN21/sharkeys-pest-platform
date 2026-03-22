@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { ClipboardList, MessageSquare, RefreshCw, X } from "lucide-react";
 import {
   getAdminTechBookingDetail,
   type TechBookingDetail,
@@ -200,64 +201,76 @@ export default function AdminTechBookingDetailPage() {
   const shortId = detail?.public_id ? detail.public_id.slice(-8) : bookingId.slice(-8);
 
   return (
-    <main className="space-y-4 sm:space-y-6">
+    <main className="space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => router.push("/account/techbookings")}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-medium transition hover:bg-white/[0.06]"
+          >
+            ← Back to Tech Bookings
+          </button>
+
+          <div>
+            <h2 className="text-xl font-bold text-[rgb(var(--fg))]">
+              {detail?.service_title ?? "Booking Details"}
+            </h2>
+            <p className="mt-1 text-sm text-[rgb(var(--muted))]">Booking #{shortId}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void refreshAll()}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-medium transition hover:bg-white/[0.06] disabled:opacity-60"
+            disabled={detailLoading || msgLoading}
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {detailErr ? (
+        <div className="flex items-center justify-between rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          <span>{detailErr}</span>
+          <button type="button" onClick={() => setDetailErr(null)}>
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ) : null}
+
+      {msgErr ? (
+        <div className="flex items-center justify-between rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          <span>{msgErr}</span>
+          <button type="button" onClick={() => setMsgErr(null)}>
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ) : null}
+
       <SectionCard
-        title={detail?.service_title ?? "Booking Details"}
-        subtitle={`Booking #${shortId}`}
-        actions={
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => router.push("/account/techbookings")}
-              className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
-              style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-            >
-              ← Back
-            </button>
-
-            <button
-              type="button"
-              onClick={() => void refreshAll()}
-              className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-              style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-              disabled={detailLoading}
-            >
-              Refresh
-            </button>
-          </div>
-        }
+        title="Booking Information"
+        subtitle="Service, customer, schedule, pricing, and status details."
+        icon={<ClipboardList className="h-5 w-5" />}
       >
-        {detailErr ? (
-          <div
-            className="rounded-xl border p-3 text-sm"
-            style={{ borderColor: "rgb(239 68 68 / 0.75)", background: "rgb(127 29 29 / 0.16)" }}
-          >
-            {detailErr}
-          </div>
-        ) : null}
-
         {detailLoading ? (
-          <div
-            className="rounded-2xl border p-4 text-sm"
-            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.12)" }}
-          >
-            Loading…
+          <div className="flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-6 text-sm text-[rgb(var(--muted))]">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            Loading booking…
           </div>
         ) : null}
 
         {!detailLoading && detail ? <BookingInfoCard booking={detail} /> : null}
       </SectionCard>
 
-      <SectionCard title="Messages" subtitle="Message thread for this booking.">
-        {msgErr ? (
-          <div
-            className="rounded-xl border p-3 text-sm"
-            style={{ borderColor: "rgb(239 68 68 / 0.75)", background: "rgb(127 29 29 / 0.16)" }}
-          >
-            {msgErr}
-          </div>
-        ) : null}
-
+      <SectionCard
+        title="Messages"
+        subtitle="Message thread for this booking."
+        icon={<MessageSquare className="h-5 w-5" />}
+      >
         <Messenger
           meUserId={me?.id ?? null}
           meFirstName={me?.first_name ?? null}
