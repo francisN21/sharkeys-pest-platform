@@ -1,9 +1,13 @@
 const express = require("express");
 const { z } = require("zod");
 const { pool } = require("../src/db");
+const { config } = require("../src/config");
 const { broadcastToRoles } = require("../src/realtime");
 const { createNotifications } = require("../src/notifications");
-const { sendBookingCreatedCustomerEmail } = require("../src/email/mailer");
+const {
+  sendBookingCreatedCustomerEmail,
+  sendLeadBookingInviteEmail,
+} = require("../src/email/mailer");
 
 const router = express.Router();
 
@@ -26,6 +30,29 @@ function normalizePhone(v) {
 function isSundayFromIso(iso) {
   const d = new Date(iso);
   return d.getDay() === 0;
+}
+
+function buildAppUrl(path, params = {}) {
+  const baseUrl = String(config.APP_BASE_URL || "").trim();
+  if (!baseUrl) return null;
+
+  const url = new URL(path || "/", baseUrl);
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && String(value) !== "") {
+      url.searchParams.set(key, String(value));
+    }
+  }
+
+  return url.toString();
+}
+
+function buildSignupUrl(email) {
+  const signupPath = String(
+    process.env.PUBLIC_BOOKING_SIGNUP_PATH || "/signup"
+  ).trim();
+
+  return buildAppUrl(signupPath, email ? { email } : {});
 }
 
 async function hasAvailabilityBlockConflict(client, startsAt, endsAt) {
@@ -149,79 +176,76 @@ router.post("/", async (req, res, next) => {
     const normalizedEmail = normalizeEmail(lead.email);
     const normalizedPhone = normalizePhone(lead.phone);
 
-    let existingLead = null;
     let matchedBy = "new";
+    let bookingOwnerKind = "lead";
+    let customerUserRow = null;
+    let leadRow = null;
 
-    if (normalizedEmail) {
-      const byEmail = await client.query(
+    // 1) Prefer existing registered user by email.
+if (normalizedEmail) {
+  const userRes = await client.query(
+    `
+    SELECT
+      u.id,
+      u.public_id,
+      u.email,
+      u.first_name,
+      u.last_name,
+      u.phone,
+      u.address,
+      u.account_type
+    FROM users u
+    WHERE u.email = $1
+    LIMIT 1
+    FOR UPDATE
+    `,
+    [normalizedEmail]
+  );
+
+  const existingUser = userRes.rows[0] || null;
+
+  if (existingUser) {
+      const rolesRes = await client.query(
         `
-        SELECT
-          id,
-          public_id,
-          email,
-          first_name,
-          last_name,
-          phone,
-          address,
-          account_type
-        FROM leads
-        WHERE lower(email) = $1
-        LIMIT 1
+        SELECT role
+        FROM user_roles
+        WHERE user_id = $1
         `,
-        [normalizedEmail]
+        [existingUser.id]
       );
 
-      if (byEmail.rowCount > 0) {
-        existingLead = byEmail.rows[0];
-        matchedBy = "email";
-      }
-    }
-
-    if (!existingLead && normalizedPhone) {
-      const byPhone = await client.query(
-        `
-        SELECT
-          id,
-          public_id,
-          email,
-          first_name,
-          last_name,
-          phone,
-          address,
-          account_type
-        FROM leads
-        WHERE regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') = $1
-        LIMIT 1
-        `,
-        [normalizedPhone]
+      const roles = rolesRes.rows.map((r) =>
+        String(r.role || "").trim().toLowerCase()
       );
 
-      if (byPhone.rowCount > 0) {
-        existingLead = byPhone.rows[0];
-        matchedBy = "phone";
+      const isInternal =
+        roles.includes("admin") ||
+        roles.includes("superuser") ||
+        roles.includes("worker");
+
+      if (isInternal) {
+        await client.query("ROLLBACK");
+        return res.status(409).json({
+          ok: false,
+          message: "This email belongs to an internal account and cannot use public booking",
+        });
       }
-    }
 
-    let leadRow;
-
-    if (existingLead) {
-      const updatedLead = await client.query(
+      const updatedUserRes = await client.query(
         `
-        UPDATE leads
+        UPDATE users
         SET
-          email = COALESCE($2, email),
-          first_name = COALESCE($3, first_name),
-          last_name = COALESCE($4, last_name),
-          phone = COALESCE($5, phone),
-          account_type = COALESCE($6, account_type),
-          address = COALESCE($7, address),
+          first_name = COALESCE(NULLIF($2, ''), first_name),
+          last_name = COALESCE(NULLIF($3, ''), last_name),
+          phone = COALESCE(NULLIF($4, ''), phone),
+          account_type = COALESCE($5, account_type),
+          address = COALESCE(NULLIF($6, ''), address),
           updated_at = now()
         WHERE id = $1
         RETURNING id, public_id, email, first_name, last_name, phone, address, account_type
         `,
         [
-          existingLead.id,
-          normalizedEmail || null,
+          existingUser.id,
           lead.first_name || null,
           lead.last_name || null,
           lead.phone || null,
@@ -230,28 +254,115 @@ router.post("/", async (req, res, next) => {
         ]
       );
 
-      leadRow = updatedLead.rows[0];
-    } else {
-      const insertedLead = await client.query(
-        `
-        INSERT INTO leads (email, first_name, last_name, phone, account_type, address)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING id, public_id, email, first_name, last_name, phone, address, account_type
-        `,
-        [
-          normalizedEmail,
-          lead.first_name,
-          lead.last_name,
-          lead.phone || null,
-          lead.account_type || null,
-          finalAddress,
-        ]
-      );
-
-      leadRow = insertedLead.rows[0];
+      customerUserRow = updatedUserRes.rows[0];
+      matchedBy = "user_email";
+      bookingOwnerKind = "registered";
     }
+  }
 
-    const leadId = leadRow.id;
+    // 2) Fallback to lead matching / creation only when no registered user matched.
+    if (!customerUserRow) {
+      let existingLead = null;
+
+      if (normalizedEmail) {
+        const byEmail = await client.query(
+          `
+          SELECT
+            id,
+            public_id,
+            email,
+            first_name,
+            last_name,
+            phone,
+            address,
+            account_type
+          FROM leads
+          WHERE lower(email) = $1
+          LIMIT 1
+          FOR UPDATE
+          `,
+          [normalizedEmail]
+        );
+
+        if (byEmail.rowCount > 0) {
+          existingLead = byEmail.rows[0];
+          matchedBy = "lead_email";
+        }
+      }
+
+      if (!existingLead && normalizedPhone) {
+        const byPhone = await client.query(
+          `
+          SELECT
+            id,
+            public_id,
+            email,
+            first_name,
+            last_name,
+            phone,
+            address,
+            account_type
+          FROM leads
+          WHERE regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') = $1
+          LIMIT 1
+          FOR UPDATE
+          `,
+          [normalizedPhone]
+        );
+
+        if (byPhone.rowCount > 0) {
+          existingLead = byPhone.rows[0];
+          matchedBy = "lead_phone";
+        }
+      }
+
+      if (existingLead) {
+        const updatedLead = await client.query(
+          `
+          UPDATE leads
+          SET
+            email = COALESCE($2, email),
+            first_name = COALESCE($3, first_name),
+            last_name = COALESCE($4, last_name),
+            phone = COALESCE($5, phone),
+            account_type = COALESCE($6, account_type),
+            address = COALESCE($7, address),
+            updated_at = now()
+          WHERE id = $1
+          RETURNING id, public_id, email, first_name, last_name, phone, address, account_type
+          `,
+          [
+            existingLead.id,
+            normalizedEmail || null,
+            lead.first_name || null,
+            lead.last_name || null,
+            lead.phone || null,
+            lead.account_type || null,
+            finalAddress || null,
+          ]
+        );
+
+        leadRow = updatedLead.rows[0];
+      } else {
+        const insertedLead = await client.query(
+          `
+          INSERT INTO leads (email, first_name, last_name, phone, account_type, address)
+          VALUES ($1, $2, $3, $4, $5, $6)
+          RETURNING id, public_id, email, first_name, last_name, phone, address, account_type
+          `,
+          [
+            normalizedEmail,
+            lead.first_name,
+            lead.last_name,
+            lead.phone || null,
+            lead.account_type || null,
+            finalAddress,
+          ]
+        );
+
+        leadRow = insertedLead.rows[0];
+      }
+    }
 
     const created = await client.query(
       `
@@ -268,8 +379,8 @@ router.post("/", async (req, res, next) => {
       RETURNING id, public_id, status, starts_at, ends_at, address, notes, created_at
       `,
       [
-        null,
-        leadId,
+        customerUserRow ? customerUserRow.id : null,
+        leadRow ? leadRow.id : null,
         serviceId,
         payload.startsAt,
         payload.endsAt,
@@ -281,8 +392,11 @@ router.post("/", async (req, res, next) => {
     const booking = created.rows[0];
 
     await addEvent(client, booking.id, null, "created_public", {
-      leadEmail: normalizedEmail,
-      leadPublicId: leadRow.public_id,
+      source: "public",
+      ownerKind: bookingOwnerKind,
+      customerUserPublicId: customerUserRow?.public_id || null,
+      leadPublicId: leadRow?.public_id || null,
+      leadEmail: normalizedEmail || null,
       matchedBy,
     });
 
@@ -294,22 +408,28 @@ router.post("/", async (req, res, next) => {
       `
     );
 
-    const leadName = [leadRow.first_name, leadRow.last_name].filter(Boolean).join(" ").trim() || null;
+    const bookingContact = customerUserRow || leadRow;
+    const contactName =
+      [bookingContact?.first_name, bookingContact?.last_name]
+        .filter(Boolean)
+        .join(" ")
+        .trim() || null;
 
     const notificationRows = adminUsersRes.rows.map((r) => ({
       userId: r.user_id,
       kind: "booking.created",
       title: "New public booking",
       body: serviceTitle
-        ? `New ${serviceTitle} booking from ${leadName ?? "a new customer"}.`
-        : `New booking from ${leadName ?? "a new customer"}.`,
+        ? `New ${serviceTitle} booking from ${contactName ?? "a new customer"}.`
+        : `New booking from ${contactName ?? "a new customer"}.`,
       bookingId: booking.id,
       bookingPublicId: booking.public_id,
       metadata: {
         bookingPublicId: booking.public_id,
         serviceTitle,
-        customerName: leadName,
+        customerName: contactName,
         source: "public",
+        ownerKind: bookingOwnerKind,
         leadEmail: normalizedEmail,
         matchedBy,
       },
@@ -323,21 +443,38 @@ router.post("/", async (req, res, next) => {
       type: "booking.created",
       bookingId: booking.public_id,
       bookingName: serviceTitle,
-      customerName: leadName,
+      customerName: contactName,
       startsAt: booking.starts_at,
       source: "public",
     });
 
-    if (leadRow.email) {
+    if (bookingContact?.email) {
       await sendBookingCreatedCustomerEmail({
-        to: leadRow.email,
-        firstName: leadRow.first_name,
+        to: bookingContact.email,
+        firstName: bookingContact.first_name,
+        customerName: bookingContact.first_name,
         bookingPublicId: booking.public_id,
         serviceTitle,
         startsAt: booking.starts_at,
         endsAt: booking.ends_at,
         address: booking.address,
         notes: booking.notes,
+      });
+    }
+
+    // Lead-only invite email for account creation.
+    if (leadRow?.email) {
+      const signupUrl = buildSignupUrl(leadRow.email);
+
+      await sendLeadBookingInviteEmail({
+        to: leadRow.email,
+        firstName: leadRow.first_name,
+        signupUrl,
+        bookingPublicId: booking.public_id,
+        serviceTitle,
+        startsAt: booking.starts_at,
+        endsAt: booking.ends_at,
+        address: booking.address,
       });
     }
 
@@ -352,14 +489,27 @@ router.post("/", async (req, res, next) => {
         notes: booking.notes ?? null,
         created_at: booking.created_at,
       },
-      lead: {
-        public_id: leadRow.public_id,
-        email: leadRow.email,
-        first_name: leadRow.first_name,
-        last_name: leadRow.last_name,
-        phone: leadRow.phone ?? null,
-        address: leadRow.address,
-      },
+      customer_kind: bookingOwnerKind,
+      customer: customerUserRow
+        ? {
+            public_id: customerUserRow.public_id,
+            email: customerUserRow.email,
+            first_name: customerUserRow.first_name,
+            last_name: customerUserRow.last_name,
+            phone: customerUserRow.phone ?? null,
+            address: customerUserRow.address,
+          }
+        : null,
+      lead: leadRow
+        ? {
+            public_id: leadRow.public_id,
+            email: leadRow.email,
+            first_name: leadRow.first_name,
+            last_name: leadRow.last_name,
+            phone: leadRow.phone ?? null,
+            address: leadRow.address,
+          }
+        : null,
     });
   } catch (e) {
     try {
@@ -379,6 +529,13 @@ router.post("/", async (req, res, next) => {
 
     if (e?.message === "Bookings are not available on Sundays") {
       return res.status(409).json({ ok: false, message: "Bookings are not available on Sundays" });
+    }
+
+    if (e?.code === "23505") {
+      return res.status(409).json({
+        ok: false,
+        message: "A booking account conflict occurred for this email",
+      });
     }
 
     if (e?.statusCode) {

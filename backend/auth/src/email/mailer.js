@@ -9,6 +9,7 @@ const {
   buildBookingCreatedOfficeEmail,
   buildBookingAssignedCustomerEmail,
   buildBookingCompletedCustomerEmail,
+  buildLeadBookingInviteEmail,
 } = require("./templates");
 
 async function safeSendEmail({ to, subject, html, text, replyTo }) {
@@ -131,6 +132,16 @@ async function sendBookingCompletedCustomerEmail(payload) {
   });
 }
 
+async function sendLeadBookingInviteEmail(payload) {
+  const content = buildLeadBookingInviteEmail(payload);
+  return safeSendEmail({
+    to: payload.to,
+    subject: content.subject,
+    html: content.html,
+    text: content.text,
+  });
+}
+
 module.exports = {
   safeSendEmail,
   sendWelcomeEmail,
@@ -141,4 +152,5 @@ module.exports = {
   sendBookingCreatedOfficeEmail,
   sendBookingAssignedCustomerEmail,
   sendBookingCompletedCustomerEmail,
+  sendLeadBookingInviteEmail,
 };

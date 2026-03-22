@@ -173,6 +173,59 @@ function buildWelcomeEmail(payload = {}) {
   };
 }
 
+function buildLeadBookingInviteEmail(payload = {}) {
+  const firstName = payload.firstName || "there";
+  const signupUrl = payload.signupUrl || "";
+  const bookingPublicId = payload.bookingPublicId || "";
+  const serviceTitle = payload.serviceTitle || "";
+  const startsAt = payload.startsAt || null;
+  const endsAt = payload.endsAt || null;
+  const address = payload.address || "";
+
+  const schedule =
+    startsAt && endsAt
+      ? `${formatDateTime(startsAt)} – ${formatDateTime(endsAt)}`
+      : startsAt
+      ? formatDateTime(startsAt)
+      : "";
+
+  const body = `
+    ${p(`Hi ${escapeHtml(firstName)},`)}
+    ${p("Thanks for booking with Sharky's Pest Control. Your request has been received successfully.")}
+    ${infoTableHtml([
+      ["Booking ID", bookingPublicId],
+      ["Service", serviceTitle],
+      ["Scheduled Time", schedule],
+      ["Address", address],
+    ])}
+    ${divider()}
+    ${p("Want to manage your appointments more easily? Create your account to track bookings, view service history, and message our team online.")}
+  `;
+
+  return {
+    subject: `Create your account – ${BRAND.companyName}`,
+    html: wrapEmailHtml(
+      "Complete Your Account Setup",
+      body,
+      ctaButtonHtml("Create My Account", signupUrl)
+    ),
+    text: [
+      `Hi ${firstName},`,
+      "",
+      "Thanks for booking with Sharky's Pest Control.",
+      lineItemText("Booking ID", bookingPublicId),
+      lineItemText("Service", serviceTitle),
+      lineItemText("Scheduled Time", schedule),
+      lineItemText("Address", address),
+      "",
+      "Create your account to track bookings, view service history, and message our team:",
+      signupUrl,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  };
+}
+
 function buildWelcomeVerificationEmail(payload = {}) {
   const firstName = payload.firstName || "there";
   const verifyUrl = payload.verifyUrl || "";
@@ -464,4 +517,5 @@ module.exports = {
   buildBookingCreatedOfficeEmail,
   buildBookingAssignedCustomerEmail,
   buildBookingCompletedCustomerEmail,
+  buildLeadBookingInviteEmail,
 };

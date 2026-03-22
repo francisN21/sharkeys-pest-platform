@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 
 import AuthTextField from "../../../components/forms/AuthTextField";
-import AuthPageShell from "../../../components/auth/AuthPageShell";
 import PasswordRequirements from "../../../components/auth/PasswordRequirements";
 import { completeEmployeeSetup } from "../../../lib/api/employees";
 
