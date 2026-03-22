@@ -311,12 +311,12 @@ export default function RevenueOverview() {
         <div>
           <div className="text-base font-semibold">Revenue</div>
           <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-            Daily / weekly / monthly revenue rollups (default: last 90 days)
+            Daily, weekly, and monthly revenue rollups (default: last 90 days)
           </div>
         </div>
 
         <div className="flex flex-wrap items-end gap-2">
-          {([3, 6, 12] as const).map((m) => (
+          {([1, 3, 6, 12] as const).map((m) => (
             <button
               key={m}
               type="button"
