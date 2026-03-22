@@ -295,6 +295,127 @@ export function getTechnicianPerformance(range?: { start?: string; end?: string 
   return jsonFetch<TechnicianPerformanceResponse>(path, { method: "GET" });
 }
 
+// ─── Repeat Customers ─────────────────────────────────────────────────────────
+
+export type RepeatCustomerTotals = {
+  total_customers: number;
+  repeat_customers: number;
+  one_time_customers: number;
+  repeat_rate_percent: number;
+};
+
+export type TopRepeatCustomerRow = {
+  customer_user_id: number;
+  first_name: string;
+  last_name: string;
+  account_type: "residential" | "business" | null;
+  booking_count: number;
+  completed_count: number;
+  last_booking_at: string;
+};
+
+export type RepeatCustomersResponse = {
+  ok: boolean;
+  range: { start: string; end_exclusive: string };
+  totals: RepeatCustomerTotals;
+  top_repeat: TopRepeatCustomerRow[];
+};
+
+export function getRepeatCustomers(range?: { start?: string; end?: string }) {
+  const params = new URLSearchParams();
+  if (range?.start) params.set("start", range.start);
+  if (range?.end) params.set("end", range.end);
+  const qs = params.toString();
+  return jsonFetch<RepeatCustomersResponse>(
+    qs ? `/admin/metrics/repeat-customers?${qs}` : `/admin/metrics/repeat-customers`,
+    { method: "GET" }
+  );
+}
+
+// ─── Revenue by Segment ───────────────────────────────────────────────────────
+
+export type RevenueBySegmentRow = {
+  segment: "residential" | "business" | "unknown";
+  completed_bookings: number;
+  unique_customers: number;
+  revenue_cents: number;
+  avg_revenue_per_booking: number;
+  avg_revenue_per_customer: number;
+};
+
+export type RevenueBySegmentMonthRow = {
+  segment: string;
+  month_start: string;
+  completed_bookings: number;
+  revenue_cents: number;
+};
+
+export type RevenueBySegmentResponse = {
+  ok: boolean;
+  range: { start: string; end_exclusive: string; tzOffsetMinutes: number };
+  by_segment: RevenueBySegmentRow[];
+  by_segment_month: RevenueBySegmentMonthRow[];
+};
+
+export function getRevenueBySegment(range?: {
+  start?: string;
+  end?: string;
+  tzOffsetMinutes?: number;
+}) {
+  const params = new URLSearchParams();
+  if (range?.start) params.set("start", range.start);
+  if (range?.end) params.set("end", range.end);
+  if (range?.tzOffsetMinutes !== undefined)
+    params.set("tzOffsetMinutes", String(range.tzOffsetMinutes));
+  const qs = params.toString();
+  return jsonFetch<RevenueBySegmentResponse>(
+    qs ? `/admin/metrics/revenue-by-segment?${qs}` : `/admin/metrics/revenue-by-segment`,
+    { method: "GET" }
+  );
+}
+
+// ─── Lead Conversion Age ──────────────────────────────────────────────────────
+
+export type LeadConversionAgeTotals = {
+  total_conversions: number;
+  avg_days: number | null;
+  min_days: number | null;
+  max_days: number | null;
+  median_days: number | null;
+};
+
+export type LeadConversionAgeBucket = {
+  bucket: "same_day" | "1_to_7d" | "7_to_30d" | "30_to_90d" | "90d_plus";
+  count: number;
+};
+
+export type LeadConversionAgeMonthRow = {
+  month_start: string;
+  conversions: number;
+  avg_days: number | null;
+};
+
+export type LeadConversionAgeResponse = {
+  ok: boolean;
+  range: { start: string; end_exclusive: string };
+  totals: LeadConversionAgeTotals;
+  buckets: LeadConversionAgeBucket[];
+  monthly: LeadConversionAgeMonthRow[];
+};
+
+export function getLeadConversionAge(range?: { start?: string; end?: string }) {
+  const params = new URLSearchParams();
+  if (range?.start) params.set("start", range.start);
+  if (range?.end) params.set("end", range.end);
+  const qs = params.toString();
+  return jsonFetch<LeadConversionAgeResponse>(
+    qs ? `/admin/metrics/lead-conversion-age?${qs}` : `/admin/metrics/lead-conversion-age`,
+    { method: "GET" }
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function exportRevenueByServiceCsv(range?: {
   start?: string;
   end?: string;

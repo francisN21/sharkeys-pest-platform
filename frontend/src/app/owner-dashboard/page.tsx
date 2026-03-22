@@ -12,6 +12,9 @@ import ServicesOverview from "../../components/su-dashboard/ServicesOverview";
 import RevenueOverview from "../../components/su-dashboard/RevenueOverview";
 import ServiceRevenueOverview from "../../components/su-dashboard/ServiceRevenueOverview";
 import TechnicianPerformanceOverview from "../../components/su-dashboard/TechnicianPerformanceOverview";
+import RepeatCustomerOverview from "../../components/su-dashboard/RepeatCustomerOverview";
+import RevenueBySegmentOverview from "../../components/su-dashboard/RevenueBySegmentOverview";
+import LeadConversionAgeOverview from "../../components/su-dashboard/LeadConversionAgeOverview";
 import OwnerRouteTabs from "./_components/owner-route-tabs";
 
 type MeUserWithRoles = NonNullable<MeResponse["user"]> & {
@@ -203,6 +206,36 @@ export default function OwnerDashboardPage() {
           }}
         >
           <TechnicianPerformanceOverview />
+        </div>
+
+        <div
+          className="rounded-2xl border p-6"
+          style={{
+            borderColor: "rgb(var(--border))",
+            background: "rgb(var(--card))",
+          }}
+        >
+          <RepeatCustomerOverview />
+        </div>
+
+        <div
+          className="rounded-2xl border p-6"
+          style={{
+            borderColor: "rgb(var(--border))",
+            background: "rgb(var(--card))",
+          }}
+        >
+          <RevenueBySegmentOverview />
+        </div>
+
+        <div
+          className="rounded-2xl border p-6"
+          style={{
+            borderColor: "rgb(var(--border))",
+            background: "rgb(var(--card))",
+          }}
+        >
+          <LeadConversionAgeOverview />
         </div>
       </div>
     </main>

@@ -46,6 +46,9 @@ const adminMetricsLeadConversionsRouter = require("../routes/adminMetricsLeadCon
 const adminRevenueMetrics = require("../routes/adminRevenueMetrics");
 const adminMetricsRevenueByServiceRouter = require("../routes/adminMetricsRevenueByService");
 const adminMetricsTechnicianPerformanceRouter = require("../routes/adminMetricsTechnicianPerformance");
+const adminMetricsRepeatCustomersRouter = require("../routes/adminMetricsRepeatCustomers");
+const adminMetricsRevenueBySegmentRouter = require("../routes/adminMetricsRevenueBySegment");
+const adminMetricsLeadConversionAgeRouter = require("../routes/adminMetricsLeadConversionAge");
 
 // Messaging system pipeline
 const messages = require("../routes/messages");
@@ -256,6 +259,9 @@ app.use(adminMetricsLeadConversionsRouter);
 app.use(adminRevenueMetrics);
 app.use(adminMetricsRevenueByServiceRouter);
 app.use(adminMetricsTechnicianPerformanceRouter);
+app.use(adminMetricsRepeatCustomersRouter);
+app.use(adminMetricsRevenueBySegmentRouter);
+app.use(adminMetricsLeadConversionAgeRouter);
 app.use("/employees", employeesRouter);
 
 // Messaging system pipeline
