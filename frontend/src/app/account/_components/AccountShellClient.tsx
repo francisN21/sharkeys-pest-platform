@@ -1,4 +1,3 @@
-//src/app/account/_components/AccountShellClient.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -123,6 +122,39 @@ function getNotificationTargetTab(role: AppRole, evt: RealtimeEvent): TabKey | n
   }
 }
 
+function getAccountHeaderMeta(role: AppRole) {
+  switch (role) {
+    case "superuser":
+      return {
+        title: "Owner Account",
+        subtitle: "Sharkeys Pest Control · Bay Area · Account & CRM",
+        icon: "fa-solid fa-user-shield",
+      };
+
+    case "admin":
+      return {
+        title: "Admin Account",
+        subtitle: "Sharkeys Pest Control · Bay Area · Dispatch & Operations",
+        icon: "fa-solid fa-briefcase",
+      };
+
+    case "technician":
+      return {
+        title: "Technician Account",
+        subtitle: "Sharkeys Pest Control · Bay Area · Field Schedule & Jobs",
+        icon: "fa-solid fa-screwdriver-wrench",
+      };
+
+    case "customer":
+    default:
+      return {
+        title: "My Account",
+        subtitle: "Sharkeys Pest Control · Bay Area · Bookings & Messages",
+        icon: "fa-solid fa-user",
+      };
+  }
+}
+
 export default function AccountShellClient({
   children,
 }: {
@@ -140,6 +172,7 @@ export default function AccountShellClient({
     useState<Record<TabKey, boolean>>(DEFAULT_PULSING_TABS);
 
   const activeTab = useMemo(() => getTabKeyFromPathname(pathname), [pathname]);
+  const headerMeta = useMemo(() => getAccountHeaderMeta(role), [role]);
 
   useEffect(() => {
     setTabBadges(readStoredBadges());
@@ -224,21 +257,67 @@ export default function AccountShellClient({
     <main className="min-h-screen overflow-y-auto scroll-smooth md:snap-y md:snap-mandatory">
       <Navbar />
 
-      <div className="mx-auto max-w-6xl px-3 py-6 space-y-4 sm:px-4 sm:py-8 md:py-10 md:space-y-6">
-        {err ? (
-          <div
-            className="rounded-2xl border p-4 text-sm"
-            style={{ borderColor: "rgb(239 68 68)" }}
-          >
-            {err}
-          </div>
-        ) : null}
+      {/* Page header */}
+      <div
+        className="border-b"
+        style={{
+          borderColor: "rgb(var(--border))",
+          background: "rgb(var(--card))",
+        }}
+      >
+        <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <div
+                className="flex h-11 w-11 items-center justify-center rounded-xl border"
+                style={{
+                  borderColor: "rgb(var(--border))",
+                  background: "rgba(var(--fg), 0.05)",
+                }}
+              >
+                <i
+                  className={`${headerMeta.icon} text-sm`}
+                  style={{ color: "rgb(var(--muted))" }}
+                />
+              </div>
 
-        <div
-          className="w-full border-b pb-3 sm:pb-4"
-          style={{ borderColor: "rgb(var(--border))" }}
-        >
-          <div className="-mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0">
+              <div>
+                <h1 className="text-lg font-bold tracking-tight">{headerMeta.title}</h1>
+                <p className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                  {headerMeta.subtitle}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div
+                className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium"
+                style={{
+                  borderColor: "rgba(16,185,129,0.3)",
+                  background: "rgba(16,185,129,0.08)",
+                  color: "rgb(16,185,129)",
+                }}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live
+              </div>
+
+              <button
+                type="button"
+                onClick={() => router.push("/")}
+                className="rounded-xl border px-3 py-1.5 text-xs font-semibold transition-opacity hover:opacity-80"
+                style={{
+                  borderColor: "rgb(var(--border))",
+                  background: "transparent",
+                }}
+              >
+                ← Back to Home
+              </button>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="mt-4 -mx-4 overflow-x-auto px-4 sm:-mx-6 sm:px-6">
             <div className="min-w-max">
               <AccountRouteTabs
                 role={role}
@@ -250,6 +329,18 @@ export default function AccountShellClient({
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Body */}
+      <div className="mx-auto max-w-6xl px-3 py-6 space-y-4 sm:px-4 sm:py-8 md:py-10 md:space-y-6">
+        {err ? (
+          <div
+            className="rounded-2xl border p-4 text-sm"
+            style={{ borderColor: "rgb(239 68 68)" }}
+          >
+            {err}
+          </div>
+        ) : null}
 
         <div
           className="rounded-2xl border p-4 sm:p-5 md:p-6"
