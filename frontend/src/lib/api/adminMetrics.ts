@@ -182,6 +182,32 @@ export function getCustomersMetrics(range?: { start?: string; end?: string }) {
   return jsonFetch<CustomersMetricsResponse>(path, { method: "GET" });
 }
 
+export type SurveyReferralRow = {
+  customer_first_name: string;
+  customer_last_name: string;
+  customer_type: "residential" | "business" | null;
+  referred_by: string;
+  submitted_at: string; // ISO timestamp
+};
+
+export type SurveyReferralsResponse = {
+  ok: boolean;
+  range: { start: string; end_exclusive: string };
+  total: number;
+  referrals: SurveyReferralRow[];
+};
+
+export function getSurveyReferrals(range?: { start?: string; end?: string }) {
+  const params = new URLSearchParams();
+  if (range?.start) params.set("start", range.start);
+  if (range?.end) params.set("end", range.end);
+
+  const qs = params.toString();
+  const path = qs ? `/admin/metrics/survey/referrals?${qs}` : `/admin/metrics/survey/referrals`;
+
+  return jsonFetch<SurveyReferralsResponse>(path, { method: "GET" });
+}
+
 export function getSurveyMetrics(range?: { start?: string; end?: string }) {
   const params = new URLSearchParams();
   if (range?.start) params.set("start", range.start);

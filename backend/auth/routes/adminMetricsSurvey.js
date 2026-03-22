@@ -152,4 +152,64 @@ router.get("/admin/metrics/survey", requireAuth, async (req, res, next) => {
   }
 });
 
+/**
+ * GET /admin/metrics/survey/referrals
+ * Superuser only.
+ * Returns all "referral" survey responses with customer name and who referred them.
+ * Ordered by most recent first.
+ */
+router.get("/admin/metrics/survey/referrals", requireAuth, async (req, res, next) => {
+  try {
+    const userId = req.user?.id ?? req.auth?.userId ?? null;
+    if (!userId) return res.status(401).json({ ok: false, message: "Not authenticated" });
+
+    const ok = await requireSuperUserByDb(userId);
+    if (!ok) return res.status(403).json({ ok: false, message: "Forbidden" });
+
+    const { start, end } = querySchema.parse(req.query);
+
+    const now = new Date();
+    const endDefault = toISODateOnlyLocal(now);
+    // Default: all-time (very large start)
+    const startDate = parseDateOnly(start || "") || "2000-01-01";
+    const endDate = parseDateOnly(end || "") || endDefault;
+
+    const startMs = new Date(`${startDate}T00:00:00Z`).getTime();
+    const endMs = new Date(`${endDate}T00:00:00Z`).getTime();
+    if (!(endMs > startMs)) {
+      return res.status(400).json({ ok: false, message: "Invalid range: end must be after start" });
+    }
+
+    const r = await pool.query(
+      `
+      SELECT
+        u.first_name                          AS customer_first_name,
+        u.last_name                           AS customer_last_name,
+        u.account_type                        AS customer_type,
+        trim(bsr.referrer_name)               AS referred_by,
+        bsr.submitted_at
+      FROM booking_survey_responses bsr
+      JOIN users u ON u.id = bsr.user_id
+      WHERE
+        lower(trim(bsr.heard_from)) IN ('referral', 'referred', 'word of mouth', 'word-of-mouth')
+        AND bsr.referrer_name IS NOT NULL
+        AND length(trim(bsr.referrer_name)) > 0
+        AND bsr.submitted_at >= $1::timestamptz
+        AND bsr.submitted_at <  $2::timestamptz
+      ORDER BY bsr.submitted_at DESC
+      `,
+      [`${startDate}T00:00:00Z`, `${endDate}T00:00:00Z`]
+    );
+
+    return res.json({
+      ok: true,
+      range: { start: startDate, end_exclusive: endDate },
+      total: r.rows.length,
+      referrals: r.rows,
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
 module.exports = router;

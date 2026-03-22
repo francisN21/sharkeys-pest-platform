@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getSurveyMetrics, type SurveyMetricsResponse } from "../../lib/api/adminMetrics";
+import SurveyReferrals from "./SurveyReferrals";
 
 function todayISO() {
   const now = new Date();
@@ -167,6 +168,7 @@ export default function SurveyOverview() {
           Loading survey metrics…
         </div>
       ) : (
+        <>
         <div className="grid gap-4 lg:grid-cols-2">
           <div
             className="rounded-2xl border p-5"
@@ -248,11 +250,12 @@ export default function SurveyOverview() {
               )}
             </div>
 
-            <div className="mt-4 text-xs" style={{ color: "rgb(var(--muted))" }}>
-              Note: Referral names are intentionally not shown here.
-            </div>
           </div>
         </div>
+
+        {/* Referral breakdown — full width below the two cards */}
+        <SurveyReferrals />
+        </>
       )}
     </section>
   );
