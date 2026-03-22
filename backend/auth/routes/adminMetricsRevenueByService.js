@@ -70,7 +70,7 @@ router.get("/admin/metrics/revenue-by-service", requireAuth, async (req, res, ne
       WITH base AS (
         SELECT
           s.id            AS service_id,
-          s.name          AS service_name,
+          s.title         AS service_name,
           date_trunc('month', (b.completed_at - make_interval(mins => $3)))::date AS month_start,
           COALESCE(bp.final_price_cents, bp.initial_price_cents, s.base_price_cents, 0) AS revenue_cents
         FROM bookings b

@@ -66,22 +66,21 @@ router.get("/admin/metrics/technician-performance", requireAuth, async (req, res
         SELECT
           b.id,
           b.status,
-          b.assigned_worker_id,
           b.completed_at,
-          b.assigned_at,
+          ba.worker_user_id,
+          ba.assigned_at,
           COALESCE(bp.final_price_cents, bp.initial_price_cents, s.base_price_cents, 0) AS revenue_cents
-        FROM bookings b
+        FROM booking_assignments ba
+        JOIN bookings b ON b.id = ba.booking_id
         JOIN services s ON s.id = b.service_id
         LEFT JOIN booking_prices bp ON bp.booking_id = b.id
         WHERE
-          b.assigned_worker_id IS NOT NULL
-          AND b.assigned_at IS NOT NULL
-          AND b.assigned_at >= ($1::date)::timestamp
-          AND b.assigned_at <  ($2::date)::timestamp
+          ba.assigned_at >= ($1::date)::timestamp
+          AND ba.assigned_at <  ($2::date)::timestamp
       ),
       tech_stats AS (
         SELECT
-          ab.assigned_worker_id AS worker_id,
+          ab.worker_user_id AS worker_id,
           u.first_name,
           u.last_name,
           COUNT(*)::int AS total_assigned,
@@ -96,8 +95,8 @@ router.get("/admin/metrics/technician-performance", requireAuth, async (req, res
             2
           ) AS avg_completion_hours
         FROM assigned_bookings ab
-        JOIN users u ON u.id = ab.assigned_worker_id
-        GROUP BY ab.assigned_worker_id, u.first_name, u.last_name
+        JOIN users u ON u.id = ab.worker_user_id
+        GROUP BY ab.worker_user_id, u.first_name, u.last_name
         ORDER BY completed_count DESC, revenue_cents DESC
       )
       SELECT json_agg(tech_stats) AS technicians FROM tech_stats
