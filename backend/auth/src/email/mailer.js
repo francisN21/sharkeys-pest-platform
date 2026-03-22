@@ -1,5 +1,6 @@
 const { resend } = require("./resendClient");
 const { config } = require("../config");
+const { logger } = require("../logger");
 const {
   buildWelcomeEmail,
   buildWelcomeVerificationEmail,
@@ -42,11 +43,7 @@ async function safeSendEmail({ to, subject, html, text, replyTo }) {
 
     return { ok: true, result };
   } catch (error) {
-    console.error("Email send failed:", {
-      subject,
-      to,
-      error: error?.message || error,
-    });
+    logger.error({ subject, to, err: error?.message || error }, "Email send failed");
     return { ok: false, error };
   }
 }

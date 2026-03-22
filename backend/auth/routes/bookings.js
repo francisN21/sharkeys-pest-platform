@@ -4,6 +4,7 @@ const { pool } = require("../src/db");
 const { requireAuth } = require("../middleware/requireAuth");
 const { requireRole } = require("../middleware/requireRole");
 const { broadcastToRoles, broadcastToUser } = require("../src/realtime");
+const { logger } = require("../src/logger");
 const { createNotifications } = require("../src/notifications");
 const { sendBookingCreatedCustomerEmail } = require("../src/email/mailer");
 
@@ -213,7 +214,7 @@ router.post("/", requireAuth, async (req, res, next) => {
           notes: booking.notes,
         });
       } catch (emailErr) {
-        console.error("Booking created but customer email failed:", emailErr);
+        logger.error({ err: emailErr?.message || emailErr }, "Booking created but customer email failed");
       }
     }
 

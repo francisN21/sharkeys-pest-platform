@@ -3,6 +3,7 @@ const { pool } = require("../src/db");
 const { requireAuth } = require("../middleware/requireAuth");
 const { requireRole } = require("../middleware/requireRole");
 const { broadcastToBookingParticipants } = require("../src/realtime");
+const { logger } = require("../src/logger");
 const { createNotifications } = require("../src/notifications");
 const { sendBookingCompletedCustomerEmail } = require("../src/email/mailer");
 
@@ -357,7 +358,7 @@ router.patch("/:id/complete", requireAuth, requireRole("worker"), async (req, re
           finalPriceCents,
         });
       } catch (emailErr) {
-        console.error("Booking completion succeeded but customer email failed:", emailErr);
+        logger.error({ err: emailErr?.message || emailErr }, "Booking completion succeeded but customer email failed");
       }
     }
 

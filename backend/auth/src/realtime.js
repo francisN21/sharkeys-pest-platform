@@ -1,5 +1,6 @@
 const WebSocket = require("ws");
 const { pool } = require("./db");
+const { logger } = require("./logger");
 
 /**
  * Map<WebSocket, { userId, roles, connectedAt }>
@@ -135,7 +136,7 @@ function initRealtime(server) {
     });
   });
 
-  console.log("Realtime WebSocket server initialized at /ws");
+  logger.info("Realtime WebSocket server initialized at /ws");
   return wss;
 }
 

@@ -3,6 +3,7 @@ const { pool } = require("../src/db");
 const { z } = require("zod");
 const { requireAuth } = require("../middleware/requireAuth");
 const { broadcastToUsers } = require("../src/realtime");
+const { logger } = require("../src/logger");
 const { createNotifications } = require("../src/notifications");
 const { sendBookingAssignedCustomerEmail } = require("../src/email/mailer");
 
@@ -516,7 +517,7 @@ router.post("/admin/tech-bookings/:publicId/reassign", requireAuth, async (req, 
           technicianPhone,
         });
       } catch (emailErr) {
-        console.error("Booking reassignment succeeded but customer email failed:", emailErr);
+        logger.error({ err: emailErr?.message || emailErr }, "Booking reassignment succeeded but customer email failed");
       }
     }
 

@@ -4,6 +4,7 @@ const http = require("http");
 const { app } = require("./app");
 const { initRealtime } = require("./realtime");
 const { pool } = require("./db");
+const { logger } = require("./logger");
 
 const PORT = process.env.PORT || 4000;
 const HOST = "0.0.0.0";
@@ -16,9 +17,7 @@ const server = http.createServer(app);
 initRealtime(server);
 
 server.listen(PORT, HOST, () => {
-  console.log(`Server running on:`);
-  console.log(`  Local:   http://localhost:${PORT}`);
-  console.log(`  Network: http://${getLocalIP()}:${PORT}`);
+  logger.info({ port: PORT, local: `http://localhost:${PORT}`, network: `http://${getLocalIP()}:${PORT}` }, "Server running");
 });
 
 // -----------------------------------------------------------
@@ -26,19 +25,19 @@ server.listen(PORT, HOST, () => {
 // -----------------------------------------------------------
 
 function gracefulShutdown(signal) {
-  console.log(`[shutdown] Received ${signal}, shutting down gracefully...`);
+  logger.info({ signal }, "Shutting down gracefully");
 
   server.close(() => {
-    console.log("[shutdown] HTTP server closed");
+    logger.info("HTTP server closed");
     pool.end(() => {
-      console.log("[shutdown] Database pool closed");
+      logger.info("Database pool closed");
       process.exit(0);
     });
   });
 
   // Force exit if shutdown takes too long (e.g. stuck connections)
   setTimeout(() => {
-    console.error("[shutdown] Forced exit after timeout");
+    logger.error("Forced exit after shutdown timeout");
     process.exit(1);
   }, 10_000).unref();
 }

@@ -1,12 +1,14 @@
 // src/app.js
 require("dotenv").config();
 
+const crypto = require("crypto");
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const cookieParser = require("cookie-parser");
 const pinoHttp = require("pino-http");
 const rateLimit = require("express-rate-limit");
+const { logger } = require("./logger");
 
 const authRouter = require("../routes/auth");
 const { notFound } = require("../middleware/notFound");
@@ -52,6 +54,33 @@ const notificationsRouter = require("../routes/notifications");
 const app = express();
 
 app.set("trust proxy", 1);
+
+// -----------------------------------------------------------
+// Request logging + correlation IDs (pino-http)
+// -----------------------------------------------------------
+
+app.use(
+  pinoHttp({
+    logger,
+    // Use incoming X-Request-Id header or generate a new UUID
+    genReqId: (req, res) => {
+      const existing = req.headers["x-request-id"];
+      const id = existing || crypto.randomUUID();
+      res.setHeader("X-Request-Id", id);
+      return id;
+    },
+    customLogLevel: (_req, res, err) => {
+      if (err || res.statusCode >= 500) return "error";
+      if (res.statusCode >= 400) return "warn";
+      return "info";
+    },
+    // Skip noisy health check endpoints
+    autoLogging: {
+      ignore: (req) =>
+        req.url === "/health" || req.url === "/health/db",
+    },
+  })
+);
 
 // -----------------------------------------------------------
 // Request timeout — respond 503 if handler takes too long

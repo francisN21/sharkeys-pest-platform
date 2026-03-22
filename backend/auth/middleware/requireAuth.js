@@ -64,7 +64,6 @@ async function requireAuth(req, res, next) {
     // ✅ Backward compatible + role-aware
     req.user = { id: userId, roles, user_role };
 
-    // console.log("REQUIRE AUTH SET:", { auth: req.auth, user: req.user });
     client.release();
     return next();
   } catch (err) {

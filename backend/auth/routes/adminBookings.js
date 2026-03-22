@@ -6,6 +6,7 @@ const {
   broadcastToRoles,
   broadcastToUser,
 } = require("../src/realtime");
+const { logger } = require("../src/logger");
 const { createNotifications } = require("../src/notifications");
 const {
   sendBookingCreatedCustomerEmail,
@@ -284,7 +285,7 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
           notes: booking.notes,
         });
       } catch (emailErr) {
-        console.error("Admin-created booking succeeded but customer email failed:", emailErr);
+        logger.error({ err: emailErr?.message || emailErr }, "Admin-created booking succeeded but customer email failed");
       }
     }
 
@@ -849,7 +850,7 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
           technicianPhone,
         });
       } catch (emailErr) {
-        console.error("Booking assignment succeeded but customer email failed:", emailErr);
+        logger.error({ err: emailErr?.message || emailErr }, "Booking assignment succeeded but customer email failed");
       }
     }
 

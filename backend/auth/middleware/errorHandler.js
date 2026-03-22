@@ -1,7 +1,5 @@
 // middleware/errorHandler.js
-const pino = require("pino");
-
-const logger = pino();
+const { logger } = require("../src/logger");
 
 function errorHandler(err, req, res, next) {
   const isProd = process.env.NODE_ENV === "production";
