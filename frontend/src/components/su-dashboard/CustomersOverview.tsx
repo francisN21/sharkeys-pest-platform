@@ -29,6 +29,15 @@ function daysAgoISO(days: number) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function monthsAgoFirstDayISO(months: number) {
+  const d = new Date();
+  d.setMonth(d.getMonth() - months);
+  d.setDate(1);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${yyyy}-${mm}-01`;
+}
+
 export default function CustomersOverview() {
   // Default: last 30 days rolling
   const [start, setStart] = useState<string>(() => daysAgoISO(30));
@@ -82,6 +91,18 @@ export default function CustomersOverview() {
         </div>
 
         <div className="flex flex-wrap items-end gap-2">
+          {([3, 6, 12] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => { setStart(monthsAgoFirstDayISO(m)); setEnd(todayISO()); }}
+              className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
+              style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+            >
+              {m}M
+            </button>
+          ))}
+
           <div className="space-y-1">
             <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
               Start

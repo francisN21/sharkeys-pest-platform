@@ -195,6 +195,15 @@ export default function RevenueOverview() {
     setAdvEnd(dateOnlyToday());
   }
 
+  function applyPreset(months: number) {
+    setShowAdvanced(false);
+    const d = new Date();
+    d.setMonth(d.getMonth() - months);
+    setFromMonth(toMonthValue(d));
+    setToMonth(defaultEndMonth);
+    setUseRollingEnd(true);
+  }
+
   const range = useMemo(() => {
     if (showAdvanced) return { start: advStart || undefined, end: advEnd || undefined };
     const start = dateOnlyFromMonthStart(fromMonth) ?? undefined;
@@ -307,6 +316,18 @@ export default function RevenueOverview() {
         </div>
 
         <div className="flex flex-wrap items-end gap-2">
+          {([3, 6, 12] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => applyPreset(m)}
+              className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
+              style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+            >
+              {m}M
+            </button>
+          ))}
+
           <button
             type="button"
             onClick={reset90d}

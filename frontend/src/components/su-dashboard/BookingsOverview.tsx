@@ -54,6 +54,12 @@ function dateOnlyDaysAgo(days: number) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function monthsAgoMonthValue(months: number) {
+  const d = new Date();
+  d.setMonth(d.getMonth() - months);
+  return toMonthValue(d);
+}
+
 export default function BookingsOverview() {
   // ✅ Default range: last 90 days (rolling from today)
   const defaultStartMonth = useMemo(() => {
@@ -93,6 +99,13 @@ export default function BookingsOverview() {
     setUseRolling90End(true);
     setAdvStart(dateOnlyDaysAgo(90));
     setAdvEnd(dateOnlyToday());
+  }
+
+  function applyPreset(months: number) {
+    setShowAdvanced(false);
+    setFromMonth(monthsAgoMonthValue(months));
+    setToMonth(defaultEndMonth);
+    setUseRolling90End(true);
   }
 
   // Build query range
@@ -179,6 +192,18 @@ export default function BookingsOverview() {
 
         {/* Controls + actions */}
         <div className="flex flex-wrap items-end gap-2">
+          {([3, 6, 12] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => applyPreset(m)}
+              className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
+              style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+            >
+              {m}M
+            </button>
+          ))}
+
           <button
             type="button"
             onClick={refreshNow}
