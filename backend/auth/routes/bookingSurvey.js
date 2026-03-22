@@ -11,12 +11,12 @@ function getAuthedUserId(req) {
 }
 
 // GET /survey/needed
-// - returns { ok: true, needed: boolean }
-// - needed = true if user has NOT submitted survey yet
 router.get("/survey/needed", requireAuth, async (req, res, next) => {
   try {
     const userId = getAuthedUserId(req);
-    if (!userId) return res.status(401).json({ ok: false, message: "Not authenticated" });
+    if (!userId) {
+      return res.status(401).json({ ok: false, message: "Not authenticated" });
+    }
 
     const existing = await pool.query(
       `SELECT 1 FROM booking_survey_responses WHERE user_id = $1 LIMIT 1`,
@@ -31,7 +31,14 @@ router.get("/survey/needed", requireAuth, async (req, res, next) => {
 
 const submitSchema = z.object({
   bookingPublicId: z.string().uuid().optional(),
-  heard_from: z.enum(["linkedin", "google", "instagram", "facebook", "referred", "other"]),
+  heard_from: z.enum([
+    "linkedin",
+    "google",
+    "instagram",
+    "facebook",
+    "referral",
+    "other",
+  ]),
   referrer_name: z.string().trim().min(2).max(120).optional(),
   other_text: z.string().trim().min(2).max(200).optional(),
 }).strict();
@@ -40,20 +47,21 @@ const submitSchema = z.object({
 router.post("/survey", requireAuth, async (req, res, next) => {
   try {
     const userId = getAuthedUserId(req);
-    if (!userId) return res.status(401).json({ ok: false, message: "Not authenticated" });
+    if (!userId) {
+      return res.status(401).json({ ok: false, message: "Not authenticated" });
+    }
 
     const payload = submitSchema.parse(req.body);
 
-    // ✅ only once ever per user
     const existing = await pool.query(
       `SELECT id FROM booking_survey_responses WHERE user_id = $1 LIMIT 1`,
       [userId]
     );
+
     if (existing.rowCount > 0) {
       return res.status(200).json({ ok: true, already_submitted: true });
     }
 
-    // Optional booking linkage
     let bookingId = null;
     if (payload.bookingPublicId) {
       const b = await pool.query(
@@ -64,8 +72,10 @@ router.post("/survey", requireAuth, async (req, res, next) => {
     }
 
     const heardFrom = payload.heard_from;
-    const referrerName = heardFrom === "referred" ? (payload.referrer_name || null) : null;
-    const otherText = heardFrom === "other" ? (payload.other_text || null) : null;
+    const referrerName =
+      heardFrom === "referral" ? (payload.referrer_name || null) : null;
+    const otherText =
+      heardFrom === "other" ? (payload.other_text || null) : null;
 
     await pool.query(
       `
