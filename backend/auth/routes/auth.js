@@ -372,11 +372,19 @@ router.post("/login", async (req, res, next) => {
 
     const user = r.rows[0];
     if (!user || !user.password_hash) {
+      pool.query(
+        `INSERT INTO login_attempts (email, ip, user_agent, reason) VALUES ($1, $2::inet, $3, $4)`,
+        [normalizedEmail, req.ip || null, req.get("user-agent") || null, "user_not_found"]
+      ).catch(() => {});
       return res.status(401).json({ ok: false, message: "Invalid email or password" });
     }
 
     const ok = await argon2.verify(user.password_hash, password);
     if (!ok) {
+      pool.query(
+        `INSERT INTO login_attempts (email, ip, user_agent, reason) VALUES ($1, $2::inet, $3, $4)`,
+        [normalizedEmail, req.ip || null, req.get("user-agent") || null, "wrong_password"]
+      ).catch(() => {});
       return res.status(401).json({ ok: false, message: "Invalid email or password" });
     }
 

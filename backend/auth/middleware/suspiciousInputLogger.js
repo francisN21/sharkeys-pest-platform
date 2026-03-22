@@ -161,4 +161,4 @@ function suspiciousInputLogger(req, res, next) {
   next();
 }
 
-module.exports = { suspiciousInputLogger };
+module.exports = { suspiciousInputLogger, ipThrottle };

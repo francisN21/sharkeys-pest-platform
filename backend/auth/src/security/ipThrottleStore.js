@@ -164,6 +164,39 @@ class IpThrottleStore {
   }
 
   /**
+   * Return all currently tracked IPs (pruned first).
+   */
+  list() {
+    this._lazyLoad();
+    this.prune();
+    const t = now();
+    const entries = [];
+    for (const [ip, s] of this.map.entries()) {
+      entries.push({
+        ip,
+        blocked: !!(s.blockedUntil && t < s.blockedUntil),
+        blocked_until: s.blockedUntil ? new Date(s.blockedUntil).toISOString() : null,
+        total_count: s.totalCount || 0,
+        window_count: s.count || 0,
+        last_seen: s.lastSeen ? new Date(s.lastSeen).toISOString() : null,
+      });
+    }
+    return entries.sort((a, b) => (b.total_count - a.total_count));
+  }
+
+  /**
+   * Remove an IP from the throttle store (unblock it).
+   */
+  clearIp(ip) {
+    this._lazyLoad();
+    const existed = this.map.has(ip);
+    this.map.delete(ip);
+    this._dirty = true;
+    this._scheduleFlush();
+    return existed;
+  }
+
+  /**
    * Call on process shutdown if you want a clean flush + no pending timers.
    * Not strictly required, but good hygiene.
    */
