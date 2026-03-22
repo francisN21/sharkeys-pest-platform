@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { SlideTabs, type SlideTabItem } from "../../../components/ui/slide-tabs";
 
-export type OwnerTabKey = "dashboard" | "employees";
+export type OwnerTabKey = "dashboard" | "employees" | "logs";
 
 type RouteTab = {
   key: OwnerTabKey;
@@ -27,6 +27,12 @@ function getOwnerTabs(): RouteTab[] {
       icon: "fa-solid fa-user-gear",
       href: "/owner-dashboard/employees",
     },
+    {
+      key: "logs",
+      label: "Logs",
+      icon: "fa-solid fa-shield-halved",
+      href: "/owner-dashboard/system-logs",
+    },
   ];
 }
 
@@ -34,6 +40,7 @@ export function getOwnerTabKeyFromPathname(pathname: string | null): OwnerTabKey
   const path = pathname ?? "/owner-dashboard";
 
   if (path.startsWith("/owner-dashboard/employees")) return "employees";
+  if (path.startsWith("/owner-dashboard/system-logs")) return "logs";
   return "dashboard";
 }
 
