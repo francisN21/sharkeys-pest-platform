@@ -265,12 +265,6 @@ export default function AdminTechBookingDetailPage() {
 
         {!detailLoading && detail ? <BookingInfoCard booking={detail} /> : null}
       </SectionCard>
-
-      <SectionCard
-        title="Messages"
-        subtitle="Message thread for this booking."
-        icon={<MessageSquare className="h-5 w-5" />}
-      >
         <Messenger
           meUserId={me?.id ?? null}
           meFirstName={me?.first_name ?? null}
@@ -280,7 +274,6 @@ export default function AdminTechBookingDetailPage() {
           onEdit={onEditMessage}
           sending={msgSending || msgLoading}
         />
-      </SectionCard>
     </main>
   );
 }
