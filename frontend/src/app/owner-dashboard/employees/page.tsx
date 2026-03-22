@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { UserPlus, RefreshCcw } from "lucide-react";
 import Navbar from "../../../components/Navbar";
 import { listEmployees, type Employee } from "../../../lib/api/employees";
 import { me, type MeResponse } from "../../../lib/api/auth";
@@ -21,18 +22,42 @@ type MeResponseWithRoles = MeResponse & {
 function isSuperUser(res: MeResponse | null) {
   if (!res) return false;
   const withRoles = res as MeResponseWithRoles;
-
   const roles = (withRoles.user?.roles ?? withRoles.roles ?? [])
     .filter((r): r is string => typeof r === "string" && r.trim().length > 0)
     .map((r) => r.trim().toLowerCase());
-
   return roles.includes("superuser");
 }
 
-function getStatusLabel(emp: Employee) {
-  if (emp.status === "active") return "Active ✅";
-  if (emp.status === "invited") return "Invited ⏳";
-  return emp.email_verified_at ? "Active ✅" : "Pending ⏳";
+function getInitials(emp: Employee) {
+  const first = emp.first_name?.trim()[0] ?? "";
+  const last = emp.last_name?.trim()[0] ?? "";
+  return (first + last).toUpperCase() || emp.email[0].toUpperCase();
+}
+
+function getStatusMeta(emp: Employee) {
+  const isActive = emp.status === "active" || !!emp.email_verified_at;
+  if (isActive) return { label: "Active", color: "rgb(16,185,129)", bg: "rgba(16,185,129,0.1)", border: "rgba(16,185,129,0.3)" };
+  if (emp.status === "invited") return { label: "Invited", color: "rgb(234,179,8)", bg: "rgba(234,179,8,0.1)", border: "rgba(234,179,8,0.3)" };
+  return { label: "Pending", color: "rgb(234,179,8)", bg: "rgba(234,179,8,0.1)", border: "rgba(234,179,8,0.3)" };
+}
+
+function getRoleMeta(role?: string | null) {
+  switch ((role ?? "").toLowerCase()) {
+    case "superadmin": return { label: "Super Admin", color: "rgb(139,92,246)", bg: "rgba(139,92,246,0.1)", border: "rgba(139,92,246,0.3)" };
+    case "admin":      return { label: "Admin",       color: "rgb(99,102,241)",  bg: "rgba(99,102,241,0.1)",  border: "rgba(99,102,241,0.3)" };
+    case "technician":
+    default:           return { label: "Technician",  color: "rgb(59,130,246)",  bg: "rgba(59,130,246,0.1)",  border: "rgba(59,130,246,0.3)" };
+  }
+}
+
+const AVATAR_COLORS = [
+  "rgb(59,130,246)", "rgb(99,102,241)", "rgb(139,92,246)",
+  "rgb(16,185,129)", "rgb(249,115,22)", "rgb(234,179,8)",
+];
+
+function avatarColor(emp: Employee) {
+  const hash = (emp.email + (emp.first_name ?? "")).split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
 }
 
 export default function EmployeesPage() {
@@ -42,6 +67,7 @@ export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
 
   const loadEmployees = useCallback(async () => {
@@ -51,181 +77,223 @@ export default function EmployeesPage() {
 
   useEffect(() => {
     let alive = true;
-
     (async () => {
       try {
         const auth = await me();
         if (!alive) return;
-
-        if (!auth?.ok || !auth.user) {
-          router.replace("/login");
-          return;
-        }
-
-        if (!isSuperUser(auth)) {
-          router.replace("/account");
-          return;
-        }
-
+        if (!auth?.ok || !auth.user) { router.replace("/login"); return; }
+        if (!isSuperUser(auth)) { router.replace("/account"); return; }
         const res = await listEmployees();
         if (!alive) return;
-
         setEmployees(res.employees ?? []);
       } catch (e: unknown) {
         if (!alive) return;
-        const msg = e instanceof Error ? e.message : "Failed to load employees";
-        setPageError(msg);
+        setPageError(e instanceof Error ? e.message : "Failed to load employees");
       } finally {
         if (alive) setLoading(false);
       }
     })();
-
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [router]);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    try { await loadEmployees(); } finally { setRefreshing(false); }
+  }
 
   async function handleInviteSuccess() {
     await loadEmployees();
   }
 
+  // Stats
+  const stats = useMemo(() => {
+    const active = employees.filter((e) => e.status === "active" || !!e.email_verified_at).length;
+    const invited = employees.filter((e) => e.status === "invited" || (e.status !== "active" && !e.email_verified_at)).length;
+    const technicians = employees.filter((e) => (e.user_role ?? "").toLowerCase() === "technician").length;
+    const admins = employees.filter((e) => ["admin", "superadmin"].includes((e.user_role ?? "").toLowerCase())).length;
+    return { total: employees.length, active, invited, technicians, admins };
+  }, [employees]);
+
   if (loading) {
     return (
-      <main className="mx-auto max-w-6xl px-4 py-10">
-        <div
-          className="rounded-2xl border p-4 text-sm"
-          style={{ borderColor: "rgb(var(--border))" }}
-        >
-          Loading employees…
-        </div>
-      </main>
+      <>
+        <Navbar />
+        <main className="mx-auto max-w-6xl px-4 py-16 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-8 w-8 rounded-full border-2 animate-spin"
+              style={{ borderColor: "rgb(var(--border))", borderTopColor: "transparent" }} />
+            <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>Loading employees…</div>
+          </div>
+        </main>
+      </>
     );
   }
 
   return (
-    <main className="min-h-screen overflow-y-auto scroll-smooth md:snap-y md:snap-mandatory">
+    <div className="min-h-screen" style={{ background: "rgb(var(--background))" }}>
       <Navbar />
 
-      <div className="mx-auto max-w-6xl px-3 py-6 space-y-4 sm:px-4 sm:py-8 md:py-10 md:space-y-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">Employees</h1>
-            <p className="mt-1 text-sm" style={{ color: "rgb(var(--muted))" }}>
-              Manage technicians, admins, and owner-level staff onboarding.
-            </p>
+      {/* Page header */}
+      <div className="border-b" style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}>
+        <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl border"
+                style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--fg), 0.05)" }}>
+                <i className="fa-solid fa-user-gear text-sm" style={{ color: "rgb(var(--muted))" }} />
+              </div>
+              <div>
+                <h1 className="text-lg font-bold tracking-tight">Employees</h1>
+                <p className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                  Sharkeys Pest Control · Technicians, Admins &amp; Staff
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={handleRefresh} disabled={refreshing}
+                className="rounded-xl border px-3 py-1.5 text-xs font-semibold hover:opacity-80 disabled:opacity-50 transition-opacity"
+                style={{ borderColor: "rgb(var(--border))", background: "transparent" }}>
+                <span className="inline-flex items-center gap-1.5">
+                  <RefreshCcw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+                  {refreshing ? "Refreshing…" : "Refresh"}
+                </span>
+              </button>
+              <button type="button" onClick={() => setOpen(true)}
+                className="rounded-xl border px-3 py-1.5 text-xs font-semibold hover:opacity-90 transition-opacity"
+                style={{ borderColor: "rgba(16,185,129,0.4)", background: "rgba(16,185,129,0.1)", color: "rgb(16,185,129)" }}>
+                <span className="inline-flex items-center gap-1.5">
+                  <UserPlus className="h-3.5 w-3.5" />
+                  Invite Employee
+                </span>
+              </button>
+              <button type="button" onClick={() => router.push("/account")}
+                className="rounded-xl border px-3 py-1.5 text-xs font-semibold hover:opacity-80 transition-opacity"
+                style={{ borderColor: "rgb(var(--border))", background: "transparent" }}>
+                ← Back to Account
+              </button>
+            </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setOpen(true)}
-              className="rounded-xl px-4 py-2 text-sm font-semibold hover:opacity-90"
-              style={{
-                background: "rgb(var(--primary))",
-                color: "rgb(var(--primary-fg))",
-              }}
-            >
-              Invite Employee
-            </button>
-
-            <button
-              type="button"
-              onClick={() => router.push("/account")}
-              className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
-              style={{
-                borderColor: "rgb(var(--border))",
-                background: "rgb(var(--card))",
-              }}
-            >
-              Back to Account
-            </button>
-          </div>
-        </div>
-
-        <div
-          className="w-full border-b pb-3 sm:pb-4"
-          style={{ borderColor: "rgb(var(--border))" }}
-        >
-          <div className="-mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0">
+          {/* Tabs */}
+          <div className="mt-4 -mx-4 overflow-x-auto px-4 sm:-mx-6 sm:px-6">
             <div className="min-w-max">
-              <OwnerRouteTabs pathname={pathname} loading={loading} />
+              <OwnerRouteTabs pathname={pathname} loading={false} />
             </div>
           </div>
-        </div>
-
-        {pageError ? (
-          <div
-            className="rounded-2xl border p-4 text-sm"
-            style={{ borderColor: "rgb(239 68 68)" }}
-          >
-            {pageError}
-          </div>
-        ) : null}
-
-        <div
-          className="rounded-2xl border p-4 sm:p-5 md:p-6"
-          style={{
-            borderColor: "rgb(var(--border))",
-            background: "rgb(var(--card))",
-          }}
-        >
-          {employees.length === 0 ? (
-            <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-              No employees yet. Invite your first technician or admin to get started.
-            </div>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {employees.map((emp) => (
-                <button
-                  key={emp.public_id || emp.id}
-                  type="button"
-                  onClick={() => router.push(`/owner-dashboard/employees/${emp.public_id}`)}
-                  className="rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-lg"
-                  style={{
-                    borderColor: "rgb(var(--border))",
-                    background: "rgb(var(--bg))",
-                  }}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="font-semibold">
-                        {[emp.first_name, emp.last_name].filter(Boolean).join(" ") || emp.email}
-                      </div>
-                      <div
-                        className="mt-1 text-sm break-all"
-                        style={{ color: "rgb(var(--muted))" }}
-                      >
-                        {emp.email}
-                      </div>
-                    </div>
-
-                    <div
-                      className="rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide"
-                      style={{
-                        borderColor: "rgb(var(--border))",
-                        background: "rgb(var(--card))",
-                      }}
-                    >
-                      {emp.user_role || "employee"}
-                    </div>
-                  </div>
-
-                  <div className="mt-4 space-y-1 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                    <div>Status: {getStatusLabel(emp)}</div>
-                    {emp.phone ? <div>Phone: {emp.phone}</div> : null}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
-      <InviteEmployeeModal
-        open={open}
-        onClose={() => setOpen(false)}
-        onSuccess={handleInviteSuccess}
-      />
-    </main>
+      <main className="mx-auto max-w-6xl px-4 py-8 space-y-6 sm:px-6">
+        {pageError && (
+          <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(239,68,68)", color: "rgb(239,68,68)" }}>
+            {pageError}
+          </div>
+        )}
+
+        {/* Stats row */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatCard label="Total staff" value={stats.total} />
+          <StatCard label="Active" value={stats.active} color="rgb(16,185,129)" />
+          <StatCard label="Pending / Invited" value={stats.invited} color="rgb(234,179,8)" />
+          <StatCard label="Technicians" value={stats.technicians} color="rgb(59,130,246)" />
+        </div>
+
+        {/* Employee grid */}
+        <div>
+          {employees.length === 0 ? (
+            <div className="rounded-2xl border p-12 text-center"
+              style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}>
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl mx-auto mb-4"
+                style={{ background: "rgba(var(--fg), 0.06)" }}>
+                <i className="fa-solid fa-user-gear text-xl" style={{ color: "rgb(var(--muted))" }} />
+              </div>
+              <div className="text-sm font-semibold mb-1">No employees yet</div>
+              <div className="text-sm mb-4" style={{ color: "rgb(var(--muted))" }}>
+                Invite your first technician or admin to get started.
+              </div>
+              <button type="button" onClick={() => setOpen(true)}
+                className="rounded-xl border px-4 py-2 text-sm font-semibold hover:opacity-90"
+                style={{ borderColor: "rgba(16,185,129,0.4)", background: "rgba(16,185,129,0.1)", color: "rgb(16,185,129)" }}>
+                <span className="inline-flex items-center gap-2">
+                  <UserPlus className="h-4 w-4" />
+                  Invite Employee
+                </span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {employees.map((emp) => {
+                const status = getStatusMeta(emp);
+                const role = getRoleMeta(emp.user_role);
+                const initials = getInitials(emp);
+                const color = avatarColor(emp);
+                const name = [emp.first_name, emp.last_name].filter(Boolean).join(" ") || emp.email;
+
+                return (
+                  <button
+                    key={emp.public_id || emp.id}
+                    type="button"
+                    onClick={() => router.push(`/owner-dashboard/employees/${emp.public_id}`)}
+                    className="rounded-2xl border p-5 text-left transition-all hover:opacity-90 hover:-translate-y-0.5 hover:shadow-lg"
+                    style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                  >
+                    <div className="flex items-start gap-4">
+                      {/* Avatar */}
+                      <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white"
+                        style={{ background: color }}>
+                        {initials}
+                      </div>
+
+                      {/* Info */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="font-semibold truncate text-sm">{name}</div>
+                          <span className="rounded-full border px-2 py-0.5 text-[11px] font-semibold flex-shrink-0"
+                            style={{ borderColor: status.border, background: status.bg, color: status.color }}>
+                            {status.label}
+                          </span>
+                        </div>
+                        <div className="mt-0.5 text-xs truncate" style={{ color: "rgb(var(--muted))" }}>
+                          {emp.email}
+                        </div>
+                        {emp.phone && (
+                          <div className="mt-0.5 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                            {emp.phone}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Role badge */}
+                    <div className="mt-4 flex items-center justify-between">
+                      <span className="rounded-full border px-2.5 py-0.5 text-xs font-semibold"
+                        style={{ borderColor: role.border, background: role.bg, color: role.color }}>
+                        {role.label}
+                      </span>
+                      <span className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                        View profile →
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </main>
+
+      <InviteEmployeeModal open={open} onClose={() => setOpen(false)} onSuccess={handleInviteSuccess} />
+    </div>
+  );
+}
+
+function StatCard({ label, value, color }: { label: string; value: number; color?: string }) {
+  return (
+    <div className="rounded-2xl border p-4"
+      style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}>
+      <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>{label}</div>
+      <div className="mt-1 text-2xl font-bold" style={color ? { color } : undefined}>{value}</div>
+    </div>
   );
 }
