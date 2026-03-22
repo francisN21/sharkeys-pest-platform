@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+// CSP is handled dynamically per-request in src/middleware.ts (nonce-based).
+// These headers are static and safe to set at the config level.
 const securityHeaders = [
   // Prevent clickjacking
   { key: "X-Frame-Options", value: "DENY" },
@@ -16,25 +18,6 @@ const securityHeaders = [
   {
     key: "Strict-Transport-Security",
     value: "max-age=31536000; includeSubDomains",
-  },
-  // Content Security Policy
-  {
-    key: "Content-Security-Policy",
-    value: [
-      "default-src 'self'",
-      // Allow Next.js inline scripts and eval in dev; lock down in prod via env
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob:",
-      "font-src 'self'",
-      // WebSocket connection to backend
-      `connect-src 'self' ${process.env.NEXT_PUBLIC_API_URL ?? ""} ${process.env.NEXT_PUBLIC_WS_URL ?? ""}`,
-      "frame-ancestors 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-    ]
-      .join("; ")
-      .trim(),
   },
 ];
 

@@ -8,6 +8,8 @@ const {
   getCookieOptions,
   createSession,
   deleteSession,
+  setCsrfCookie,
+  clearCsrfCookie,
 } = require("../src/auth/session");
 const { requireAuth } = require("../middleware/requireAuth");
 const { config } = require("../src/config");
@@ -291,6 +293,7 @@ router.post("/signup", async (req, res, next) => {
       ...getCookieOptions(),
       expires: new Date(expiresAt),
     });
+    setCsrfCookie(res);
 
     const verifyUrl = buildAppUrl(config.EMAIL_VERIFY_PATH, {
       email: user.email,
@@ -391,6 +394,7 @@ router.post("/login", async (req, res, next) => {
       ...getCookieOptions(),
       expires: new Date(expiresAt),
     });
+    setCsrfCookie(res);
 
     const roles = user.roles || [];
     const user_role = roles.includes("superuser")
@@ -433,6 +437,7 @@ router.post("/logout", async (req, res, next) => {
     if (sid) await deleteSession(sid);
 
     res.clearCookie(cookieName, { ...getCookieOptions() });
+    clearCsrfCookie(res);
     return res.status(200).json({ ok: true });
   } catch (err) {
     next(err);
@@ -980,6 +985,7 @@ router.post("/new-account-setup/complete", async (req, res, next) => {
       ...getCookieOptions(),
       expires: new Date(expiresAt),
     });
+    setCsrfCookie(res);
 
     return res.json({
       ok: true,

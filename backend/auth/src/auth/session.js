@@ -64,10 +64,34 @@ async function touchSession(sessionId) {
   return r.rows[0] || null;
 }
 
+const CSRF_COOKIE_NAME = "csrf_token";
+
+function generateCsrfToken() {
+  return crypto.randomBytes(24).toString("hex");
+}
+
+function setCsrfCookie(res) {
+  const isProd = process.env.NODE_ENV === "production";
+  const token = generateCsrfToken();
+  res.cookie(CSRF_COOKIE_NAME, token, {
+    httpOnly: false, // Must be readable by JavaScript so the frontend can send it as a header
+    secure: isProd,
+    sameSite: "lax",
+    path: "/",
+  });
+  return token;
+}
+
+function clearCsrfCookie(res) {
+  res.clearCookie(CSRF_COOKIE_NAME, { path: "/" });
+}
+
 module.exports = {
   getCookieOptions,
   createSession,
   deleteSession,
   getSession,
   touchSession,
+  setCsrfCookie,
+  clearCsrfCookie,
 };

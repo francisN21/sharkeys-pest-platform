@@ -199,6 +199,38 @@ app.use(trackSiteAccess({
   excludePaths: ["/health", "/favicon.ico"],
 }));
 
+// -----------------------------------------------------------
+// CSRF validation — double-submit cookie pattern
+// Enforced on state-changing methods for authenticated requests
+// (i.e. when a session cookie is present).
+// Auth endpoints (login, signup) are exempt — no session exists yet.
+// -----------------------------------------------------------
+
+const CSRF_COOKIE_NAME = "csrf_token";
+const CSRF_SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+const CSRF_EXEMPT_PREFIXES = ["/auth/", "/public/"];
+
+app.use((req, res, next) => {
+  if (CSRF_SAFE_METHODS.has(req.method)) return next();
+  if (CSRF_EXEMPT_PREFIXES.some((p) => req.path.startsWith(p))) return next();
+
+  const cookieName = process.env.SESSION_COOKIE_NAME || "sid";
+  if (!req.cookies?.[cookieName]) return next(); // Unauthenticated request — skip
+
+  const tokenFromHeader = req.headers["x-csrf-token"];
+  const tokenFromCookie = req.cookies?.[CSRF_COOKIE_NAME];
+
+  if (!tokenFromHeader || !tokenFromCookie || tokenFromHeader !== tokenFromCookie) {
+    return res.status(403).json({
+      ok: false,
+      error: "Forbidden",
+      message: "Invalid CSRF token",
+    });
+  }
+
+  next();
+});
+
 // Rate limiters on sensitive auth endpoints
 app.post("/auth/login", loginLimiter);
 app.post("/auth/signup", signupLimiter);
