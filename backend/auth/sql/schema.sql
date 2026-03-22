@@ -998,3 +998,22 @@ CREATE INDEX IF NOT EXISTS idx_customer_tags_kind_entity
 
 CREATE INDEX IF NOT EXISTS idx_customer_tags_updated_at
   ON customer_tags (updated_at DESC);
+
+-- ============================================================
+-- Lead Invites
+-- ============================================================  
+CREATE TABLE IF NOT EXISTS lead_account_invites (
+  id BIGSERIAL PRIMARY KEY,
+  lead_id BIGINT NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  consumed_at TIMESTAMPTZ NULL,
+  sent_by_user_id BIGINT NULL REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_lead_account_invites_lead_id
+  ON lead_account_invites(lead_id);
+
+CREATE INDEX IF NOT EXISTS idx_lead_account_invites_expires_at
+  ON lead_account_invites(expires_at);

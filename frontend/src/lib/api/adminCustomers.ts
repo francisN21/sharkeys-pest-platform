@@ -255,3 +255,10 @@ export function adminSetCustomerCrmTag(
 ) {
   return adminSetCustomerTag(kind, publicId, tag, note);
 }
+
+export function adminSendInvite(kind: AdminCustomerKind, publicId: string) {
+  return jsonFetch<{ ok: boolean; message?: string; invite?: { expiresAt?: string | null } }>(
+    `/admin/customers/${kind}/${publicId}/send-invite`,
+    { method: "POST" }
+  );
+}

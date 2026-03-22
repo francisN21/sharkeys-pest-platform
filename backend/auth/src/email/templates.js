@@ -175,7 +175,7 @@ function buildWelcomeEmail(payload = {}) {
 
 function buildLeadBookingInviteEmail(payload = {}) {
   const firstName = payload.firstName || "there";
-  const signupUrl = payload.signupUrl || "";
+  const signupUrl = payload.signupUrl || payload.setupUrl || payload.resetUrl || "";
   const bookingPublicId = payload.bookingPublicId || "";
   const serviceTitle = payload.serviceTitle || "";
   const startsAt = payload.startsAt || null;
@@ -200,6 +200,16 @@ function buildLeadBookingInviteEmail(payload = {}) {
     ])}
     ${divider()}
     ${p("Want to manage your appointments more easily? Create your account to track bookings, view service history, and message our team online.")}
+    ${
+      signupUrl
+        ? p(
+            `If the button does not work, copy and paste this link into your browser:<br /><a href="${escapeHtml(
+              signupUrl
+            )}" style="color:${BRAND.accentColor};word-break:break-all;">${escapeHtml(signupUrl)}</a>`,
+            `font-size:14px;color:${BRAND.mutedColor};margin-bottom:0;`
+          )
+        : ""
+    }
   `;
 
   return {

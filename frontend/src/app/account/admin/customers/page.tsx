@@ -5,6 +5,7 @@ import {
   adminListCustomers,
   adminGetCustomerDetail,
   adminSetCustomerTag,
+  adminSendInvite,
   type AdminCustomerRow,
   type AdminCustomerDetailResponse,
   type AdminCustomerKind,
@@ -488,6 +489,7 @@ function BookingGroupSection({
 export default function AdminCustomersPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const [rows, setRows] = useState<AdminCustomerRow[]>([]);
 
@@ -507,6 +509,7 @@ export default function AdminCustomersPage() {
   const [tagValue, setTagValue] = useState<string>("");
   const [tagNote, setTagNote] = useState<string>("");
   const [tagBusy, setTagBusy] = useState(false);
+  const [inviteBusy, setInviteBusy] = useState(false);
 
   async function refresh(opts?: { page?: number; q?: string }) {
     const nextPage = opts?.page ?? page;
@@ -522,6 +525,7 @@ export default function AdminCustomersPage() {
 
   async function openDetail(kind: AdminCustomerKind, publicId: string) {
     setErr(null);
+    setNotice(null);
     setView("detail");
     setSelected({ kind, public_id: publicId });
     setDetail(null);
@@ -545,6 +549,7 @@ export default function AdminCustomersPage() {
     setDetail(null);
     setTagValue("");
     setTagNote("");
+    setNotice(null);
   }
 
   async function saveTag() {
@@ -552,17 +557,37 @@ export default function AdminCustomersPage() {
     try {
       setTagBusy(true);
       setErr(null);
+      setNotice(null);
+
       await adminSetCustomerTag(selected.kind, selected.public_id, tagValue ? tagValue : null, tagNote ? tagNote : null);
 
       const d = await adminGetCustomerDetail(selected.kind, selected.public_id);
       setDetail(d);
       setTagValue(d.tag?.tag ?? "");
       setTagNote(d.tag?.note ?? "");
-      refresh();
+      await refresh();
+      setNotice("Tag saved.");
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to save tag");
     } finally {
       setTagBusy(false);
+    }
+  }
+
+  async function sendInvite() {
+    if (!selected || selected.kind !== "lead") return;
+
+    try {
+      setInviteBusy(true);
+      setErr(null);
+      setNotice(null);
+
+      const res = await adminSendInvite(selected.kind, selected.public_id);
+      setNotice(res.message || "Invite email sent.");
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Failed to send invite");
+    } finally {
+      setInviteBusy(false);
     }
   }
 
@@ -572,6 +597,7 @@ export default function AdminCustomersPage() {
       try {
         setLoading(true);
         setErr(null);
+        setNotice(null);
         await refresh({ page: 1 });
       } catch (e: unknown) {
         if (!alive) return;
@@ -621,15 +647,29 @@ export default function AdminCustomersPage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => selected && openDetail(selected.kind, selected.public_id)}
-            className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-            disabled={detailLoading || !selected}
-          >
-            Refresh
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            {c?.kind === "lead" ? (
+              <button
+                type="button"
+                onClick={sendInvite}
+                className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+                style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                disabled={detailLoading || inviteBusy || !selected}
+              >
+                {inviteBusy ? "Sending…" : "Send Account Invite"}
+              </button>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={() => selected && openDetail(selected.kind, selected.public_id)}
+              className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+              style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+              disabled={detailLoading || !selected}
+            >
+              Refresh
+            </button>
+          </div>
         </div>
 
         {err ? (
@@ -638,6 +678,18 @@ export default function AdminCustomersPage() {
             style={{ borderColor: "rgb(239 68 68 / 0.75)", background: "rgb(127 29 29 / 0.16)" }}
           >
             {err}
+          </div>
+        ) : null}
+
+        {notice ? (
+          <div
+            className="rounded-xl border p-3 text-sm"
+            style={{
+              borderColor: "rgb(var(--border))",
+              background: "rgba(34, 197, 94, 0.10)",
+            }}
+          >
+            {notice}
           </div>
         ) : null}
 
@@ -823,6 +875,18 @@ export default function AdminCustomersPage() {
           style={{ borderColor: "rgb(239 68 68 / 0.75)", background: "rgb(127 29 29 / 0.16)" }}
         >
           {err}
+        </div>
+      ) : null}
+
+      {notice ? (
+        <div
+          className="rounded-xl border p-3 text-sm"
+          style={{
+            borderColor: "rgb(var(--border))",
+            background: "rgba(34, 197, 94, 0.10)",
+          }}
+        >
+          {notice}
         </div>
       ) : null}
 

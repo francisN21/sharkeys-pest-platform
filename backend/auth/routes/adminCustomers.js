@@ -1,8 +1,11 @@
 // backend/auth/routes/adminCustomers.js
+const crypto = require("crypto");
 const express = require("express");
 const { z } = require("zod");
 const { pool } = require("../src/db");
 const { requireAuth } = require("../middleware/requireAuth");
+const { sendLeadBookingInviteEmail } = require("../src/email/mailer");
+const { config } = require("../src/config");
 
 const router = express.Router();
 
@@ -33,6 +36,33 @@ async function requireAdminOrSuperuser(req, res, next) {
   } catch (e) {
     return next(e);
   }
+}
+
+function hashValue(value) {
+  return crypto.createHash("sha256").update(String(value)).digest("hex");
+}
+
+function generateInviteToken() {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+function addDays(date, days) {
+  return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
+}
+
+function buildAppUrl(path, params = {}) {
+  const baseUrl = String(config.APP_BASE_URL || "").trim();
+  if (!baseUrl) return null;
+
+  const url = new URL(path || "/", baseUrl);
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && String(value) !== "") {
+      url.searchParams.set(key, String(value));
+    }
+  }
+
+  return url.toString();
 }
 
 /**
@@ -248,6 +278,8 @@ router.get("/", requireAuth, requireAdminOrSuperuser, async (req, res, next) => 
   }
 });
 
+
+
 /**
  * COMBINED SEARCH (registered customers + leads)
  * GET /admin/customers/search?q=&limit=
@@ -391,6 +423,137 @@ router.get("/search", requireAuth, requireAdminOrSuperuser, async (req, res, nex
     next(e);
   }
 });
+
+/**
+ * POST /admin/customers/:kind/:publicId/send-invite
+ */
+router.post(
+  "/:kind/:publicId/send-invite",
+  requireAuth,
+  requireAdminOrSuperuser,
+  async (req, res, next) => {
+    const client = await pool.connect();
+
+    try {
+      const actorUserId = req.user?.id ?? req.auth?.userId ?? null;
+      const kind = String(req.params.kind || "").trim().toLowerCase();
+      const publicId = String(req.params.publicId || "").trim();
+
+      if (kind !== "lead") {
+        return res.status(400).json({
+          ok: false,
+          message: "Invites can only be sent to leads",
+        });
+      }
+
+      await client.query("BEGIN");
+
+      const leadRes = await client.query(
+        `
+        SELECT
+          id,
+          public_id,
+          email,
+          first_name,
+          last_name,
+          phone,
+          account_type,
+          address
+        FROM leads
+        WHERE public_id = $1
+        LIMIT 1
+        FOR UPDATE
+        `,
+        [publicId]
+      );
+
+      const lead = leadRes.rows[0] || null;
+
+      if (!lead) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ ok: false, message: "Lead not found" });
+      }
+
+      // If a registered user already exists with this email, do not send a lead invite.
+      const existingUserRes = await client.query(
+        `
+        SELECT id
+        FROM users
+        WHERE email = $1
+        LIMIT 1
+        `,
+        [lead.email]
+      );
+
+      if (existingUserRes.rowCount > 0) {
+        await client.query("ROLLBACK");
+        return res.status(409).json({
+          ok: false,
+          message: "This lead already has a registered account",
+        });
+      }
+
+      await client.query(
+        `
+        DELETE FROM lead_account_invites
+        WHERE lead_id = $1
+          AND consumed_at IS NULL
+        `,
+        [lead.id]
+      );
+
+      const token = generateInviteToken();
+      const tokenHash = hashValue(token);
+      const expiresAt = addDays(new Date(), 7).toISOString();
+
+      await client.query(
+        `
+        INSERT INTO lead_account_invites (
+          lead_id,
+          token_hash,
+          expires_at,
+          sent_by_user_id
+        )
+        VALUES ($1, $2, $3, $4)
+        `,
+        [lead.id, tokenHash, expiresAt, actorUserId]
+      );
+
+      await client.query("COMMIT");
+
+      const setupPath =
+        process.env.NEW_ACCOUNT_SETUP_PATH || "/new-account-setup";
+
+      const setupUrl = buildAppUrl(setupPath, {
+        token,
+        email: lead.email,
+      });
+
+      const emailResult = await sendLeadBookingInviteEmail({
+        to: lead.email,
+        firstName: lead.first_name,
+        resetUrl: setupUrl,
+      });
+
+      return res.json({
+        ok: true,
+        message: "Invite email sent",
+        invite: {
+          expiresAt,
+        },
+        email: emailResult,
+      });
+    } catch (err) {
+      try {
+        await client.query("ROLLBACK");
+      } catch {}
+
+      next(err);
+    } finally {
+      client.release();
+    }
+  }
+);
 
 /* ---------------------------
    DETAIL VIEW + TAGGING
@@ -604,5 +767,7 @@ router.patch("/:kind/:publicId/tag", requireAuth, requireAdminOrSuperuser, async
     next(e);
   }
 });
+
+
 
 module.exports = router;

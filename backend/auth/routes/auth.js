@@ -802,120 +802,111 @@ router.post("/password/reset", async (req, res, next) => {
  * - marks email verified if not already verified
  * - signs the user in immediately
  */
+
+
+
 router.post("/new-account-setup/complete", async (req, res, next) => {
   const client = await pool.connect();
+
   try {
     const { token, password } = newAccountSetupCompleteSchema.parse(req.body);
     const tokenHash = hashValue(token);
 
     await client.query("BEGIN");
 
-    const tokenRes = await client.query(
+    const inviteRes = await client.query(
       `
-      SELECT prt.id, prt.user_id
-      FROM password_reset_tokens prt
-      WHERE prt.token_hash = $1
-        AND prt.consumed_at IS NULL
-        AND prt.expires_at > now()
-      ORDER BY prt.created_at DESC
+      SELECT
+        lai.id,
+        lai.lead_id,
+        lai.expires_at,
+        lai.consumed_at,
+        l.public_id AS lead_public_id,
+        l.email,
+        l.first_name,
+        l.last_name,
+        l.phone,
+        l.account_type,
+        l.address,
+        l.crm_tag,
+        l.crm_tag_note,
+        l.crm_tag_updated_at,
+        l.crm_tag_updated_by_user_id
+      FROM lead_account_invites lai
+      JOIN leads l ON l.id = lai.lead_id
+      WHERE lai.token_hash = $1
+        AND lai.consumed_at IS NULL
+        AND lai.expires_at > now()
+      ORDER BY lai.created_at DESC
       LIMIT 1
       FOR UPDATE
       `,
       [tokenHash]
     );
 
-    const setupRow = tokenRes.rows[0] || null;
-    if (!setupRow) {
+    const invite = inviteRes.rows[0] || null;
+
+    if (!invite) {
       await client.query("ROLLBACK");
-      return res.status(400).json({ ok: false, message: "Invalid or expired setup token" });
+      return res.status(400).json({ ok: false, message: "Invalid or expired setup link" });
     }
 
-    const userRes = await client.query(
+    const existingUserRes = await client.query(
       `
-      SELECT
-        u.id,
-        u.public_id,
-        u.email,
-        u.password_hash,
-        u.first_name,
-        u.last_name,
-        u.phone,
-        u.account_type,
-        u.address,
-        u.email_verified_at,
-        u.created_at
-      FROM users u
-      WHERE u.id = $1
+      SELECT id, public_id, email, password_hash
+      FROM users
+      WHERE email = $1
       LIMIT 1
       FOR UPDATE
       `,
-      [setupRow.user_id]
+      [invite.email]
     );
 
-    const user = userRes.rows[0] || null;
-    if (!user) {
+    if (existingUserRes.rowCount > 0) {
       await client.query("ROLLBACK");
-      return res.status(400).json({ ok: false, message: "Account not found" });
-    }
-
-    if (user.password_hash) {
-      const sameAsCurrent = await argon2.verify(user.password_hash, password);
-      if (sameAsCurrent) {
-        await client.query("ROLLBACK");
-        return res.status(400).json({
-          ok: false,
-          message: "New password must be different from your current password and recent passwords",
-        });
-      }
-    }
-
-    const historyRes = await client.query(
-      `
-      SELECT password_hash
-      FROM user_password_history
-      WHERE user_id = $1
-      ORDER BY created_at DESC
-      LIMIT 5
-      `,
-      [user.id]
-    );
-
-    for (const row of historyRes.rows) {
-      if (!row?.password_hash) continue;
-
-      const reused = await argon2.verify(row.password_hash, password);
-      if (reused) {
-        await client.query("ROLLBACK");
-        return res.status(400).json({
-          ok: false,
-          message: "New password must be different from your current password and recent passwords",
-        });
-      }
-    }
-
-    if (user.password_hash) {
-      await client.query(
-        `
-        INSERT INTO user_password_history (user_id, password_hash)
-        VALUES ($1, $2)
-        `,
-        [user.id, user.password_hash]
-      );
+      return res.status(409).json({
+        ok: false,
+        message: "An account already exists for this email. Please sign in instead.",
+      });
     }
 
     const passwordHash = await argon2.hash(password);
 
-    await client.query(
+    const createdUserRes = await client.query(
       `
-      UPDATE users
-      SET
-        password_hash = $2,
-        email_verified_at = COALESCE(email_verified_at, now()),
-        updated_at = now()
-      WHERE id = $1
+      INSERT INTO users (
+        email,
+        password_hash,
+        first_name,
+        last_name,
+        phone,
+        account_type,
+        address,
+        email_verified_at,
+        crm_tag,
+        crm_tag_note,
+        crm_tag_updated_at,
+        crm_tag_updated_by_user_id
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,now(),$8,$9,$10,$11)
+      RETURNING id, public_id, email, first_name, last_name, phone, account_type, address, email_verified_at, created_at
       `,
-      [user.id, passwordHash]
+      [
+        invite.email,
+        passwordHash,
+        invite.first_name,
+        invite.last_name,
+        invite.phone,
+        invite.account_type,
+        invite.address,
+        invite.crm_tag ?? null,
+        invite.crm_tag_note ?? null,
+        invite.crm_tag_updated_at ?? null,
+        invite.crm_tag_updated_by_user_id ?? null,
+      ]
     );
+
+    const user = createdUserRes.rows[0];
 
     await client.query(
       `
@@ -927,23 +918,51 @@ router.post("/new-account-setup/complete", async (req, res, next) => {
     );
 
     await client.query(
-      `UPDATE password_reset_tokens SET consumed_at = now() WHERE id = $1`,
-      [setupRow.id]
+      `
+      UPDATE bookings
+      SET customer_user_id = $1,
+          lead_id = NULL
+      WHERE lead_id = $2
+      `,
+      [user.id, invite.lead_id]
     );
 
     await client.query(
       `
-      DELETE FROM user_password_history
-      WHERE id IN (
-        SELECT id
-        FROM user_password_history
-        WHERE user_id = $1
-        ORDER BY created_at DESC
-        OFFSET 5
-      )
+      INSERT INTO lead_conversions (lead_id, lead_public_id, user_id, email)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT DO NOTHING
       `,
-      [user.id]
+      [invite.lead_id, invite.lead_public_id, user.id, invite.email]
     );
+
+    await client.query(
+      `
+      INSERT INTO customer_tags (kind, entity_id, tag, note, updated_by_user_id, updated_at)
+      SELECT 'registered', $1, ct.tag, ct.note, ct.updated_by_user_id, ct.updated_at
+      FROM customer_tags ct
+      WHERE ct.kind = 'lead' AND ct.entity_id = $2
+      ON CONFLICT (kind, entity_id)
+      DO UPDATE SET
+        tag = EXCLUDED.tag,
+        note = EXCLUDED.note,
+        updated_by_user_id = EXCLUDED.updated_by_user_id,
+        updated_at = EXCLUDED.updated_at
+      `,
+      [user.id, invite.lead_id]
+    );
+
+    await client.query(
+      `DELETE FROM customer_tags WHERE kind = 'lead' AND entity_id = $1`,
+      [invite.lead_id]
+    );
+
+    await client.query(
+      `UPDATE lead_account_invites SET consumed_at = now() WHERE id = $1`,
+      [invite.id]
+    );
+
+    await client.query(`DELETE FROM leads WHERE id = $1`, [invite.lead_id]);
 
     await client.query("COMMIT");
 
@@ -955,19 +974,6 @@ router.post("/new-account-setup/complete", async (req, res, next) => {
       expires: new Date(expiresAt),
     });
 
-    const rolesRes = await pool.query(
-      `SELECT role FROM user_roles WHERE user_id = $1`,
-      [user.id]
-    );
-    const roles = rolesRes.rows.map((r) => r.role);
-    const user_role = roles.includes("superuser")
-      ? "superuser"
-      : roles.includes("admin")
-      ? "admin"
-      : roles.includes("worker")
-      ? "worker"
-      : "customer";
-
     return res.json({
       ok: true,
       user: {
@@ -978,10 +984,10 @@ router.post("/new-account-setup/complete", async (req, res, next) => {
         phone: user.phone,
         account_type: user.account_type,
         address: user.address,
-        email_verified_at: new Date().toISOString(),
+        email_verified_at: user.email_verified_at,
         created_at: user.created_at,
-        roles,
-        user_role,
+        roles: ["customer"],
+        user_role: "customer",
       },
       session: { expiresAt },
     });
@@ -1053,5 +1059,4 @@ router.get("/me", requireAuth, async (req, res, next) => {
     next(err);
   }
 });
-
 module.exports = router;
