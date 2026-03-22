@@ -6,6 +6,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const cookieParser = require("cookie-parser");
 const pinoHttp = require("pino-http");
+const rateLimit = require("express-rate-limit");
 
 const authRouter = require("../routes/auth");
 const { notFound } = require("../middleware/notFound");
@@ -51,6 +52,50 @@ const notificationsRouter = require("../routes/notifications");
 const app = express();
 
 app.set("trust proxy", 1);
+
+// -----------------------------------------------------------
+// Rate limiters — applied per-IP before route handlers
+// -----------------------------------------------------------
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: "TooManyRequests", message: "Too many login attempts. Please try again later." },
+});
+
+const signupLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: "TooManyRequests", message: "Too many signup attempts. Please try again later." },
+});
+
+const passwordResetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: "TooManyRequests", message: "Too many password reset requests. Please try again later." },
+});
+
+const emailVerificationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: "TooManyRequests", message: "Too many verification requests. Please try again later." },
+});
+
+const publicBookingLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: "TooManyRequests", message: "Too many booking requests. Please try again later." },
+});
 
 app.use(
   helmet({
@@ -105,6 +150,13 @@ app.use(trackSiteAccess({
   excludePaths: ["/health", "/favicon.ico"],
 }));
 
+// Rate limiters on sensitive auth endpoints
+app.post("/auth/login", loginLimiter);
+app.post("/auth/signup", signupLimiter);
+app.post("/auth/request-password-reset", passwordResetLimiter);
+app.post("/auth/reset-password-with-token", passwordResetLimiter);
+app.post("/auth/request-email-verification", emailVerificationLimiter);
+
 // Main Auth pipeline
 app.use("/auth", authRouter);
 app.use("/auth", meRouter);
@@ -130,7 +182,8 @@ app.use(notificationsRouter);
 // Prices Routes Pipeline
 app.use(bookingPricesRouter)
 
-//Public Booking Pipeline
+// Public Booking Pipeline (rate limited)
+app.use("/public/bookings", publicBookingLimiter);
 app.use("/public/bookings", publicBookingsRouter);
 
 // Service routes pipeline

@@ -1,4 +1,8 @@
 // middleware/errorHandler.js
+const pino = require("pino");
+
+const logger = pino();
+
 function errorHandler(err, req, res, next) {
   const isProd = process.env.NODE_ENV === "production";
 
@@ -96,6 +100,16 @@ function errorHandler(err, req, res, next) {
       constraint: err.constraint,
       detail: err.detail,
     };
+  }
+
+  if (status >= 500) {
+    logger.error(
+      {
+        err: { message: err.message, stack: err.stack, code: err.code },
+        req: { method: req.method, url: req.url, ip: req.ip },
+      },
+      "Server error"
+    );
   }
 
   res.status(status).json(payload);

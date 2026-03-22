@@ -3,6 +3,12 @@ const { app } = require("../src/app");
 const { pool } = require("../src/db");
 const { resetDb } = require("./helpers/dbReset");
 
+const TEST_USER = {
+  email: "test@example.com",
+  password: "Password123!XyZa",
+  first_name: "Test",
+  last_name: "User",
+};
 
 beforeEach(async () => {
   await resetDb();
@@ -16,15 +22,15 @@ test("signup sets session cookie and returns user", async () => {
   const res = await request(app)
     .post("/auth/signup")
     .set("Content-Type", "application/json")
-    .send({ email: "test@example.com", password: "Password123!" });
+    .send(TEST_USER);
 
   expect(res.statusCode).toBe(201);
   expect(res.body.ok).toBe(true);
-  expect(res.body.user.email).toBe("test@example.com");
+  expect(res.body.user.email).toBe(TEST_USER.email);
 
   const setCookie = res.headers["set-cookie"];
   expect(setCookie).toBeDefined();
-  expect(setCookie.join(";")).toMatch(/sid=/); // uses your SESSION_COOKIE_NAME if still "sid"
+  expect(setCookie.join(";")).toMatch(/sid=/);
 });
 
 test("/auth/me requires auth", async () => {
@@ -36,7 +42,7 @@ test("/auth/me requires auth", async () => {
 test("me works after signup (cookie auth)", async () => {
   const signup = await request(app)
     .post("/auth/signup")
-    .send({ email: "test@example.com", password: "Password123!" });
+    .send(TEST_USER);
 
   const cookie = signup.headers["set-cookie"];
   expect(cookie).toBeDefined();
@@ -44,13 +50,13 @@ test("me works after signup (cookie auth)", async () => {
   const me = await request(app).get("/auth/me").set("Cookie", cookie);
   expect(me.statusCode).toBe(200);
   expect(me.body.ok).toBe(true);
-  expect(me.body.user.email).toBe("test@example.com");
+  expect(me.body.user.email).toBe(TEST_USER.email);
 });
 
 test("logout clears session", async () => {
   const signup = await request(app)
     .post("/auth/signup")
-    .send({ email: "test@example.com", password: "Password123!" });
+    .send(TEST_USER);
 
   const cookie = signup.headers["set-cookie"];
 

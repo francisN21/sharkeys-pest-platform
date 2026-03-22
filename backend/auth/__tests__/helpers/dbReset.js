@@ -1,9 +1,9 @@
 const { pool } = require("../../src/db");
 
 async function resetDb() {
-  await pool.query(
-    "TRUNCATE TABLE email_tokens, sessions, oauth_identities, users RESTART IDENTITY CASCADE"
-  );
+  // Truncating users cascades to: sessions, user_roles, email_verification_codes,
+  // password_reset_tokens, employee_invites, bookings, leads, etc.
+  await pool.query("TRUNCATE TABLE users RESTART IDENTITY CASCADE");
 }
 
 module.exports = { resetDb };

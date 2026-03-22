@@ -12,24 +12,16 @@ type RealtimeProviderProps = {
 export function RealtimeProvider({
   children,
   userId,
-  roles,
 }: RealtimeProviderProps) {
   const baseUrl = process.env.NEXT_PUBLIC_WS_URL ?? "";
 
+  // Identity is validated server-side via the session cookie at connection time.
+  // No credentials are passed in the URL.
   const wsUrl = useMemo(() => {
     if (!baseUrl) return "";
     if (!userId) return "";
-
-    const normalizedRoles = Array.isArray(roles)
-      ? roles.map((r) => String(r ?? "").trim().toLowerCase()).filter(Boolean)
-      : [];
-
-    const sep = baseUrl.includes("?") ? "&" : "?";
-
-    return `${baseUrl}${sep}userId=${encodeURIComponent(
-      String(userId)
-    )}&roles=${encodeURIComponent(normalizedRoles.join(","))}`;
-  }, [baseUrl, roles, userId]);
+    return baseUrl;
+  }, [baseUrl, userId]);
 
   useRealtime(wsUrl);
 

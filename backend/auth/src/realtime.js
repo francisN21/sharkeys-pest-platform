@@ -1,10 +1,47 @@
 const WebSocket = require("ws");
-const url = require("url");
+const { pool } = require("./db");
 
 /**
  * Map<WebSocket, { userId, roles, connectedAt }>
  */
 const clients = new Map();
+
+const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "sid";
+
+function parseCookies(cookieHeader) {
+  const result = {};
+  if (!cookieHeader) return result;
+  for (const part of String(cookieHeader).split(";")) {
+    const eqIdx = part.indexOf("=");
+    if (eqIdx < 0) continue;
+    result[part.slice(0, eqIdx).trim()] = part.slice(eqIdx + 1).trim();
+  }
+  return result;
+}
+
+async function resolveSessionIdentity(req) {
+  const cookies = parseCookies(req.headers.cookie);
+  const sid = cookies[SESSION_COOKIE_NAME];
+  if (!sid) return null;
+
+  try {
+    const r = await pool.query(
+      `SELECT s.user_id, COALESCE(array_agg(ur.role ORDER BY ur.role), '{}') AS roles
+       FROM sessions s
+       LEFT JOIN user_roles ur ON ur.user_id = s.user_id
+       WHERE s.id = $1 AND s.expires_at > now()
+       GROUP BY s.user_id`,
+      [sid]
+    );
+    if (!r.rows[0]) return null;
+    return {
+      userId: Number(r.rows[0].user_id),
+      roles: r.rows[0].roles || [],
+    };
+  } catch {
+    return null;
+  }
+}
 
 function safeJsonParse(value) {
   try {
@@ -49,34 +86,19 @@ function getAllConnectedClients() {
   return Array.from(clients.entries()).map(([ws, meta]) => ({ ws, meta }));
 }
 
-function parseConnectionIdentity(req) {
-  const parsed = url.parse(req.url || "", true);
-  const query = parsed.query || {};
-
-  const userIdRaw = query.userId;
-  const rolesRaw = query.roles;
-
-  const userId =
-    typeof userIdRaw === "string" && /^\d+$/.test(userIdRaw)
-      ? Number(userIdRaw)
-      : null;
-
-  const roles =
-    typeof rolesRaw === "string"
-      ? rolesRaw.split(",").map(normalizeRole).filter(Boolean)
-      : [];
-
-  return { userId, roles };
-}
-
 function initRealtime(server) {
   const wss = new WebSocket.Server({
     server,
     path: "/ws",
   });
 
-  wss.on("connection", (ws, req) => {
-    const identity = parseConnectionIdentity(req);
+  wss.on("connection", async (ws, req) => {
+    const identity = await resolveSessionIdentity(req);
+
+    if (!identity) {
+      ws.close(1008, "Authentication required");
+      return;
+    }
 
     clients.set(ws, {
       userId: identity.userId,
@@ -87,38 +109,14 @@ function initRealtime(server) {
     sendToSocket(ws, {
       type: "system.connected",
       at: new Date().toISOString(),
-      userId: identity.userId,
-      roles: identity.roles,
     });
 
     ws.on("message", (raw) => {
       const msg = safeJsonParse(String(raw || ""));
       if (!msg || typeof msg !== "object") return;
 
-      if (msg.type === "auth.identify") {
-        const nextUserId =
-          typeof msg.userId === "number" &&
-          Number.isInteger(msg.userId) &&
-          msg.userId > 0
-            ? msg.userId
-            : null;
-
-        const nextRoles = normalizeRoles(msg.roles);
-
-        clients.set(ws, {
-          userId: nextUserId,
-          roles: nextRoles,
-          connectedAt:
-            getClientMeta(ws)?.connectedAt || new Date().toISOString(),
-        });
-
-        sendToSocket(ws, {
-          type: "system.identified",
-          at: new Date().toISOString(),
-          userId: nextUserId,
-          roles: nextRoles,
-        });
-      }
+      // auth.identify is intentionally not supported — identity is derived
+      // from the validated session cookie at connection time and cannot be changed.
 
       if (msg.type === "ping") {
         sendToSocket(ws, { type: "pong", at: new Date().toISOString() });
