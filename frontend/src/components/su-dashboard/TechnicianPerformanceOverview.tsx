@@ -2,7 +2,8 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { RefreshCcw } from "lucide-react";
+import { RefreshCcw, Download } from "lucide-react";
+import { RangeDropdown, type RangePreset } from "./RangeDropdown";
 import {
   getTechnicianPerformance,
   exportTechnicianPerformanceCsv,
@@ -62,7 +63,7 @@ function fmtHours(h: number | null | undefined) {
  * Preset helpers
  ---------------------------- */
 
-type Preset = "1m" | "3m" | "6m" | "12m";
+type Preset = RangePreset;
 
 function presetRange(preset: Preset): { start: string; end: string } {
   const months = preset === "1m" ? 1 : preset === "3m" ? 3 : preset === "6m" ? 6 : 12;
@@ -175,32 +176,27 @@ export default function TechnicianPerformanceOverview() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-end gap-2">
-          {(["1m", "3m", "6m", "12m"] as Preset[]).map((p) => (
-            <PresetButton key={p} label={p.toUpperCase()} active={preset === p} onClick={() => setPreset(p)} />
-          ))}
-
+        <div className="flex items-center gap-2">
+          <RangeDropdown preset={preset} onPreset={setPreset} />
           <button
             type="button"
             onClick={onExportCsv}
             disabled={exporting || loading}
-            className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
+            title="Export CSV"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border hover:opacity-80 disabled:opacity-50 transition-opacity"
+            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
           >
-            {exporting ? "Exporting…" : "Export CSV"}
+            <Download className="h-4 w-4" style={{ color: "rgb(var(--muted))" }} />
           </button>
-
           <button
             type="button"
             onClick={load}
             disabled={loading}
-            className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+            title="Refresh"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border hover:opacity-80 disabled:opacity-50 transition-opacity"
             style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
           >
-            <span className="inline-flex items-center gap-2">
-              <RefreshCcw className="h-4 w-4" />
-              {loading ? "Refreshing…" : "Refresh"}
-            </span>
+            <RefreshCcw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} style={{ color: "rgb(var(--muted))" }} />
           </button>
         </div>
       </div>
@@ -290,27 +286,3 @@ function CompletionBadge({ count, total }: { count: number; total: number }) {
   );
 }
 
-function PresetButton({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
-      style={{
-        borderColor: "rgb(var(--border))",
-        background: active ? "rgb(var(--card))" : "rgba(var(--bg), 0.25)",
-        fontWeight: active ? 700 : 600,
-      }}
-    >
-      {label}
-    </button>
-  );
-}

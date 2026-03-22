@@ -4,6 +4,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { CreditCard, CalendarDays, ArrowUpRight, RefreshCcw } from "lucide-react";
+import { RangeDropdown, type RangePreset } from "./RangeDropdown";
 import {
   RevenueGraphCard,
   type RevenueGraphMode,
@@ -163,22 +164,9 @@ async function getRevenueMetrics(range: { start?: string; end?: string }) {
 type ViewMode = RevenueGraphMode;
 
 export default function RevenueOverview() {
-  // ✅ Default: rolling last 90 days to TODAY (exclusive end)
-  const defaultStartMonth = useMemo(() => {
-    const now = new Date();
-    const start = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-    return toMonthValue(start);
-  }, []);
-  const defaultEndMonth = useMemo(() => toMonthValue(new Date()), []);
-
-  const [fromMonth, setFromMonth] = useState<string>(defaultStartMonth);
-  const [toMonth, setToMonth] = useState<string>(defaultEndMonth);
-  const [useRollingEnd, setUseRollingEnd] = useState<boolean>(true);
-
-  // Advanced day-level range
-  const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
-  const [advStart, setAdvStart] = useState<string>(() => dateOnlyDaysAgo(90));
-  const [advEnd, setAdvEnd] = useState<string>(() => dateOnlyToday()); // exclusive end
+  const [preset, setPreset] = useState<RangePreset | null>(null);
+  const [customStart, setCustomStart] = useState<string>(() => dateOnlyDaysAgo(90));
+  const [customEnd, setCustomEnd] = useState<string>(() => dateOnlyToday());
 
   // View toggle (daily/weekly/monthly)
   const [mode, setMode] = useState<ViewMode>("monthly");
@@ -187,29 +175,18 @@ export default function RevenueOverview() {
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  function reset90d() {
-    setFromMonth(defaultStartMonth);
-    setToMonth(defaultEndMonth);
-    setUseRollingEnd(true);
-    setAdvStart(dateOnlyDaysAgo(90));
-    setAdvEnd(dateOnlyToday());
+  function handlePreset(p: RangePreset) {
+    setPreset(p);
+    const months = p === "1m" ? 1 : p === "3m" ? 3 : p === "6m" ? 6 : 12;
+    const d = new Date(); d.setMonth(d.getMonth() - months); d.setDate(1);
+    setCustomStart(dateOnly(d));
+    setCustomEnd(dateOnlyToday());
   }
 
-  function applyPreset(months: number) {
-    setShowAdvanced(false);
-    const d = new Date();
-    d.setMonth(d.getMonth() - months);
-    setFromMonth(toMonthValue(d));
-    setToMonth(defaultEndMonth);
-    setUseRollingEnd(true);
-  }
-
-  const range = useMemo(() => {
-    if (showAdvanced) return { start: advStart || undefined, end: advEnd || undefined };
-    const start = dateOnlyFromMonthStart(fromMonth) ?? undefined;
-    const end = useRollingEnd ? dateOnlyToday() : (dateOnlyEndExclusiveFromMonthEnd(toMonth) ?? undefined);
-    return { start, end };
-  }, [showAdvanced, advStart, advEnd, fromMonth, toMonth, useRollingEnd]);
+  const range = useMemo(() => ({
+    start: customStart || undefined,
+    end: customEnd || undefined,
+  }), [customStart, customEnd]);
 
   function normalize(res: RevenueMetricsResponse): RevenueMetricsResponse {
     const start = String(res?.range?.start ?? "");
@@ -315,51 +292,24 @@ export default function RevenueOverview() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-end gap-2">
-          {([1, 3, 6, 12] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => applyPreset(m)}
-              className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
-              style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-            >
-              {m}M
-            </button>
-          ))}
-
-          <button
-            type="button"
-            onClick={reset90d}
-            className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
-            style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--bg), 0.25)" }}
-            title="Reset to last 90 days (rolling to today)"
-          >
-            Reset 90d
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowAdvanced((v) => !v)}
-            className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
-            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-            title="Advanced date range"
-          >
-            {showAdvanced ? "Hide advanced" : "Advanced"}
-          </button>
-
+        <div className="flex items-center gap-2">
+          <RangeDropdown
+            preset={preset}
+            onPreset={handlePreset}
+            customStart={customStart}
+            customEnd={customEnd}
+            onCustomStart={(v) => { setCustomStart(v); setPreset(null); }}
+            onCustomEnd={(v) => { setCustomEnd(v); setPreset(null); }}
+          />
           <button
             type="button"
             onClick={reload}
-            className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
             disabled={loading}
             title="Refresh"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border hover:opacity-80 disabled:opacity-50 transition-opacity"
+            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
           >
-            <span className="inline-flex items-center gap-2">
-              <RefreshCcw className="h-4 w-4" />
-              {loading ? "Refreshing…" : "Refresh"}
-            </span>
+            <RefreshCcw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} style={{ color: "rgb(var(--muted))" }} />
           </button>
         </div>
       </div>

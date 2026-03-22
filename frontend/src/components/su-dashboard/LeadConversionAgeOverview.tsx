@@ -4,6 +4,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { RefreshCcw } from "lucide-react";
 import { getLeadConversionAge, type LeadConversionAgeBucket, type LeadConversionAgeMonthRow } from "../../lib/api/adminMetrics";
+import RangeDropdown, { type RangePreset } from "./RangeDropdown";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 function dateOnly(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
@@ -38,7 +39,7 @@ const BUCKET_META: Record<string, { label: string; color: string }> = {
 
 const BUCKET_ORDER = ["same_day", "1_to_7d", "7_to_30d", "30_to_90d", "90d_plus"];
 
-type Preset = "1m" | "3m" | "6m" | "12m";
+type Preset = RangePreset;
 function presetRange(p: Preset) {
   const months = p === "1m" ? 1 : p === "3m" ? 3 : p === "6m" ? 6 : 12;
   return { start: monthsAgoFirstDay(months), end: dateOnlyToday() };
@@ -107,17 +108,17 @@ export default function LeadConversionAgeOverview() {
             How long it takes for leads to become customers after their first contact
           </div>
         </div>
-        <div className="flex flex-wrap items-end gap-2">
-          {(["1m", "3m", "6m", "12m"] as Preset[]).map((p) => (
-            <PresetBtn key={p} label={p.toUpperCase()} active={preset === p} onClick={() => setPreset(p)} />
-          ))}
-          <button type="button" onClick={load} disabled={loading}
-            className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}>
-            <span className="inline-flex items-center gap-2">
-              <RefreshCcw className="h-4 w-4" />
-              {loading ? "Refreshing…" : "Refresh"}
-            </span>
+        <div className="flex items-center gap-2">
+          <RangeDropdown preset={preset} onPreset={setPreset} />
+          <button
+            type="button"
+            onClick={load}
+            disabled={loading}
+            title="Refresh"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border hover:opacity-80 disabled:opacity-50 transition-opacity"
+            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+          >
+            <RefreshCcw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} style={{ color: "rgb(var(--muted))" }} />
           </button>
         </div>
       </div>
@@ -221,12 +222,3 @@ function KpiCard({ title, value, small }: { title: string; value: string; small?
   );
 }
 
-function PresetBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button type="button" onClick={onClick}
-      className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
-      style={{ borderColor: "rgb(var(--border))", background: active ? "rgb(var(--card))" : "rgba(var(--bg), 0.25)", fontWeight: active ? 700 : 600 }}>
-      {label}
-    </button>
-  );
-}
