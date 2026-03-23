@@ -1,6 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import Script from "next/script";
 import { AuthProvider } from "../components/AuthProvider";
 import ThemeProvider from "../components/ThemeProvider";
 import { Toaster } from "../components/ui/sonner";
@@ -66,6 +67,13 @@ export default async function RootLayout({
           }}
         />
       </head>
+
+      {process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? (
+        <Script
+          src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`}
+          strategy="afterInteractive"
+        />
+      ) : null}
 
       <body className="min-h-screen bg-gradient-to-b from-background via-background to-muted/20 text-foreground antialiased">
         <AuthProvider>

@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import AuthTextField from "../../../components/forms/AuthTextField";
+import AddressAutocomplete from "../../../components/AddressAutocomplete";
 import PasswordRequirements from "../../../components/auth/PasswordRequirements";
 import { signupSchema, type SignupValues } from "../../../lib/validators/auth";
 import { signup, ApiError, me } from "../../../lib/api/auth";
@@ -33,6 +34,7 @@ export default function SignupPage() {
     register,
     handleSubmit,
     watch,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<SignupValues>({
     resolver: zodResolver(signupSchema),
@@ -153,11 +155,24 @@ export default function SignupPage() {
             </select>
           </div>
 
-          <AuthTextField
-            label="Address (optional)"
-            placeholder="123 Main St, Benicia, CA"
-            error={errors.address?.message}
-            {...register("address")}
+          <Controller
+            name="address"
+            control={control}
+            render={({ field }) => (
+              <AddressAutocomplete
+                label="Address (optional)"
+                placeholder="123 Main St, Benicia, CA"
+                value={field.value ?? ""}
+                onChange={field.onChange}
+                error={errors.address?.message}
+                className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
+                style={{
+                  borderColor: errors.address ? "rgb(239 68 68)" : "rgb(var(--border))",
+                  background: "rgb(var(--card))",
+                  color: "rgb(var(--fg))",
+                }}
+              />
+            )}
           />
         </div>
 

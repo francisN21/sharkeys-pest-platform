@@ -24,6 +24,7 @@ import {
 import { createGuestBooking, submitPublicSurvey } from "../../lib/api/publicBookings";
 import BookingSurveyModal from "../../components/BookingSurveyModal";
 import type { SurveyCode } from "../../lib/api/survey";
+import AddressAutocomplete from "../../components/AddressAutocomplete";
 
 // --- Types ---
 
@@ -1056,9 +1057,9 @@ export default function PublicBookingPage({
                     >
                       <div className="space-y-4">
                         <Field label="Service address *">
-                          <input
+                          <AddressAutocomplete
                             value={serviceAddress}
-                            onChange={(e) => setServiceAddress(e.target.value)}
+                            onChange={setServiceAddress}
                             placeholder="123 Main St, San Jose, CA 95101"
                             className={INPUT_CLS}
                             style={{

@@ -17,6 +17,7 @@ import { createBooking, getBookingAvailability, type AvailabilityBooking } from 
 import { me, type MeResponse } from "../../lib/api/auth";
 import BookingSurveyModal from "../../components/BookingSurveyModal";
 import { surveyNeeded, submitSurvey, type SurveyCode } from "../../lib/api/survey";
+import AddressAutocomplete from "../../components/AddressAutocomplete";
 
 // --- Helpers ---
 
@@ -885,7 +886,7 @@ export default function BookPage() {
                     </label>
                   </div>
                   {useDifferentAddress ? (
-                    <input
+                    <AddressAutocomplete
                       className={cn(INPUT_CLS, "mt-3")}
                       style={{
                         borderColor: "rgb(var(--border))",
@@ -893,7 +894,7 @@ export default function BookPage() {
                       }}
                       placeholder="Enter service address"
                       value={serviceAddress}
-                      onChange={(e) => setServiceAddress(e.target.value)}
+                      onChange={setServiceAddress}
                     />
                   ) : null}
                 </SectionCard>
