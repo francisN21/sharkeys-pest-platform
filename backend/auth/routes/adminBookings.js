@@ -2,6 +2,7 @@ const express = require("express");
 const { z } = require("zod");
 const { pool } = require("../src/db");
 const { requireAuth } = require("../middleware/requireAuth");
+const { config } = require("../src/config");
 const {
   broadcastToRoles,
   broadcastToUser,
@@ -11,6 +12,7 @@ const { createNotifications } = require("../src/notifications");
 const {
   sendBookingCreatedCustomerEmail,
   sendBookingAssignedCustomerEmail,
+  sendLeadBookingInviteEmail,
 } = require("../src/email/mailer");
 
 const router = express.Router();
@@ -46,6 +48,15 @@ async function addEvent(client, bookingId, actorUserId, eventType, metadata = {}
      VALUES ($1, $2, $3, $4::jsonb)`,
     [bookingId, actorUserId || null, eventType, JSON.stringify(metadata)]
   );
+}
+
+function buildSignupUrl(email) {
+  const baseUrl = String(config.APP_BASE_URL || "").trim();
+  if (!baseUrl) return null;
+  const signupPath = String(process.env.PUBLIC_BOOKING_SIGNUP_PATH || "/signup").trim();
+  const url = new URL(signupPath, baseUrl);
+  if (email) url.searchParams.set("email", email);
+  return url.toString();
 }
 
 function isSundayFromIso(iso) {
@@ -150,6 +161,7 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
     let emailTo = null;
     let firstNameForEmail = null;
     let customerName = null;
+    let isNewLead = false;
 
     if (payload.customerPublicId) {
       const u = await client.query(
@@ -189,7 +201,7 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
           account_type = COALESCE(EXCLUDED.account_type, leads.account_type),
           address    = COALESCE(EXCLUDED.address, leads.address),
           updated_at = now()
-        RETURNING id, address, email, first_name, last_name
+        RETURNING id, address, email, first_name, last_name, (xmax = 0) AS is_new_lead
         `,
         [
           lead.email,
@@ -201,14 +213,16 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
         ]
       );
 
-      leadId = up.rows[0].id;
-      finalAddress = String(payload.address || "").trim() || String(up.rows[0].address || "").trim();
-      emailTo = up.rows[0].email ?? payload.lead.email ?? null;
-      firstNameForEmail = up.rows[0].first_name ?? payload.lead.first_name ?? null;
+      const leadResult = up.rows[0];
+      leadId = leadResult.id;
+      finalAddress = String(payload.address || "").trim() || String(leadResult.address || "").trim();
+      emailTo = leadResult.email ?? payload.lead.email ?? null;
+      firstNameForEmail = leadResult.first_name ?? payload.lead.first_name ?? null;
       customerName = [
-        up.rows[0].first_name ?? payload.lead.first_name ?? null,
-        up.rows[0].last_name ?? payload.lead.last_name ?? null,
+        leadResult.first_name ?? payload.lead.first_name ?? null,
+        leadResult.last_name ?? payload.lead.last_name ?? null,
       ].filter(Boolean).join(" ").trim() || null;
+      isNewLead = !!leadResult.is_new_lead;
 
       if (!finalAddress || finalAddress.length < 5) {
         await client.query("ROLLBACK");
@@ -272,7 +286,7 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
       });
     }
 
-    if (emailTo) {
+    if (emailTo && !isNewLead) {
       try {
         await sendBookingCreatedCustomerEmail({
           to: emailTo,
@@ -286,6 +300,24 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
         });
       } catch (emailErr) {
         logger.error({ err: emailErr?.message || emailErr }, "Admin-created booking succeeded but customer email failed");
+      }
+    }
+
+    if (isNewLead && emailTo) {
+      try {
+        const signupUrl = buildSignupUrl(emailTo);
+        await sendLeadBookingInviteEmail({
+          to: emailTo,
+          firstName: firstNameForEmail,
+          signupUrl,
+          bookingPublicId: booking.public_id,
+          serviceTitle,
+          startsAt: booking.starts_at,
+          endsAt: booking.ends_at,
+          address: booking.address,
+        });
+      } catch (emailErr) {
+        logger.error({ err: emailErr?.message || emailErr }, "Admin-created booking succeeded but lead invite email failed");
       }
     }
 

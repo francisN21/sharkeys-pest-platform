@@ -1,4 +1,4 @@
-import { jsonFetch } from "./auth";
+import { jsonFetch } from "./http";
 
 export type EmployeeInvite = {
   invited_role?: "superadmin" | "admin" | "technician" | string | null;
@@ -51,7 +51,11 @@ export function completeEmployeeSetup(payload: {
   last_name?: string;
   phone?: string;
 }) {
-  return jsonFetch<{ ok: true }>("/employees/complete", {
+  return jsonFetch<{
+    ok: true;
+    user: { public_id: string; email: string; user_role: string };
+    session: { expiresAt: string };
+  }>("/employees/complete", {
     method: "POST",
     body: JSON.stringify(payload),
   });

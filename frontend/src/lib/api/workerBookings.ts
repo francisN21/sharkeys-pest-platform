@@ -1,5 +1,5 @@
 // frontend/src/lib/api/workerBookings.ts
-import { jsonFetch } from "../api/bookings";
+import { jsonFetch } from "./http";
 
 export type WorkerBookingRow = {
   public_id: string;

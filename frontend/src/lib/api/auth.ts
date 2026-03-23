@@ -25,12 +25,24 @@ export class ApiError extends Error {
   }
 }
 
+function getCsrfToken(): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 export async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const url = resolveUrl(path);
+  const method = (init?.method ?? "GET").toUpperCase();
+  const csrfToken = method !== "GET" ? getCsrfToken() : null;
 
   const res = await fetch(url, {
     ...init,
-    headers: { ...(init?.headers || {}), "Content-Type": "application/json" },
+    headers: {
+      ...(init?.headers || {}),
+      "Content-Type": "application/json",
+      ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+    },
     credentials: "include",
   });
 

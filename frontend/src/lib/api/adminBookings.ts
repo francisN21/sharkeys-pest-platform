@@ -1,6 +1,6 @@
 // frontend/src/lib/api/adminBookings.ts
 
-import { jsonFetch } from "../api/bookings";
+import { jsonFetch } from "./http";
 
 export type AdminBookingRow = {
   public_id: string;

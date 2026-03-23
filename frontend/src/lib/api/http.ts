@@ -5,9 +5,20 @@ export type ApiErrorShape = {
   error?: string;
 };
 
+export class ApiError extends Error {
+  status: number;
+  payload?: unknown;
+  constructor(message: string, status: number, payload?: unknown) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.payload = payload;
+  }
+}
+
 const API_BASE = process.env.NEXT_PUBLIC_AUTH_API_BASE;
 
-function resolveUrl(path: string) {
+export function resolveUrl(path: string) {
   if (!API_BASE && !path.startsWith("http")) {
     throw new Error(
       "Missing NEXT_PUBLIC_AUTH_API_BASE. Set it in .env.local (e.g. http://localhost:4000)."
@@ -52,7 +63,7 @@ export async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T>
     const msg =
       (isApiErrorShape(raw) && (raw.message || raw.error)) ||
       `Request failed (${res.status})`;
-    throw new Error(msg);
+    throw new ApiError(msg, res.status, raw);
   }
 
   return raw as T;

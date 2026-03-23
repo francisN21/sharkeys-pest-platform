@@ -1,32 +1,5 @@
 // frontend/src/lib/api/publicBookings.ts
-type ApiErrorShape = { message?: string; error?: string; ok?: boolean };
-
-const API_BASE = process.env.NEXT_PUBLIC_AUTH_API_BASE;
-
-function resolveUrl(path: string) {
-  if (!API_BASE && !path.startsWith("http")) {
-    throw new Error("Missing NEXT_PUBLIC_AUTH_API_BASE. Set it in .env.local.");
-  }
-  return path.startsWith("http") ? path : `${API_BASE}${path}`;
-}
-
-async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const url = resolveUrl(path);
-
-  const res = await fetch(url, {
-    ...init,
-    headers: { ...(init?.headers || {}), "Content-Type": "application/json" },
-    credentials: "include",
-  });
-
-  const data = (await res.json().catch(() => ({}))) as T & ApiErrorShape;
-
-  if (!res.ok) {
-    throw new Error(data?.message || data?.error || `Request failed (${res.status})`);
-  }
-
-  return data as T;
-}
+import { jsonFetch } from "./http";
 
 export type CreateGuestBookingInput = {
   servicePublicId: string;

@@ -1,11 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import {
-  ArrowLeft,
   CheckCircle2,
   ShieldAlert,
   Eye,
@@ -24,6 +22,7 @@ type EmployeeSetupValues = {
 };
 
 export default function EmployeeSetupPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token")?.trim() || "";
   const hasToken = token.length >= 20;
@@ -69,12 +68,24 @@ export default function EmployeeSetupPage() {
     }
 
     try {
-      await completeEmployeeSetup({
+      const result = await completeEmployeeSetup({
         token,
         password: values.password,
       });
 
       setSetupSuccess(true);
+
+      const role = result.user?.user_role;
+      const dest =
+        role === "superuser" || role === "admin"
+          ? "/account/admin"
+          : role === "worker"
+          ? "/account/technician"
+          : "/account";
+
+      setTimeout(() => {
+        router.push(dest);
+      }, 1200);
     } catch (e: unknown) {
       if (e instanceof Error) setServerError(e.message);
       else setServerError("Unable to complete employee setup");
@@ -125,16 +136,8 @@ export default function EmployeeSetupPage() {
               <div className="space-y-2">
                 <p className="font-medium">Employee account ready</p>
                 <p style={{ color: "rgb(var(--muted))" }}>
-                  Your password has been created successfully. You can now sign
-                  in to your employee account.
+                  Your password has been created successfully. Signing you in…
                 </p>
-                <Link
-                  href="/login"
-                  className="font-semibold hover:underline"
-                  style={{ color: "rgb(var(--fg))" }}
-                >
-                  Go to sign in
-                </Link>
               </div>
             </div>
           </div>

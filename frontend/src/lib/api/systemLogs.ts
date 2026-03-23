@@ -1,27 +1,5 @@
 // lib/api/systemLogs.ts
-type ApiErrorShape = { message?: string; error?: string; ok?: boolean };
-
-const API_BASE = process.env.NEXT_PUBLIC_AUTH_API_BASE;
-
-function resolveUrl(path: string) {
-  if (!API_BASE && !path.startsWith("http")) {
-    throw new Error("Missing NEXT_PUBLIC_AUTH_API_BASE.");
-  }
-  return path.startsWith("http") ? path : `${API_BASE}${path}`;
-}
-
-async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(resolveUrl(path), {
-    ...init,
-    headers: { ...(init?.headers ?? {}), "Content-Type": "application/json" },
-    credentials: "include",
-  });
-  const data = (await res.json().catch(() => ({}))) as T & ApiErrorShape;
-  if (!res.ok) {
-    throw new Error(data?.message ?? data?.error ?? `Request failed (${res.status})`);
-  }
-  return data as T;
-}
+import { jsonFetch } from "./http";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

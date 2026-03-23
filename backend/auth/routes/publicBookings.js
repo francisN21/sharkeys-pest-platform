@@ -6,6 +6,7 @@ const { broadcastToRoles } = require("../src/realtime");
 const { createNotifications } = require("../src/notifications");
 const {
   sendBookingCreatedCustomerEmail,
+  sendBookingCreatedOfficeEmail,
   sendLeadBookingInviteEmail,
 } = require("../src/email/mailer");
 
@@ -448,7 +449,9 @@ if (normalizedEmail) {
       source: "public",
     });
 
-    if (bookingContact?.email) {
+    // Only send booking confirmation email to registered users.
+    // Leads receive the invite email below which already includes booking details.
+    if (bookingOwnerKind === "registered" && bookingContact?.email) {
       await sendBookingCreatedCustomerEmail({
         to: bookingContact.email,
         firstName: bookingContact.first_name,
@@ -461,6 +464,19 @@ if (normalizedEmail) {
         notes: booking.notes,
       });
     }
+
+    await sendBookingCreatedOfficeEmail({
+      customerName: bookingContact?.first_name || leadRow?.first_name || "Guest",
+      customerEmail: bookingContact?.email || leadRow?.email || null,
+      customerPhone: bookingContact?.phone || leadRow?.phone || null,
+      bookingPublicId: booking.public_id,
+      serviceTitle,
+      source: "public",
+      startsAt: booking.starts_at,
+      endsAt: booking.ends_at,
+      address: booking.address,
+      notes: booking.notes,
+    });
 
     // Lead-only invite email for account creation.
     if (leadRow?.email) {

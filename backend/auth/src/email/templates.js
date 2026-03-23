@@ -10,7 +10,8 @@ function escapeHtml(value) {
 function formatDateTime(value) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return String(value || "");
-  return d.toLocaleString(undefined, {
+  return d.toLocaleString("en-US", {
+    timeZone: "America/Los_Angeles",
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -26,7 +27,7 @@ function formatMoney(cents) {
 }
 
 const BRAND = {
-  logoUrl: "http://sharkyspestcontrolbayarea/main-logo.jpg",
+  logoUrl: "https://sharkyspestcontrolbayarea.com/main-logo.jpg",
   logoAlt: "Sharky's Pest Control",
   logoWidth: "160",
   companyName: "Sharky's Pest Control",

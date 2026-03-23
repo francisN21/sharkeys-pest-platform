@@ -159,16 +159,6 @@ export default function LoginClient() {
       </div>
 
       <div className="text-center text-sm" style={{ color: "rgb(var(--muted))" }}>
-        Forgot Password?{" "}
-        <Link
-          href="/reset-password"
-          className="font-semibold hover:underline"
-          style={{ color: "rgb(var(--fg))" }}
-        >
-          Reset Password
-        </Link>
-      </div>
-      <div className="text-center text-sm" style={{ color: "rgb(var(--muted))" }}>
         Don&apos;t have an account?{" "}
         <Link
           href="/signup"

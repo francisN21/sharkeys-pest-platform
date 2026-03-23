@@ -7,6 +7,11 @@ const { pool } = require("../src/db");
 const { requireAuth } = require("../middleware/requireAuth");
 const { config } = require("../src/config");
 const { sendEmployeeInviteEmail } = require("../src/email/mailer");
+const {
+  getCookieOptions,
+  createSession,
+  setCsrfCookie,
+} = require("../src/auth/session");
 
 const router = express.Router();
 
@@ -654,6 +659,15 @@ router.post("/complete", async (req, res, next) => {
 
     await client.query("COMMIT");
 
+    const { sessionId, expiresAt } = await createSession(user.id);
+
+    const cookieName = process.env.SESSION_COOKIE_NAME || "sid";
+    res.cookie(cookieName, sessionId, {
+      ...getCookieOptions(),
+      expires: new Date(expiresAt),
+    });
+    setCsrfCookie(res);
+
     return res.json({
       ok: true,
       user: {
@@ -661,6 +675,7 @@ router.post("/complete", async (req, res, next) => {
         email: user.email,
         user_role: displayRole(invite.invited_role),
       },
+      session: { expiresAt },
     });
   } catch (err) {
     try {

@@ -1,4 +1,4 @@
-import { jsonFetch } from "../api/bookings";
+import { jsonFetch } from "./http";
 
 export type AdminCustomerKind = "registered" | "lead";
 export type CrmTag = "vip" | "regular" | "good" | "bad" | null;
