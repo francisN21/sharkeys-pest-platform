@@ -6,7 +6,7 @@ export function middleware(request: NextRequest) {
   // This allows us to remove 'unsafe-inline' from script-src.
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_AUTH_API_BASE ?? "";
   const wsUrl = process.env.NEXT_PUBLIC_WS_URL ?? "";
 
   const csp = [
