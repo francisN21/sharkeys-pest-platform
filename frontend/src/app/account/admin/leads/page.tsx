@@ -12,13 +12,13 @@ import {
   ChevronRight,
   Clock,
   MapPin,
-  RefreshCw,
   RotateCcw,
   StickyNote,
   User,
   UserPlus,
   Wrench,
 } from "lucide-react";
+import AddressAutocomplete from "../../../../components/AddressAutocomplete";
 import { getServices, type Service } from "../../../../lib/api/services";
 import { adminCreateBooking, getBookingAvailability, type AvailabilityBooking } from "../../../../lib/api/adminBookings";
 import { me, type MeResponse } from "../../../../lib/api/auth";
@@ -109,7 +109,6 @@ function addMinutesIso(iso: string, minutes: number) {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type AccountType = "" | "residential" | "business";
-type RecurrenceFreq = "" | "biweekly" | "monthly" | "quarterly";
 
 type MeUserWithRoles = NonNullable<MeResponse["user"]> & {
   roles?: string[] | null;
@@ -216,12 +215,6 @@ export default function AdminLeadsPage() {
   const [serviceAddress, setServiceAddress] = useState("");
 
   const [notes, setNotes] = useState("");
-
-  // Recurrence
-  const [recurringEnabled, setRecurringEnabled] = useState(false);
-  const [recurringFreq, setRecurringFreq] = useState<RecurrenceFreq>("");
-  const [recurringCount, setRecurringCount] = useState<number>(1);
-  const [recurringSameTime, setRecurringSameTime] = useState(true);
 
   // Target selection: existing vs new lead
   const [targetMode, setTargetMode] = useState<BookingTargetMode>("existing");
@@ -450,23 +443,6 @@ export default function AdminLeadsPage() {
     return false;
   }
 
-  function buildRecurringNote() {
-    if (!recurringEnabled) return "";
-    const freqLabel =
-      recurringFreq === "biweekly"
-        ? "Every 2 weeks"
-        : recurringFreq === "monthly"
-        ? "Monthly"
-        : recurringFreq === "quarterly"
-        ? "Every 3 months"
-        : "Recurring";
-
-    const countLabel = recurringCount > 0 ? `${recurringCount} time(s)` : "unspecified times";
-    const sameLabel = recurringSameTime ? "same day/time" : "time may vary";
-
-    return `\n\n[Recurring Request]\n- Frequency: ${freqLabel}\n- Repeat: ${countLabel}\n- Preference: ${sameLabel}\n`;
-  }
-
   // ─── Customer search ───────────────────────────────────────────────────────
 
   const lastSearchId = useRef(0);
@@ -527,11 +503,6 @@ export default function AdminLeadsPage() {
 
     setNotes("");
 
-    setRecurringEnabled(false);
-    setRecurringFreq("");
-    setRecurringCount(1);
-    setRecurringSameTime(true);
-
     setSelectedStartHour(null);
     setPendingStartHour(null);
   }
@@ -576,7 +547,7 @@ export default function AdminLeadsPage() {
       if (leadAddress.trim().length < 5) return setError("Enter a valid address (at least 5 characters).");
     }
 
-    const finalNotes = (notes.trim() ? notes.trim() : "") + (recurringEnabled ? buildRecurringNote() : "");
+    const finalNotes = notes.trim();
 
     try {
       setLoadingSubmit(true);
@@ -1013,9 +984,9 @@ export default function AdminLeadsPage() {
 
                     <div className="sm:col-span-2">
                       <Field label="Address *">
-                        <input
+                        <AddressAutocomplete
                           value={leadAddress}
-                          onChange={(e) => setLeadAddress(e.target.value)}
+                          onChange={setLeadAddress}
                           className={INPUT_CLS}
                           placeholder="Street, City, State"
                         />
@@ -1298,11 +1269,11 @@ export default function AdminLeadsPage() {
                           transition={{ duration: 0.18 }}
                           className="overflow-hidden"
                         >
-                          <input
+                          <AddressAutocomplete
                             className={INPUT_CLS}
                             placeholder="Enter service address"
                             value={serviceAddress}
-                            onChange={(e) => setServiceAddress(e.target.value)}
+                            onChange={setServiceAddress}
                           />
                         </motion.div>
                       ) : null}
@@ -1312,95 +1283,6 @@ export default function AdminLeadsPage() {
               </motion.div>
             ) : null}
           </AnimatePresence>
-
-          {/* ── Recurring ── */}
-          <SectionCard
-            icon={<RefreshCw className="h-4 w-4" />}
-            title="Recurring Service"
-            subtitle="Optional — note a repeat schedule preference"
-            accentClass="bg-teal-500/10 text-teal-400"
-          >
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-[rgb(var(--fg))]">
-              <input
-                type="checkbox"
-                checked={recurringEnabled}
-                onChange={(e) => {
-                  const on = e.target.checked;
-                  setRecurringEnabled(on);
-                  if (!on) {
-                    setRecurringFreq("");
-                    setRecurringCount(1);
-                    setRecurringSameTime(true);
-                  }
-                }}
-                className="h-4 w-4 rounded"
-              />
-              I want this service to repeat
-            </label>
-
-            <AnimatePresence>
-              {recurringEnabled ? (
-                <motion.div
-                  initial={shouldReduceMotion ? undefined : { opacity: 0, height: 0 }}
-                  animate={shouldReduceMotion ? undefined : { opacity: 1, height: "auto" }}
-                  exit={shouldReduceMotion ? undefined : { opacity: 0, height: 0 }}
-                  transition={{ duration: 0.18 }}
-                  className="overflow-hidden"
-                >
-                  <div className="mt-4 space-y-4">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <Field label="Frequency">
-                        <select
-                          value={recurringFreq}
-                          onChange={(e) => setRecurringFreq(e.target.value as RecurrenceFreq)}
-                          className={SELECT_CLS}
-                        >
-                          <option value="">Select…</option>
-                          <option value="biweekly">Every 2 weeks</option>
-                          <option value="monthly">Monthly</option>
-                          <option value="quarterly">Every 3 months</option>
-                        </select>
-                      </Field>
-
-                      <Field label="Repeat how many more times?">
-                        <input
-                          type="number"
-                          min={1}
-                          max={24}
-                          value={recurringCount}
-                          onChange={(e) => setRecurringCount(Math.max(1, Math.min(24, Number(e.target.value || 1))))}
-                          className={INPUT_CLS}
-                        />
-                        <p className="text-xs text-[rgb(var(--muted))]">
-                          3 = 4 total visits including this one
-                        </p>
-                      </Field>
-                    </div>
-
-                    <label className="flex cursor-pointer items-center gap-2 text-sm text-[rgb(var(--fg))]">
-                      <input
-                        type="checkbox"
-                        checked={recurringSameTime}
-                        onChange={(e) => setRecurringSameTime(e.target.checked)}
-                        className="h-4 w-4 rounded"
-                      />
-                      Prefer the same day and time each visit
-                    </label>
-
-                    {!recurringSameTime ? (
-                      <p className="text-xs text-[rgb(var(--muted))]">
-                        We'll record your preference and coordinate alternative times after the first booking.
-                      </p>
-                    ) : null}
-
-                    <p className="text-xs text-[rgb(var(--muted))]">
-                      Recurrence is saved as a preference — no auto-generated bookings yet.
-                    </p>
-                  </div>
-                </motion.div>
-              ) : null}
-            </AnimatePresence>
-          </SectionCard>
 
           {/* ── Notes ── */}
           <SectionCard
