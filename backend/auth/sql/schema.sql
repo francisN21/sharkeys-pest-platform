@@ -966,6 +966,75 @@ CREATE INDEX IF NOT EXISTS idx_booking_survey_heard_from_time
 CREATE INDEX IF NOT EXISTS idx_booking_survey_submitted_at
   ON booking_survey_responses (submitted_at DESC);
 
+-- ============================================================
+-- LEAD SURVEY RESPONSES (unauthenticated / public booking guests)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS lead_survey_responses (
+  id BIGSERIAL PRIMARY KEY,
+  lead_id BIGINT NULL REFERENCES leads(id) ON DELETE SET NULL,
+  booking_id BIGINT NULL REFERENCES bookings(id) ON DELETE SET NULL,
+  heard_from TEXT NOT NULL,
+  referrer_name TEXT NULL,
+  other_text TEXT NULL,
+  submitted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (booking_id)
+);
+
+DO $$
+BEGIN
+  -- Add yelp to survey_sources
+  INSERT INTO survey_sources (code, label, sort_order)
+  VALUES ('yelp', 'Yelp', 35)
+  ON CONFLICT DO NOTHING;
+
+  -- Expand heard_from constraint on booking_survey_responses to include yelp
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'booking_survey_heard_from_chk'
+  ) THEN
+    ALTER TABLE booking_survey_responses DROP CONSTRAINT booking_survey_heard_from_chk;
+  END IF;
+  ALTER TABLE booking_survey_responses
+    ADD CONSTRAINT booking_survey_heard_from_chk
+    CHECK (heard_from IN ('facebook', 'instagram', 'google', 'linkedin', 'yelp', 'referral', 'other'));
+
+  -- Constraints for lead_survey_responses
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'lead_survey_heard_from_chk'
+  ) THEN
+    ALTER TABLE lead_survey_responses
+      ADD CONSTRAINT lead_survey_heard_from_chk
+      CHECK (heard_from IN ('facebook', 'instagram', 'google', 'linkedin', 'yelp', 'referral', 'other'));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'lead_survey_referrer_required_chk'
+  ) THEN
+    ALTER TABLE lead_survey_responses
+      ADD CONSTRAINT lead_survey_referrer_required_chk
+      CHECK (
+        (heard_from <> 'referral')
+        OR (referrer_name IS NOT NULL AND length(btrim(referrer_name)) > 0)
+      );
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'lead_survey_other_required_chk'
+  ) THEN
+    ALTER TABLE lead_survey_responses
+      ADD CONSTRAINT lead_survey_other_required_chk
+      CHECK (
+        (heard_from <> 'other')
+        OR (other_text IS NOT NULL AND length(btrim(other_text)) > 0)
+      );
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_lead_survey_heard_from
+  ON lead_survey_responses (heard_from);
+
+CREATE INDEX IF NOT EXISTS idx_lead_survey_submitted_at
+  ON lead_survey_responses (submitted_at DESC);
+
 COMMIT;
 
 

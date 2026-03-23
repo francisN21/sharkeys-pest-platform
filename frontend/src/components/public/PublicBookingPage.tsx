@@ -21,7 +21,9 @@ import {
   getBookingAvailability,
   type AvailabilityBooking,
 } from "../../lib/api/bookings";
-import { createGuestBooking } from "../../lib/api/publicBookings";
+import { createGuestBooking, submitPublicSurvey } from "../../lib/api/publicBookings";
+import BookingSurveyModal from "../../components/BookingSurveyModal";
+import type { SurveyCode } from "../../lib/api/survey";
 
 // --- Types ---
 
@@ -241,6 +243,13 @@ export default function PublicBookingPage({
   const [bookingComplete, setBookingComplete] = useState(false);
   const [servicePublicId, setServicePublicId] = useState("");
 
+  const [surveyOpen, setSurveyOpen] = useState(false);
+  const [surveySubmitting, setSurveySubmitting] = useState(false);
+  const [createdBookingPublicId, setCreatedBookingPublicId] = useState<string | null>(null);
+  const [surveyHeardFrom, setSurveyHeardFrom] = useState<SurveyCode | "">("");
+  const [surveyReferrerName, setSurveyReferrerName] = useState("");
+  const [surveyOtherText, setSurveyOtherText] = useState("");
+
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -440,7 +449,30 @@ export default function PublicBookingPage({
   function handleStartAnotherBooking() {
     setError(null);
     setBookingComplete(false);
+    setSurveyOpen(false);
+    setSurveyHeardFrom("");
+    setSurveyReferrerName("");
+    setSurveyOtherText("");
+    setCreatedBookingPublicId(null);
     resetForm();
+  }
+
+  async function onSubmitSurvey() {
+    if (!surveyHeardFrom || !createdBookingPublicId) return;
+    try {
+      setSurveySubmitting(true);
+      await submitPublicSurvey({
+        bookingPublicId: createdBookingPublicId,
+        heard_from: surveyHeardFrom,
+        referrer_name: surveyHeardFrom === "referral" ? surveyReferrerName.trim() : undefined,
+        other_text: surveyHeardFrom === "other" ? surveyOtherText.trim() : undefined,
+      });
+    } catch {
+      // Survey errors are non-critical — silently dismiss
+    } finally {
+      setSurveySubmitting(false);
+      setSurveyOpen(false);
+    }
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -467,7 +499,7 @@ export default function PublicBookingPage({
 
     try {
       setLoadingSubmit(true);
-      await createGuestBooking({
+      const result = await createGuestBooking({
         servicePublicId,
         startsAt: startsAtIso,
         endsAt: computedEndsAtIso,
@@ -481,11 +513,14 @@ export default function PublicBookingPage({
           address: serviceAddress.trim(),
         },
       });
+      const pid = result?.booking?.public_id ?? null;
+      setCreatedBookingPublicId(pid);
       resetForm();
       setBookingComplete(true);
       toast.success("Booking request submitted!", {
         description: "We'll review your request and be in touch shortly.",
       });
+      setSurveyOpen(true);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to create booking");
     } finally {
@@ -1138,6 +1173,20 @@ export default function PublicBookingPage({
           </div>
         </motion.section>
       </PageContainer>
+
+      <BookingSurveyModal
+        open={surveyOpen}
+        onClose={() => setSurveyOpen(false)}
+        onSkip={() => setSurveyOpen(false)}
+        heardFrom={surveyHeardFrom}
+        setHeardFrom={setSurveyHeardFrom}
+        referrerName={surveyReferrerName}
+        setReferrerName={setSurveyReferrerName}
+        otherText={surveyOtherText}
+        setOtherText={setSurveyOtherText}
+        submitting={surveySubmitting}
+        onSubmit={onSubmitSurvey}
+      />
     </main>
   );
 }

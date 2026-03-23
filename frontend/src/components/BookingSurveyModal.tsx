@@ -8,10 +8,11 @@ import type { SurveyCode } from "../lib/api/survey";
 // ─── Icons for each source ─────────────────────────────────────────────────────
 
 const SOURCE_OPTIONS: { value: SurveyCode; label: string; emoji: string }[] = [
-  { value: "linkedin", label: "LinkedIn", emoji: "💼" },
   { value: "google", label: "Google", emoji: "🔍" },
+  { value: "yelp", label: "Yelp", emoji: "⭐" },
   { value: "instagram", label: "Instagram", emoji: "📸" },
   { value: "facebook", label: "Facebook", emoji: "👥" },
+  { value: "linkedin", label: "LinkedIn", emoji: "💼" },
   { value: "referral", label: "Referral", emoji: "🤝" },
   { value: "other", label: "Other", emoji: "✨" },
 ];

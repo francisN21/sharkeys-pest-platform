@@ -36,6 +36,7 @@ const submitSchema = z.object({
     "google",
     "instagram",
     "facebook",
+    "yelp",
     "referral",
     "other",
   ]),

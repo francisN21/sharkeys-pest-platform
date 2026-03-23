@@ -564,4 +564,81 @@ if (normalizedEmail) {
   }
 });
 
+// ─── Public survey submission ─────────────────────────────────────────────────
+// POST /public/bookings/survey
+// No auth required. Links survey response to the booking + lead (or user).
+// One response per booking enforced at DB level (UNIQUE booking_id).
+
+const publicSurveySchema = z.object({
+  bookingPublicId: z.string().uuid(),
+  heard_from: z.enum([
+    "linkedin",
+    "google",
+    "instagram",
+    "facebook",
+    "yelp",
+    "referral",
+    "other",
+  ]),
+  referrer_name: z.string().trim().min(2).max(120).optional(),
+  other_text: z.string().trim().min(2).max(200).optional(),
+}).strict();
+
+router.post("/survey", async (req, res, next) => {
+  try {
+    const payload = publicSurveySchema.parse(req.body);
+
+    const heardFrom = payload.heard_from;
+    const referrerName = heardFrom === "referral" ? (payload.referrer_name || null) : null;
+    const otherText = heardFrom === "other" ? (payload.other_text || null) : null;
+
+    // Resolve booking → lead_id and customer_user_id
+    const bookingRes = await pool.query(
+      `SELECT id, lead_id, customer_user_id FROM bookings WHERE public_id = $1 LIMIT 1`,
+      [payload.bookingPublicId]
+    );
+
+    if (bookingRes.rowCount === 0) {
+      return res.status(404).json({ ok: false, message: "Booking not found" });
+    }
+
+    const booking = bookingRes.rows[0];
+
+    // If there is a registered user on this booking, store in booking_survey_responses
+    // (deduped by user_id — one survey ever per registered user).
+    if (booking.customer_user_id) {
+      const existing = await pool.query(
+        `SELECT 1 FROM booking_survey_responses WHERE user_id = $1 LIMIT 1`,
+        [booking.customer_user_id]
+      );
+      if (existing.rowCount === 0) {
+        await pool.query(
+          `INSERT INTO booking_survey_responses
+             (user_id, booking_id, heard_from, referrer_name, other_text, submitted_at)
+           VALUES ($1, $2, $3, $4, $5, now())
+           ON CONFLICT (user_id) DO NOTHING`,
+          [booking.customer_user_id, booking.id, heardFrom, referrerName, otherText]
+        );
+      }
+      return res.status(201).json({ ok: true });
+    }
+
+    // Lead path — store in lead_survey_responses (deduped by booking_id).
+    await pool.query(
+      `INSERT INTO lead_survey_responses
+         (lead_id, booking_id, heard_from, referrer_name, other_text, submitted_at)
+       VALUES ($1, $2, $3, $4, $5, now())
+       ON CONFLICT (booking_id) DO NOTHING`,
+      [booking.lead_id || null, booking.id, heardFrom, referrerName, otherText]
+    );
+
+    return res.status(201).json({ ok: true });
+  } catch (e) {
+    if (e?.name === "ZodError") {
+      return res.status(400).json({ ok: false, message: "Invalid survey data" });
+    }
+    next(e);
+  }
+});
+
 module.exports = router;

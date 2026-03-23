@@ -44,3 +44,17 @@ export async function createGuestBooking(input: CreateGuestBookingInput) {
     body: JSON.stringify(input),
   });
 }
+
+export type SubmitPublicSurveyInput = {
+  bookingPublicId: string;
+  heard_from: import("./survey").SurveyCode;
+  referrer_name?: string;
+  other_text?: string;
+};
+
+export function submitPublicSurvey(input: SubmitPublicSurveyInput) {
+  return jsonFetch<{ ok: boolean }>("/public/bookings/survey", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}

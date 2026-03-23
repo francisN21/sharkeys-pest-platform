@@ -6,6 +6,7 @@ export type SurveyCode =
   | "google"
   | "instagram"
   | "facebook"
+  | "yelp"
   | "referral"
   | "other";
 
