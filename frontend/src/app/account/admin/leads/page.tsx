@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { toast } from "sonner";
 import {
   Briefcase,
   CalendarDays,
@@ -628,6 +629,11 @@ export default function AdminLeadsPage() {
       const pid = created?.booking?.public_id ? ` (${created.booking.public_id})` : "";
       resetForm();
       setSuccessMsg(`Booking created!${pid}`);
+      toast.success("Booking created!", {
+        description: created?.booking?.public_id
+          ? `Booking ID: ${created.booking.public_id}`
+          : "The booking has been added to the schedule.",
+      });
 
       try {
         const tzOffsetMinutes = new Date().getTimezoneOffset();

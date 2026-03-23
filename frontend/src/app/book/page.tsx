@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CalendarDays,
+  CheckCircle2,
   Clock,
   FileText,
   MapPin,
 } from "lucide-react";
+import { toast } from "sonner";
 import Navbar from "../../components/Navbar";
 import { getServices, type Service } from "../../lib/api/services";
 import { createBooking, getBookingAvailability, type AvailabilityBooking } from "../../lib/api/bookings";
@@ -110,34 +112,51 @@ function formatSelectedHeader(dateYmd: string, startHour: number | null, blocks:
 
 // --- UI Components ---
 
-function SectionHeader({
+function SectionCard({
   icon,
   title,
   subtitle,
+  accentClass = "bg-sky-500/10 text-sky-400",
+  complete = false,
+  children,
 }: {
   icon: React.ReactNode;
   title: string;
   subtitle?: string;
+  accentClass?: string;
+  complete?: boolean;
+  children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-3 mb-4">
+    <div
+      className="overflow-hidden rounded-2xl border"
+      style={{
+        borderColor: "rgb(var(--border))",
+        background: "rgba(var(--bg), 0.02)",
+      }}
+    >
       <div
-        className="shrink-0 rounded-xl border p-2 shadow-sm"
-        style={{
-          borderColor: "rgb(var(--border))",
-          background: "rgb(var(--card))",
-        }}
+        className="flex items-center gap-3 border-b px-5 py-4"
+        style={{ borderColor: "rgb(var(--border))" }}
       >
-        {icon}
-      </div>
-      <div>
-        <div className="text-sm font-semibold">{title}</div>
-        {subtitle ? (
-          <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-            {subtitle}
-          </div>
+        <div
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${accentClass}`}
+        >
+          {icon}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-semibold">{title}</div>
+          {subtitle ? (
+            <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+              {subtitle}
+            </div>
+          ) : null}
+        </div>
+        {complete ? (
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
         ) : null}
       </div>
+      <div className="p-5">{children}</div>
     </div>
   );
 }
@@ -156,7 +175,6 @@ export default function BookPage() {
   const [loadingSubmit, setLoadingSubmit] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const [user, setUser] = useState<MeResponse["user"] | null>(null);
   const [servicePublicId, setServicePublicId] = useState("");
@@ -388,7 +406,6 @@ export default function BookPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSuccessMsg(null);
     setError(null);
 
     if (!servicePublicId) return setError("Please select a service.");
@@ -422,7 +439,9 @@ export default function BookPage() {
       });
       const bookingPid = created?.booking?.public_id ?? null;
       setCreatedBookingPublicId(bookingPid);
-      setSuccessMsg("Booking created!");
+      toast.success("Booking created!", {
+        description: "Your appointment has been scheduled successfully.",
+      });
       await openSurveyIfNeeded();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to create booking");
@@ -465,20 +484,6 @@ export default function BookPage() {
             ) : null}
           </AnimatePresence>
 
-          <AnimatePresence>
-            {successMsg ? (
-              <motion.div
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                className="rounded-xl border p-3 text-sm"
-                style={{ borderColor: "rgb(34 197 94)" }}
-              >
-                {successMsg}
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
-
           <div
             className="rounded-2xl border p-6 shadow-sm"
             style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
@@ -494,18 +499,13 @@ export default function BookPage() {
             ) : (
               <form className="space-y-6" onSubmit={onSubmit}>
                 {/* Service picker */}
-                <div
-                  className="rounded-2xl border p-5"
-                  style={{
-                    borderColor: "rgb(var(--border))",
-                    background: "rgba(var(--bg), 0.28)",
-                  }}
+                <SectionCard
+                  icon={<FileText className="h-5 w-5" />}
+                  title="Select a Service"
+                  subtitle="Choose the type of pest control service you need"
+                  accentClass="bg-sky-500/10 text-sky-400"
+                  complete={!!servicePublicId}
                 >
-                  <SectionHeader
-                    icon={<FileText className="h-4 w-4" />}
-                    title="Select a Service"
-                    subtitle="Choose the type of pest control service you need"
-                  />
 
                   {/* Mobile dropdown */}
                   <div className="sm:hidden">
@@ -593,21 +593,16 @@ export default function BookPage() {
                       );
                     })}
                   </div>
-                </div>
+                </SectionCard>
 
                 {/* Calendar + Time */}
-                <div
-                  className="rounded-2xl border p-5"
-                  style={{
-                    borderColor: "rgb(var(--border))",
-                    background: "rgba(var(--bg), 0.28)",
-                  }}
+                <SectionCard
+                  icon={<CalendarDays className="h-5 w-5" />}
+                  title="Pick a Date & Time"
+                  subtitle="Select an available slot for your service"
+                  accentClass="bg-orange-500/10 text-orange-400"
+                  complete={selectedStartHour !== null}
                 >
-                  <SectionHeader
-                    icon={<CalendarDays className="h-4 w-4" />}
-                    title="Pick a Date & Time"
-                    subtitle="Select an available slot for your service"
-                  />
                   <div className="grid gap-4 lg:grid-cols-3">
                     {/* Calendar */}
                     <div
@@ -853,21 +848,16 @@ export default function BookPage() {
                       </div>
                     </div>
                   </div>
-                </div>
+                </SectionCard>
 
                 {/* Address */}
-                <div
-                  className="rounded-2xl border p-5"
-                  style={{
-                    borderColor: "rgb(var(--border))",
-                    background: "rgba(var(--bg), 0.28)",
-                  }}
+                <SectionCard
+                  icon={<MapPin className="h-5 w-5" />}
+                  title="Service Address"
+                  subtitle="Where we're coming"
+                  accentClass="bg-emerald-500/10 text-emerald-400"
+                  complete={finalAddress.length >= 5}
                 >
-                  <SectionHeader
-                    icon={<MapPin className="h-4 w-4" />}
-                    title="Service Address"
-                    subtitle="Where we're coming"
-                  />
                   <div
                     className="rounded-xl border p-3 text-sm"
                     style={{
@@ -906,21 +896,16 @@ export default function BookPage() {
                       onChange={(e) => setServiceAddress(e.target.value)}
                     />
                   ) : null}
-                </div>
+                </SectionCard>
 
                 {/* Notes */}
-                <div
-                  className="rounded-2xl border p-5"
-                  style={{
-                    borderColor: "rgb(var(--border))",
-                    background: "rgba(var(--bg), 0.28)",
-                  }}
+                <SectionCard
+                  icon={<FileText className="h-5 w-5" />}
+                  title="Notes"
+                  subtitle="Optional details to help our technician"
+                  accentClass="bg-violet-500/10 text-violet-400"
+                  complete={notes.trim().length > 0}
                 >
-                  <SectionHeader
-                    icon={<FileText className="h-4 w-4" />}
-                    title="Notes"
-                    subtitle="Optional details to help our technician"
-                  />
                   <textarea
                     className={cn(INPUT_CLS, "min-h-[100px] resize-none")}
                     style={{
@@ -935,39 +920,93 @@ export default function BookPage() {
                   <div className="mt-1 text-xs text-right" style={{ color: "rgb(var(--muted))" }}>
                     {notes.length}/2000
                   </div>
-                </div>
+                </SectionCard>
+
+                {/* Booking summary strip */}
+                <AnimatePresence>
+                  {selectedStartHour !== null && selectedService ? (
+                    <motion.div
+                      key="summary"
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden rounded-2xl border"
+                      style={{
+                        borderColor: "rgba(34,197,94,0.3)",
+                        background: "rgba(34,197,94,0.05)",
+                      }}
+                    >
+                      <div
+                        className="flex items-center gap-2 border-b px-5 py-3"
+                        style={{ borderColor: "rgba(34,197,94,0.2)" }}
+                      >
+                        <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
+                        <span className="text-sm font-semibold text-green-500">Booking Summary</span>
+                      </div>
+                      <div className="flex flex-wrap gap-x-6 gap-y-3 px-5 py-4">
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: "rgb(var(--muted))" }}>Service</div>
+                          <div className="text-sm font-medium">{selectedService.title}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: "rgb(var(--muted))" }}>Date & Time</div>
+                          <div className="text-sm font-medium">{formatSelectedHeader(selectedDateYmd, selectedStartHour, neededBlocks)}</div>
+                        </div>
+                        {finalAddress ? (
+                          <div>
+                            <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: "rgb(var(--muted))" }}>Address</div>
+                            <div className="text-sm font-medium">{finalAddress}</div>
+                          </div>
+                        ) : null}
+                      </div>
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
 
                 {/* Actions */}
-                <div className="flex items-center justify-end gap-3">
-                  <button
-                    type="button"
-                    className="rounded-xl border px-4 py-2 text-sm font-semibold hover:opacity-90 transition"
-                    style={{ borderColor: "rgb(var(--border))", background: "transparent" }}
-                    onClick={() => router.push("/account")}
-                    disabled={loadingSubmit}
-                  >
-                    Cancel
-                  </button>
-                  <motion.button
-                    type="submit"
-                    disabled={loadingSubmit || selectedStartHour === null}
-                    whileHover={
-                      !loadingSubmit && selectedStartHour !== null ? { scale: 1.01, y: -1 } : {}
-                    }
-                    whileTap={
-                      !loadingSubmit && selectedStartHour !== null ? { scale: 0.99 } : {}
-                    }
-                    className="rounded-xl px-6 py-2.5 text-sm font-semibold shadow-sm transition disabled:opacity-60"
-                    style={{
-                      background: "rgb(var(--primary))",
-                      color: "rgb(var(--primary-fg))",
-                    }}
-                    title={
-                      selectedStartHour === null ? "Select and confirm a time first" : undefined
-                    }
-                  >
-                    {loadingSubmit ? "Booking…" : "Confirm Booking"}
-                  </motion.button>
+                <div className="flex flex-col items-end gap-2">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      className="rounded-xl border px-4 py-2 text-sm font-semibold hover:opacity-90 transition"
+                      style={{ borderColor: "rgb(var(--border))", background: "transparent" }}
+                      onClick={() => router.push("/account")}
+                      disabled={loadingSubmit}
+                    >
+                      Cancel
+                    </button>
+                    <motion.button
+                      type="submit"
+                      disabled={loadingSubmit || selectedStartHour === null}
+                      whileHover={
+                        !loadingSubmit && selectedStartHour !== null ? { scale: 1.01, y: -1 } : {}
+                      }
+                      whileTap={
+                        !loadingSubmit && selectedStartHour !== null ? { scale: 0.99 } : {}
+                      }
+                      className="rounded-xl px-6 py-2.5 text-sm font-semibold shadow-sm transition disabled:opacity-60"
+                      style={{
+                        background: "rgb(var(--primary))",
+                        color: "rgb(var(--primary-fg))",
+                      }}
+                    >
+                      {loadingSubmit ? "Booking…" : "Confirm Booking"}
+                    </motion.button>
+                  </div>
+                  <AnimatePresence>
+                    {selectedStartHour === null ? (
+                      <motion.p
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="text-xs"
+                        style={{ color: "rgb(var(--muted))" }}
+                      >
+                        Select and confirm a date &amp; time to continue
+                      </motion.p>
+                    ) : null}
+                  </AnimatePresence>
                 </div>
               </form>
             )}

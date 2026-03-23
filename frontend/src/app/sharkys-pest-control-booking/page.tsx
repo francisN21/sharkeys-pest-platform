@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
 import {
   CalendarDays,
   CheckCircle2,
@@ -157,34 +158,51 @@ function PageContainer({
   );
 }
 
-function SectionHeader({
+function SectionCard({
   icon,
   title,
   subtitle,
+  accentClass = "bg-sky-500/10 text-sky-400",
+  complete = false,
+  children,
 }: {
   icon: React.ReactNode;
   title: string;
   subtitle?: string;
+  accentClass?: string;
+  complete?: boolean;
+  children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-3 mb-4">
+    <div
+      className="overflow-hidden rounded-2xl border"
+      style={{
+        borderColor: "rgb(var(--border))",
+        background: "rgba(var(--bg), 0.02)",
+      }}
+    >
       <div
-        className="shrink-0 rounded-xl border p-2 shadow-sm"
-        style={{
-          borderColor: "rgb(var(--border))",
-          background: "rgb(var(--card))",
-        }}
+        className="flex items-center gap-3 border-b px-5 py-4"
+        style={{ borderColor: "rgb(var(--border))" }}
       >
-        {icon}
-      </div>
-      <div>
-        <div className="text-sm font-semibold">{title}</div>
-        {subtitle ? (
-          <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-            {subtitle}
-          </div>
+        <div
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${accentClass}`}
+        >
+          {icon}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-semibold">{title}</div>
+          {subtitle ? (
+            <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+              {subtitle}
+            </div>
+          ) : null}
+        </div>
+        {complete ? (
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
         ) : null}
       </div>
+      <div className="p-5">{children}</div>
     </div>
   );
 }
@@ -436,6 +454,9 @@ export default function NewCustomerBookingPage() {
       });
       resetForm();
       setBookingComplete(true);
+      toast.success("Booking request submitted!", {
+        description: "We'll review your request and be in touch shortly.",
+      });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to create booking");
     } finally {
@@ -514,12 +535,45 @@ export default function NewCustomerBookingPage() {
                     <div className="rounded-full p-4" style={{ background: "rgba(34, 197, 94, 0.10)" }}>
                       <CheckCircle2 className="h-10 w-10" style={{ color: "rgb(34 197 94)" }} />
                     </div>
-                    <div className="max-w-xl space-y-2">
-                      <h2 className="text-2xl font-semibold">Booking request submitted</h2>
+                    <div className="max-w-md space-y-2">
+                      <h2 className="text-2xl font-semibold">Booking request submitted!</h2>
                       <p className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                        Your request has been received. Check your email for confirmation and next
-                        steps to create your account.
+                        Your request has been received. Here&apos;s what happens next:
                       </p>
+                    </div>
+                    <div className="w-full max-w-md space-y-4 text-left">
+                      {[
+                        {
+                          n: "1",
+                          title: "We review your request",
+                          desc: "Our team reviews your booking details within 1 business day.",
+                        },
+                        {
+                          n: "2",
+                          title: "Account setup email",
+                          desc: "You'll receive an email to complete your customer account.",
+                        },
+                        {
+                          n: "3",
+                          title: "Service confirmation",
+                          desc: "Once confirmed, you'll get a reminder before your appointment.",
+                        },
+                      ].map((s) => (
+                        <div key={s.n} className="flex items-start gap-3">
+                          <div
+                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-bold"
+                            style={{ borderColor: "rgb(var(--border))" }}
+                          >
+                            {s.n}
+                          </div>
+                          <div>
+                            <div className="text-sm font-semibold">{s.title}</div>
+                            <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                              {s.desc}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                     <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
                       <button
@@ -553,18 +607,13 @@ export default function NewCustomerBookingPage() {
                     transition={{ duration: 0.2 }}
                   >
                     {/* Contact info */}
-                    <div
-                      className="rounded-2xl border p-5"
-                      style={{
-                        borderColor: "rgb(var(--border))",
-                        background: "rgba(var(--bg), 0.28)",
-                      }}
+                    <SectionCard
+                      icon={<User2 className="h-5 w-5" />}
+                      title="Contact Information"
+                      subtitle="Tell us who you are"
+                      accentClass="bg-violet-500/10 text-violet-400"
+                      complete={!!(firstName.trim() && lastName.trim() && email.trim() && email.includes("@"))}
                     >
-                      <SectionHeader
-                        icon={<User2 className="h-4 w-4" />}
-                        title="Contact Information"
-                        subtitle="Tell us who you are"
-                      />
                       <div className="grid gap-3 sm:grid-cols-2">
                         <Field label="First name *">
                           <input
@@ -614,21 +663,16 @@ export default function NewCustomerBookingPage() {
                           />
                         </Field>
                       </div>
-                    </div>
+                    </SectionCard>
 
                     {/* Service selection */}
-                    <div
-                      className="rounded-2xl border p-5"
-                      style={{
-                        borderColor: "rgb(var(--border))",
-                        background: "rgba(var(--bg), 0.28)",
-                      }}
+                    <SectionCard
+                      icon={<FileText className="h-5 w-5" />}
+                      title="Select a Service"
+                      subtitle="Choose the type of pest control service you need"
+                      accentClass="bg-sky-500/10 text-sky-400"
+                      complete={!!servicePublicId}
                     >
-                      <SectionHeader
-                        icon={<FileText className="h-4 w-4" />}
-                        title="Select a Service"
-                        subtitle="Choose the type of pest control service you need"
-                      />
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
                         {services.map((s) => {
                           const active = s.public_id === servicePublicId;
@@ -690,21 +734,16 @@ export default function NewCustomerBookingPage() {
                           );
                         })}
                       </div>
-                    </div>
+                    </SectionCard>
 
                     {/* Calendar + Time */}
-                    <div
-                      className="rounded-2xl border p-5"
-                      style={{
-                        borderColor: "rgb(var(--border))",
-                        background: "rgba(var(--bg), 0.28)",
-                      }}
+                    <SectionCard
+                      icon={<CalendarDays className="h-5 w-5" />}
+                      title="Pick a Date & Time"
+                      subtitle="Select an available slot for your service"
+                      accentClass="bg-orange-500/10 text-orange-400"
+                      complete={selectedStartHour !== null}
                     >
-                      <SectionHeader
-                        icon={<CalendarDays className="h-4 w-4" />}
-                        title="Pick a Date & Time"
-                        subtitle="Select an available slot for your service"
-                      />
                       <div className="grid gap-4 lg:grid-cols-3">
                         {/* Calendar */}
                         <div
@@ -934,21 +973,16 @@ export default function NewCustomerBookingPage() {
                           </div>
                         </div>
                       </div>
-                    </div>
+                    </SectionCard>
 
                     {/* Service address + notes */}
-                    <div
-                      className="rounded-2xl border p-5"
-                      style={{
-                        borderColor: "rgb(var(--border))",
-                        background: "rgba(var(--bg), 0.28)",
-                      }}
+                    <SectionCard
+                      icon={<MapPin className="h-5 w-5" />}
+                      title="Service Details"
+                      subtitle="Where we're coming and what to expect"
+                      accentClass="bg-emerald-500/10 text-emerald-400"
+                      complete={serviceAddress.trim().length >= 5 && notes.trim().length >= 5}
                     >
-                      <SectionHeader
-                        icon={<MapPin className="h-4 w-4" />}
-                        title="Service Details"
-                        subtitle="Where we're coming and what to expect"
-                      />
                       <div className="space-y-4">
                         <Field label="Service address *">
                           <input
@@ -979,10 +1013,52 @@ export default function NewCustomerBookingPage() {
                           </div>
                         </Field>
                       </div>
-                    </div>
+                    </SectionCard>
+
+                    {/* Booking summary strip */}
+                    <AnimatePresence>
+                      {selectedStartHour !== null && selectedService ? (
+                        <motion.div
+                          key="summary"
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -4 }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden rounded-2xl border"
+                          style={{
+                            borderColor: "rgba(34,197,94,0.3)",
+                            background: "rgba(34,197,94,0.05)",
+                          }}
+                        >
+                          <div
+                            className="flex items-center gap-2 border-b px-5 py-3"
+                            style={{ borderColor: "rgba(34,197,94,0.2)" }}
+                          >
+                            <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
+                            <span className="text-sm font-semibold text-green-500">Booking Summary</span>
+                          </div>
+                          <div className="flex flex-wrap gap-x-6 gap-y-3 px-5 py-4">
+                            <div>
+                              <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: "rgb(var(--muted))" }}>Service</div>
+                              <div className="text-sm font-medium">{selectedService.title}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: "rgb(var(--muted))" }}>Date & Time</div>
+                              <div className="text-sm font-medium">{formatSelectedHeader(selectedDateYmd, selectedStartHour, neededBlocks)}</div>
+                            </div>
+                            {serviceAddress.trim() ? (
+                              <div>
+                                <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: "rgb(var(--muted))" }}>Address</div>
+                                <div className="text-sm font-medium">{serviceAddress.trim()}</div>
+                              </div>
+                            ) : null}
+                          </div>
+                        </motion.div>
+                      ) : null}
+                    </AnimatePresence>
 
                     {/* Submit */}
-                    <div className="flex items-center justify-end gap-3">
+                    <div className="flex flex-col items-end gap-2">
                       <motion.button
                         type="submit"
                         disabled={loadingSubmit || selectedStartHour === null}
@@ -993,10 +1069,22 @@ export default function NewCustomerBookingPage() {
                           background: "rgb(var(--primary))",
                           color: "rgb(var(--primary-fg))",
                         }}
-                        title={selectedStartHour === null ? "Select and confirm a time first" : undefined}
                       >
                         {loadingSubmit ? "Submitting…" : "Request Booking"}
                       </motion.button>
+                      <AnimatePresence>
+                        {selectedStartHour === null ? (
+                          <motion.p
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="text-xs"
+                            style={{ color: "rgb(var(--muted))" }}
+                          >
+                            Select and confirm a date &amp; time to continue
+                          </motion.p>
+                        ) : null}
+                      </AnimatePresence>
                     </div>
                   </motion.form>
                 )}
