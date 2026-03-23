@@ -426,21 +426,21 @@ export default function Navbar() {
             <div className="relative h-5 w-5">
               <span
                 className={[
-                  "absolute left-0 top-[4px] h-[2px] w-5 transition-transform",
+                  "absolute left-0 top-[4px] h-[2px] w-5 transition-transform duration-200 ease-out",
                   menuOpen ? "translate-y-[6px] rotate-45" : "",
                 ].join(" ")}
                 style={{ background: "rgb(var(--fg))" }}
               />
               <span
                 className={[
-                  "absolute left-0 top-[10px] h-[2px] w-5 transition-opacity",
+                  "absolute left-0 top-[10px] h-[2px] w-5 transition-opacity duration-200 ease-out",
                   menuOpen ? "opacity-0" : "opacity-100",
                 ].join(" ")}
                 style={{ background: "rgb(var(--fg))" }}
               />
               <span
                 className={[
-                  "absolute left-0 top-[16px] h-[2px] w-5 transition-transform",
+                  "absolute left-0 top-[16px] h-[2px] w-5 transition-transform duration-200 ease-out",
                   menuOpen ? "translate-y-[-6px] -rotate-45" : "",
                 ].join(" ")}
                 style={{ background: "rgb(var(--fg))" }}
@@ -451,7 +451,7 @@ export default function Navbar() {
       </div>
 
       {menuOpen ? (
-        <div ref={menuRef}>
+        <div ref={menuRef} className="menu-slide-down">
           <NavbarMobileMenu
             menuOpen={menuOpen}
             name={name}

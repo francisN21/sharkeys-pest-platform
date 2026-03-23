@@ -15,6 +15,7 @@ import {
 import AuthTextField from "../../../components/forms/AuthTextField";
 import PasswordRequirements from "../../../components/auth/PasswordRequirements";
 import { completeEmployeeSetup } from "../../../lib/api/employees";
+import { notifyAuthChanged } from "../../../components/AuthProvider";
 
 type EmployeeSetupValues = {
   password: string;
@@ -74,6 +75,7 @@ export default function EmployeeSetupPage() {
       });
 
       setSetupSuccess(true);
+      notifyAuthChanged();
 
       const role = result.user?.user_role;
       const dest =

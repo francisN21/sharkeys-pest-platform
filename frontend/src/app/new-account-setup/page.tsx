@@ -18,6 +18,7 @@ import AuthTextField from "../../components/forms/AuthTextField";
 import AuthPageShell from "../../components/auth/AuthPageShell";
 import PasswordRequirements from "../../components/auth/PasswordRequirements";
 import { completeNewAccountSetup } from "../../lib/api/auth";
+import { notifyAuthChanged } from "../../components/AuthProvider";
 
 type FormValues = {
   password: string;
@@ -81,6 +82,7 @@ export default function NewAccountSetupPage() {
       });
 
       setSetupSuccess(true);
+      notifyAuthChanged();
 
       setTimeout(() => {
         router.push("/account");

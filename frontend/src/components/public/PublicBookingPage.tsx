@@ -1,9 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  CalendarDays,
+  CheckCircle2,
+  ChevronLeft,
+  Clock,
+  FileText,
+  MapPin,
+  User2,
+} from "lucide-react";
 import { me as apiMe } from "../../lib/api/auth";
 import Navbar from "../../components/Navbar";
 import { getServices, type Service } from "../../lib/api/services";
@@ -13,7 +22,7 @@ import {
 } from "../../lib/api/bookings";
 import { createGuestBooking } from "../../lib/api/publicBookings";
 
-type RecurrenceFreq = "" | "biweekly" | "monthly" | "quarterly";
+// --- Types ---
 
 type PublicBookingPageProps = {
   lockedServiceTitle: string;
@@ -22,6 +31,8 @@ type PublicBookingPageProps = {
   backHref?: string;
   backLabel?: string;
 };
+
+// --- Helpers ---
 
 function dollarsFromCents(cents?: number | null) {
   if (typeof cents !== "number") return null;
@@ -104,18 +115,14 @@ function formatSelectedHeader(
 ) {
   const [y, m, d] = dateYmd.split("-").map(Number);
   const base = new Date(y, m - 1, d, 0, 0, 0, 0);
-
   const dayLabel = base.toLocaleDateString(undefined, {
     weekday: "long",
     month: "short",
     day: "numeric",
   });
-
   if (startHour === null) return dayLabel;
-
   const start = new Date(y, m - 1, d, startHour, 0, 0, 0);
   const end = new Date(start.getTime() + blocks * 60 * 60_000);
-
   const startLabel = start.toLocaleTimeString(undefined, {
     hour: "numeric",
     minute: "2-digit",
@@ -124,7 +131,6 @@ function formatSelectedHeader(
     hour: "numeric",
     minute: "2-digit",
   });
-
   return `${dayLabel} • ${startLabel} – ${endLabel}`;
 }
 
@@ -136,19 +142,18 @@ function redirectAuthenticatedUserByRole(
     router.replace("/book");
     return true;
   }
-
   if (userRole === "superuser" || userRole === "admin") {
     router.replace("/account/admin/leads");
     return true;
   }
-
   if (userRole === "technician" || userRole === "worker") {
     router.replace("/account/technician");
     return true;
   }
-
   return false;
 }
+
+// --- UI Components ---
 
 function PageContainer({
   children,
@@ -164,6 +169,43 @@ function PageContainer({
   );
 }
 
+function SectionHeader({
+  icon,
+  title,
+  subtitle,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle?: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 mb-4">
+      <div
+        className="shrink-0 rounded-xl border p-2 shadow-sm"
+        style={{
+          borderColor: "rgb(var(--border))",
+          background: "rgb(var(--card))",
+        }}
+      >
+        {icon}
+      </div>
+      <div>
+        <div className="text-sm font-semibold">{title}</div>
+        {subtitle ? (
+          <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+            {subtitle}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+const INPUT_CLS =
+  "w-full rounded-xl border px-3 py-2.5 text-sm transition focus:outline-none focus:ring-2";
+
+// --- Main Component ---
+
 export default function PublicBookingPage({
   lockedServiceTitle,
   pageTitle,
@@ -174,14 +216,11 @@ export default function PublicBookingPage({
   const router = useRouter();
 
   const [authChecking, setAuthChecking] = useState(true);
-
   const [services, setServices] = useState<Service[]>([]);
   const [loadingServices, setLoadingServices] = useState(true);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
-
   const [error, setError] = useState<string | null>(null);
   const [bookingComplete, setBookingComplete] = useState(false);
-
   const [servicePublicId, setServicePublicId] = useState("");
 
   const [firstName, setFirstName] = useState("");
@@ -189,6 +228,7 @@ export default function PublicBookingPage({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [serviceAddress, setServiceAddress] = useState("");
+  const [notes, setNotes] = useState("");
 
   const todayYmd = useMemo(() => ymdLocal(new Date()), []);
   const [monthCursor, setMonthCursor] = useState(() => startOfMonth(new Date()));
@@ -199,12 +239,7 @@ export default function PublicBookingPage({
   const [availLoading, setAvailLoading] = useState(false);
   const [booked, setBooked] = useState<AvailabilityBooking[]>([]);
 
-  const [notes, setNotes] = useState("");
-
-  const [recurringEnabled, setRecurringEnabled] = useState(false);
-  const [recurringFreq, setRecurringFreq] = useState<RecurrenceFreq>("");
-  const [recurringCount, setRecurringCount] = useState<number>(1);
-  const [recurringSameTime, setRecurringSameTime] = useState(true);
+  const timeListRef = useRef<HTMLDivElement>(null);
 
   const selectedService = useMemo(
     () => services.find((s) => s.public_id === servicePublicId) || null,
@@ -226,58 +261,49 @@ export default function PublicBookingPage({
     return addMinutesIso(startsAtIso, durationMinutes);
   }, [startsAtIso, durationMinutes]);
 
+  const lockedServicePrice = dollarsFromCents(selectedService?.base_price_cents);
+
+  // Auth check: redirect authenticated users away from public booking
   useEffect(() => {
     let alive = true;
-  
     (async () => {
       try {
-        const me = await apiMe();
-  
+        const res = await apiMe();
         if (!alive) return;
-  
         const redirected = redirectAuthenticatedUserByRole(
           router,
-          me.user?.user_role ?? null
+          res.user?.user_role ?? null
         );
-  
         if (redirected) return;
       } catch {
-        // not authenticated or failed lookup -> stay on public booking page
+        // Not authenticated — stay on this page
       } finally {
         if (alive) setAuthChecking(false);
       }
     })();
-  
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [router]);
 
+  // Load services and lock to the specified one
   useEffect(() => {
     let alive = true;
-
     (async () => {
       try {
         setLoadingServices(true);
         setError(null);
-
         const res = await getServices();
         if (!alive) return;
-
         const list = res.services || [];
         setServices(list);
-
         const lockedService =
           list.find(
             (s) => s.title.trim().toLowerCase() === lockedServiceTitle.trim().toLowerCase()
           ) || null;
-
         if (!lockedService) {
           setError(`"${lockedServiceTitle}" service was not found.`);
           setServicePublicId("");
           return;
         }
-
         setServicePublicId(lockedService.public_id);
       } catch (e: unknown) {
         if (!alive) return;
@@ -286,15 +312,12 @@ export default function PublicBookingPage({
         if (alive) setLoadingServices(false);
       }
     })();
-
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [lockedServiceTitle]);
 
+  // Load availability for selected date
   useEffect(() => {
     let alive = true;
-
     (async () => {
       try {
         setAvailLoading(true);
@@ -309,12 +332,16 @@ export default function PublicBookingPage({
         if (alive) setAvailLoading(false);
       }
     })();
-
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [selectedDateYmd]);
 
+  // Scroll time list to 8 AM when date changes
+  useEffect(() => {
+    if (!timeListRef.current) return;
+    timeListRef.current.scrollTop = 8 * 44;
+  }, [selectedDateYmd]);
+
+  // Clear time selection when service duration changes
   useEffect(() => {
     setSelectedStartHour(null);
     setPendingStartHour(null);
@@ -323,12 +350,9 @@ export default function PublicBookingPage({
   const calendarCells = useMemo(() => {
     const start = startOfMonth(monthCursor);
     const end = endOfMonth(monthCursor);
-
     const startDow = weekdaySun0(start);
     const daysInMonth = end.getDate();
-
     const cells: Array<{ ymd: string; inMonth: boolean; date: Date }> = [];
-
     const prevMonthEnd = new Date(start.getFullYear(), start.getMonth(), 0);
     const prevDays = prevMonthEnd.getDate();
     for (let i = 0; i < startDow; i++) {
@@ -336,27 +360,20 @@ export default function PublicBookingPage({
       const d = new Date(start.getFullYear(), start.getMonth() - 1, day);
       cells.push({ ymd: ymdLocal(d), inMonth: false, date: d });
     }
-
     for (let day = 1; day <= daysInMonth; day++) {
       const d = new Date(start.getFullYear(), start.getMonth(), day);
       cells.push({ ymd: ymdLocal(d), inMonth: true, date: d });
     }
-
     while (cells.length < 42) {
       const last = cells[cells.length - 1].date;
       const d = new Date(last.getFullYear(), last.getMonth(), last.getDate() + 1);
       cells.push({ ymd: ymdLocal(d), inMonth: false, date: d });
     }
-
     return cells;
   }, [monthCursor]);
 
   const bookedIntervals = useMemo(
-    () =>
-      booked.map((b) => ({
-        start: new Date(b.starts_at),
-        end: new Date(b.ends_at),
-      })),
+    () => booked.map((b) => ({ start: new Date(b.starts_at), end: new Date(b.ends_at) })),
     [booked]
   );
 
@@ -372,38 +389,16 @@ export default function PublicBookingPage({
     const [y, m, d] = dateYmd.split("-").map(Number);
     const start = new Date(y, m - 1, d, startHour, 0, 0, 0);
     const end = new Date(start.getTime() + neededBlocks * 60 * 60_000);
-
     if (startHour + neededBlocks > 24) return true;
-
     for (const it of bookedIntervals) {
       if (overlaps(start, end, it.start, it.end)) return true;
     }
-
     const today = ymdLocal(new Date());
     if (isSameYmd(dateYmd, today)) {
       const now = new Date();
       if (start <= now) return true;
     }
-
     return false;
-  }
-
-  function buildRecurringNote() {
-    if (!recurringEnabled) return "";
-
-    const freqLabel =
-      recurringFreq === "biweekly"
-        ? "Every 2 weeks"
-        : recurringFreq === "monthly"
-          ? "Monthly"
-          : recurringFreq === "quarterly"
-            ? "Every 3 months"
-            : "Recurring";
-
-    const countLabel = recurringCount > 0 ? `${recurringCount} time(s)` : "unspecified times";
-    const sameLabel = recurringSameTime ? "same day/time" : "time may vary";
-
-    return `\n\n[Recurring Request]\n- Frequency: ${freqLabel}\n- Repeat: ${countLabel}\n- Preference: ${sameLabel}\n`;
   }
 
   function resetForm() {
@@ -413,20 +408,14 @@ export default function PublicBookingPage({
     setPhone("");
     setServiceAddress("");
     setNotes("");
-    setRecurringEnabled(false);
-    setRecurringFreq("");
-    setRecurringCount(1);
-    setRecurringSameTime(true);
     setSelectedStartHour(null);
     setPendingStartHour(null);
     setSelectedDateYmd(todayYmd);
     setMonthCursor(startOfMonth(new Date()));
-
     const lockedService =
       services.find(
         (s) => s.title.trim().toLowerCase() === lockedServiceTitle.trim().toLowerCase()
       ) || null;
-
     setServicePublicId(lockedService?.public_id ?? "");
   }
 
@@ -449,28 +438,23 @@ export default function PublicBookingPage({
     if (notes.trim().length < 5) {
       return setError("Please enter a description (at least 5 characters).");
     }
-
     if (!servicePublicId) return setError(`${lockedServiceTitle} service is unavailable.`);
     if (!selectedDateYmd || selectedStartHour === null) {
       return setError("Please select a date and time.");
     }
     if (!startsAtIso || !computedEndsAtIso) return setError("Could not compute schedule.");
-
     if (slotIsBlocked(selectedDateYmd, selectedStartHour)) {
       return setError("That time is no longer available. Please select another slot.");
     }
 
-    const finalNotes = notes.trim() + (recurringEnabled ? buildRecurringNote() : "");
-
     try {
       setLoadingSubmit(true);
-
       await createGuestBooking({
         servicePublicId,
         startsAt: startsAtIso,
         endsAt: computedEndsAtIso,
         address: serviceAddress.trim(),
-        notes: finalNotes.trim(),
+        notes: notes.trim(),
         lead: {
           email: email.trim(),
           first_name: firstName.trim(),
@@ -479,7 +463,6 @@ export default function PublicBookingPage({
           address: serviceAddress.trim(),
         },
       });
-
       resetForm();
       setBookingComplete(true);
     } catch (e: unknown) {
@@ -489,48 +472,46 @@ export default function PublicBookingPage({
     }
   }
 
-    if (authChecking) {
-      return (
-        <main className="min-h-screen overflow-y-auto scroll-smooth bg-gradient-to-b from-background via-background to-muted/20">
-          <Navbar />
-          <PageContainer>
-            <div
-              className="rounded-2xl border p-6 shadow-sm"
-              style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-            >
-              <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                Loading…
-              </div>
-            </div>
-          </PageContainer>
-        </main>
-      );
-    }
-
-  const lockedServicePrice = dollarsFromCents(selectedService?.base_price_cents);
+  if (authChecking) {
+    return (
+      <main className="min-h-screen overflow-y-auto">
+        <Navbar />
+        <PageContainer>
+          <div
+            className="rounded-2xl border p-6 shadow-sm"
+            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+          >
+            <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>Loading…</div>
+          </div>
+        </PageContainer>
+      </main>
+    );
+  }
 
   return (
-    <main className="min-h-screen overflow-y-auto scroll-smooth bg-gradient-to-b from-background via-background to-muted/20">
+    <main className="min-h-screen overflow-y-auto scroll-smooth">
       <Navbar />
-
       <PageContainer>
-        <section className="space-y-6">
+        <motion.section
+          className="space-y-6"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          {/* Page header */}
           <div className="space-y-4">
-            <div>
-              <Link
-                href={backHref}
-                className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold shadow-sm transition hover:opacity-90"
-                style={{
-                  borderColor: "rgb(var(--border))",
-                  background: "rgb(var(--card))",
-                  color: "rgb(var(--fg))",
-                }}
-              >
-                <ChevronLeft className="h-4 w-4" />
-                {backLabel}
-              </Link>
-            </div>
-
+            <Link
+              href={backHref}
+              className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold shadow-sm transition hover:opacity-90"
+              style={{
+                borderColor: "rgb(var(--border))",
+                background: "rgb(var(--card))",
+                color: "rgb(var(--fg))",
+              }}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              {backLabel}
+            </Link>
             <div className="space-y-1">
               <h1 className="text-2xl font-semibold">{pageTitle}</h1>
               <p className="text-sm" style={{ color: "rgb(var(--muted))" }}>
@@ -539,555 +520,557 @@ export default function PublicBookingPage({
             </div>
           </div>
 
-          {error ? (
-            <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "rgb(239 68 68)" }}>
-              {error}
-            </div>
-          ) : null}
+          <AnimatePresence>
+            {error ? (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                className="rounded-xl border p-3 text-sm"
+                style={{ borderColor: "rgb(239 68 68)" }}
+              >
+                {error}
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
 
           <div
             className="rounded-2xl border p-6 shadow-sm"
-            style={{
-              borderColor: "rgb(var(--border))",
-              background: "rgb(var(--card))",
-            }}
+            style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
           >
             {loadingServices ? (
-              <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
+              <div className="flex items-center gap-2 text-sm" style={{ color: "rgb(var(--muted))" }}>
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
                 Loading…
               </div>
-            ) : bookingComplete ? (
-              <div className="flex min-h-[420px] flex-col items-center justify-center space-y-4 text-center">
-                <div
-                  className="rounded-full border px-4 py-2 text-sm font-semibold"
-                  style={{
-                    borderColor: "rgb(34 197 94)",
-                    background: "rgba(34, 197, 94, 0.10)",
-                    color: "rgb(22 101 52)",
-                  }}
-                >
-                  Success
-                </div>
-
-                <div className="max-w-xl space-y-2">
-                  <h2 className="text-2xl font-semibold">Booking request submitted</h2>
-                  <p className="text-sm" style={{ color: "rgb(var(--muted))" }}>
-                    Your request has been received. Check your email for confirmation and next steps
-                    to create your account.
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={handleStartAnotherBooking}
-                    className="rounded-xl border px-4 py-2 text-sm font-semibold hover:opacity-90"
-                    style={{
-                      borderColor: "rgb(var(--border))",
-                      background: "rgb(var(--card))",
-                    }}
-                  >
-                    Create another booking
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => router.push("/login")}
-                    className="rounded-xl border px-4 py-2 text-sm font-semibold hover:opacity-90"
-                    style={{
-                      borderColor: "rgb(var(--border))",
-                      background: "transparent",
-                    }}
-                  >
-                    Back to sign in
-                  </button>
-                </div>
-              </div>
             ) : (
-              <form className="space-y-6" onSubmit={onSubmit}>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="First name *">
-                    <input
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      className="w-full rounded-xl border px-3 py-2 text-sm"
-                      style={{
-                        borderColor: "rgb(var(--border))",
-                        background: "rgba(var(--bg), 0.35)",
-                      }}
-                    />
-                  </Field>
-
-                  <Field label="Last name *">
-                    <input
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      className="w-full rounded-xl border px-3 py-2 text-sm"
-                      style={{
-                        borderColor: "rgb(var(--border))",
-                        background: "rgba(var(--bg), 0.35)",
-                      }}
-                    />
-                  </Field>
-
-                  <Field label="Email *">
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full rounded-xl border px-3 py-2 text-sm"
-                      style={{
-                        borderColor: "rgb(var(--border))",
-                        background: "rgba(var(--bg), 0.35)",
-                      }}
-                      placeholder="you@example.com"
-                    />
-                  </Field>
-
-                  <Field label="Phone">
-                    <input
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="w-full rounded-xl border px-3 py-2 text-sm"
-                      style={{
-                        borderColor: "rgb(var(--border))",
-                        background: "rgba(var(--bg), 0.35)",
-                      }}
-                      placeholder="702-555-1234"
-                    />
-                  </Field>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold">Service</label>
-
-                  {selectedService ? (
-                    <div
-                      className="rounded-2xl border p-4"
-                      style={{
-                        borderColor: "rgb(var(--border))",
-                        background: "rgba(var(--bg), 0.30)",
-                      }}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="text-sm font-semibold sm:text-base">
-                            {selectedService.title}
-                          </div>
-                          <div
-                            className="mt-1 text-xs sm:text-sm"
-                            style={{ color: "rgb(var(--muted))" }}
-                          >
-                            {selectedService.description}
-                          </div>
-                        </div>
-
-                        <span
-                          className="shrink-0 rounded-full border px-2 py-1 text-[11px] sm:text-xs"
-                          style={{
-                            borderColor: "rgb(var(--border))",
-                            background: "rgba(var(--bg), 0.35)",
-                          }}
-                        >
-                          Selected
-                        </span>
-                      </div>
-
-                      {lockedServicePrice ? (
-                        <div
-                          className="mt-3 flex items-center gap-2 text-[11px] sm:text-xs"
-                          style={{ color: "rgb(var(--muted))" }}
-                        >
-                          <span
-                            className="rounded-full border px-2 py-1"
-                            style={{ borderColor: "rgb(var(--border))" }}
-                          >
-                            ${lockedServicePrice}
-                          </span>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <div
-                      className="rounded-xl border p-3 text-sm"
-                      style={{ borderColor: "rgb(239 68 68)" }}
-                    >
-                      {lockedServiceTitle} service is unavailable.
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid gap-4 lg:grid-cols-3">
-                  <div
-                    className="rounded-2xl border p-4 lg:col-span-2"
-                    style={{
-                      borderColor: "rgb(var(--border))",
-                      background: "rgba(var(--bg), 0.15)",
-                    }}
+              <AnimatePresence mode="wait">
+                {bookingComplete ? (
+                  <motion.div
+                    key="success"
+                    initial={{ opacity: 0, scale: 0.97 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.25 }}
+                    className="flex min-h-[420px] flex-col items-center justify-center space-y-4 text-center"
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm font-semibold">Select a Date</div>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
-                          style={{
-                            borderColor: "rgb(var(--border))",
-                            background: "rgba(var(--bg), 0.25)",
-                          }}
-                          onClick={() => setMonthCursor((d) => addMonths(d, -1))}
-                        >
-                          ‹
-                        </button>
-
-                        <div className="text-sm font-semibold">{formatMonthYear(monthCursor)}</div>
-
-                        <button
-                          type="button"
-                          className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
-                          style={{
-                            borderColor: "rgb(var(--border))",
-                            background: "rgba(var(--bg), 0.25)",
-                          }}
-                          onClick={() => setMonthCursor((d) => addMonths(d, 1))}
-                        >
-                          ›
-                        </button>
-                      </div>
+                    <div className="rounded-full p-4" style={{ background: "rgba(34, 197, 94, 0.10)" }}>
+                      <CheckCircle2 className="h-10 w-10" style={{ color: "rgb(34 197 94)" }} />
                     </div>
-
-                    <div
-                      className="mt-4 grid grid-cols-7 gap-2 text-xs"
-                      style={{ color: "rgb(var(--muted))" }}
-                    >
-                      {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((w) => (
-                        <div key={w} className="text-center font-semibold">
-                          {w}
-                        </div>
-                      ))}
+                    <div className="max-w-xl space-y-2">
+                      <h2 className="text-2xl font-semibold">Booking request submitted</h2>
+                      <p className="text-sm" style={{ color: "rgb(var(--muted))" }}>
+                        Your request has been received. Check your email for confirmation and next
+                        steps to create your account.
+                      </p>
                     </div>
-
-                    <div className="mt-2 grid grid-cols-7 gap-2">
-                      {calendarCells.map((c) => {
-                        const disabled = isPastDate(c.ymd) || c.ymd > maxBookDateYmd;
-                        const active = isSameYmd(c.ymd, selectedDateYmd);
-                        const isToday = isSameYmd(c.ymd, todayYmd);
-
-                        return (
-                          <button
-                            key={c.ymd}
-                            type="button"
-                            onClick={() => {
-                              if (disabled) return;
-                              setSelectedDateYmd(c.ymd);
-                              setSelectedStartHour(null);
-                              setPendingStartHour(null);
-                            }}
-                            disabled={disabled}
-                            className={cn(
-                              "rounded-xl border py-2 text-sm transition",
-                              active && "ring-2",
-                              disabled && "cursor-not-allowed opacity-50"
-                            )}
-                            style={{
-                              borderColor: "rgb(var(--border))",
-                              background: active
-                                ? "rgba(var(--bg), 0.45)"
-                                : "rgba(var(--bg), 0.25)",
-                            }}
-                          >
-                            <div className="flex items-center justify-center gap-2">
-                              <span className={cn(!c.inMonth && "opacity-60")}>
-                                {c.date.getDate()}
-                              </span>
-                              {isToday ? (
-                                <span
-                                  className="inline-block h-2 w-2 rounded-full"
-                                  style={{ background: "rgb(59 130 246)" }}
-                                  aria-hidden="true"
-                                />
-                              ) : null}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div className="mt-4 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                      Selected:{" "}
-                      <span className="font-semibold">
-                        {formatSelectedHeader(selectedDateYmd, selectedStartHour, neededBlocks)}
-                      </span>
-                      {availLoading ? <span className="ml-2">• Checking availability…</span> : null}
-                    </div>
-                  </div>
-
-                  <div
-                    className="rounded-2xl border p-4"
-                    style={{
-                      borderColor: "rgb(var(--border))",
-                      background: "rgba(var(--bg), 0.15)",
-                    }}
-                  >
-                    <div className="space-y-1">
-                      <div className="text-sm font-semibold">Available Times</div>
-                      <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                        {formatSelectedHeader(selectedDateYmd, selectedStartHour, neededBlocks)}
-                      </div>
-                    </div>
-
-                    <div className="mt-3 grid max-h-[360px] gap-2 overflow-y-auto pr-1">
-                      {hours.map((h) => {
-                        const blocked = slotIsBlocked(selectedDateYmd, h);
-                        const active = selectedStartHour === h;
-                        const pending = pendingStartHour === h;
-
-                        return (
-                          <button
-                            key={h}
-                            type="button"
-                            disabled={blocked}
-                            onClick={() => setPendingStartHour(h)}
-                            className={cn(
-                              "w-full rounded-xl border px-3 py-2 text-left text-sm font-semibold transition",
-                              (active || pending) && "ring-2",
-                              blocked && "cursor-not-allowed opacity-50"
-                            )}
-                            style={{
-                              borderColor: "rgb(var(--border))",
-                              background: active
-                                ? "rgba(var(--bg), 0.55)"
-                                : pending
-                                  ? "rgba(var(--bg), 0.40)"
-                                  : "rgba(var(--bg), 0.25)",
-                            }}
-                          >
-                            {formatTimeLabel(h)}
-                            {neededBlocks > 1 ? (
-                              <span className="ml-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                                → {formatTimeLabel((h + neededBlocks) % 24)}
-                              </span>
-                            ) : null}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {pendingStartHour !== null ? (
-                      <div
-                        className="mt-3 rounded-xl border p-3"
+                    <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={handleStartAnotherBooking}
+                        className="rounded-xl border px-4 py-2 text-sm font-semibold hover:opacity-90 transition"
                         style={{
                           borderColor: "rgb(var(--border))",
-                          background: "rgba(var(--bg), 0.25)",
+                          background: "rgb(var(--card))",
                         }}
                       >
-                        <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-                          Selected time
-                        </div>
-                        <div className="mt-1 text-sm font-semibold">
-                          {formatSelectedHeader(selectedDateYmd, pendingStartHour, neededBlocks)}
-                        </div>
-
-                        <div className="mt-3 flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (slotIsBlocked(selectedDateYmd, pendingStartHour)) return;
-                              setSelectedStartHour(pendingStartHour);
-                              setPendingStartHour(null);
-                            }}
-                            className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-60"
-                            style={{
-                              borderColor: "rgb(var(--border))",
-                              background: "rgb(var(--card))",
-                            }}
-                            disabled={slotIsBlocked(selectedDateYmd, pendingStartHour)}
-                          >
-                            Confirm time
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => setPendingStartHour(null)}
-                            className="rounded-xl border px-3 py-2 text-sm font-semibold hover:opacity-90"
-                            style={{
-                              borderColor: "rgb(var(--border))",
-                              background: "transparent",
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : null}
-
-                    <div className="mt-3 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                      Reserved slots are automatically disabled.
+                        Create another booking
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => router.push("/login")}
+                        className="rounded-xl border px-4 py-2 text-sm font-semibold hover:opacity-90 transition"
+                        style={{ borderColor: "rgb(var(--border))", background: "transparent" }}
+                      >
+                        Back to sign in
+                      </button>
                     </div>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold">Recurring service</label>
-
-                  <div
-                    className="rounded-xl border p-3 text-sm"
-                    style={{
-                      borderColor: "rgb(var(--border))",
-                      background: "rgba(var(--bg), 0.25)",
-                    }}
+                  </motion.div>
+                ) : (
+                  <motion.form
+                    key="form"
+                    className="space-y-6"
+                    onSubmit={onSubmit}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.2 }}
                   >
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={recurringEnabled}
-                        onChange={(e) => {
-                          const on = e.target.checked;
-                          setRecurringEnabled(on);
-                          if (!on) {
-                            setRecurringFreq("");
-                            setRecurringCount(1);
-                            setRecurringSameTime(true);
-                          }
-                        }}
+                    {/* Locked service display */}
+                    <div
+                      className="rounded-2xl border p-5"
+                      style={{
+                        borderColor: "rgb(var(--border))",
+                        background: "rgba(var(--bg), 0.28)",
+                      }}
+                    >
+                      <SectionHeader
+                        icon={<FileText className="h-4 w-4" />}
+                        title="Selected Service"
+                        subtitle="This booking is pre-configured for this service"
                       />
-                      I want this service to repeat
-                    </label>
-
-                    {recurringEnabled ? (
-                      <div className="mt-3 grid gap-3">
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          <Field label="Frequency">
-                            <select
-                              value={recurringFreq}
-                              onChange={(e) => setRecurringFreq(e.target.value as RecurrenceFreq)}
-                              className="w-full rounded-lg border px-3 py-2 text-sm"
+                      {selectedService ? (
+                        <div
+                          className="rounded-2xl border p-4"
+                          style={{
+                            borderColor: "rgb(var(--border))",
+                            background: "rgba(var(--bg), 0.22)",
+                          }}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold sm:text-base">
+                                {selectedService.title}
+                              </div>
+                              <div
+                                className="mt-1 text-xs sm:text-sm"
+                                style={{ color: "rgb(var(--muted))" }}
+                              >
+                                {selectedService.description}
+                              </div>
+                            </div>
+                            <span
+                              className="shrink-0 rounded-full border px-2 py-1 text-[11px] sm:text-xs"
                               style={{
                                 borderColor: "rgb(var(--border))",
                                 background: "rgba(var(--bg), 0.35)",
                               }}
                             >
-                              <option value="">Select…</option>
-                              <option value="biweekly">Every 2 weeks</option>
-                              <option value="monthly">Monthly</option>
-                              <option value="quarterly">Every 3 months</option>
-                            </select>
-                          </Field>
-
-                          <Field label="Repeat how many more times?">
-                            <input
-                              type="number"
-                              min={1}
-                              max={24}
-                              value={recurringCount}
-                              onChange={(e) =>
-                                setRecurringCount(
-                                  Math.max(1, Math.min(24, Number(e.target.value || 1)))
-                                )
-                              }
-                              className="w-full rounded-lg border px-3 py-2 text-sm"
-                              style={{
-                                borderColor: "rgb(var(--border))",
-                                background: "rgba(var(--bg), 0.35)",
-                              }}
-                            />
-                            <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                              (Example: 3 means total of 4 visits including this one)
+                              Selected
+                            </span>
+                          </div>
+                          {lockedServicePrice ? (
+                            <div
+                              className="mt-3 text-[11px] sm:text-xs"
+                              style={{ color: "rgb(var(--muted))" }}
+                            >
+                              <span
+                                className="rounded-full border px-2 py-1"
+                                style={{ borderColor: "rgb(var(--border))" }}
+                              >
+                                ${lockedServicePrice}
+                              </span>
                             </div>
-                          </Field>
+                          ) : null}
                         </div>
-
+                      ) : (
                         <div
                           className="rounded-xl border p-3 text-sm"
+                          style={{ borderColor: "rgb(239 68 68)" }}
+                        >
+                          {lockedServiceTitle} service is currently unavailable.
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Contact info */}
+                    <div
+                      className="rounded-2xl border p-5"
+                      style={{
+                        borderColor: "rgb(var(--border))",
+                        background: "rgba(var(--bg), 0.28)",
+                      }}
+                    >
+                      <SectionHeader
+                        icon={<User2 className="h-4 w-4" />}
+                        title="Contact Information"
+                        subtitle="Tell us who you are"
+                      />
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <Field label="First name *">
+                          <input
+                            value={firstName}
+                            onChange={(e) => setFirstName(e.target.value)}
+                            className={INPUT_CLS}
+                            style={{
+                              borderColor: "rgb(var(--border))",
+                              background: "rgba(var(--bg), 0.35)",
+                            }}
+                          />
+                        </Field>
+                        <Field label="Last name *">
+                          <input
+                            value={lastName}
+                            onChange={(e) => setLastName(e.target.value)}
+                            className={INPUT_CLS}
+                            style={{
+                              borderColor: "rgb(var(--border))",
+                              background: "rgba(var(--bg), 0.35)",
+                            }}
+                          />
+                        </Field>
+                        <Field label="Email *">
+                          <input
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="you@example.com"
+                            className={INPUT_CLS}
+                            style={{
+                              borderColor: "rgb(var(--border))",
+                              background: "rgba(var(--bg), 0.35)",
+                            }}
+                          />
+                        </Field>
+                        <Field label="Phone">
+                          <input
+                            value={phone}
+                            onChange={(e) => setPhone(e.target.value)}
+                            placeholder="702-555-1234"
+                            className={INPUT_CLS}
+                            style={{
+                              borderColor: "rgb(var(--border))",
+                              background: "rgba(var(--bg), 0.35)",
+                            }}
+                          />
+                        </Field>
+                      </div>
+                    </div>
+
+                    {/* Calendar + Time */}
+                    <div
+                      className="rounded-2xl border p-5"
+                      style={{
+                        borderColor: "rgb(var(--border))",
+                        background: "rgba(var(--bg), 0.28)",
+                      }}
+                    >
+                      <SectionHeader
+                        icon={<CalendarDays className="h-4 w-4" />}
+                        title="Pick a Date & Time"
+                        subtitle="Select an available slot for your service"
+                      />
+                      <div className="grid gap-4 lg:grid-cols-3">
+                        {/* Calendar */}
+                        <div
+                          className="rounded-2xl border p-4 lg:col-span-2"
                           style={{
                             borderColor: "rgb(var(--border))",
-                            background: "rgba(var(--bg), 0.18)",
+                            background: "rgba(var(--bg), 0.15)",
                           }}
                         >
-                          <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
-                            Same day & time?
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm font-semibold">
+                              {formatMonthYear(monthCursor)}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                className="rounded-xl border px-3 py-1.5 text-sm font-semibold hover:opacity-90 transition"
+                                style={{
+                                  borderColor: "rgb(var(--border))",
+                                  background: "rgba(var(--bg), 0.25)",
+                                }}
+                                onClick={() => setMonthCursor((d) => addMonths(d, -1))}
+                              >
+                                ‹
+                              </button>
+                              <button
+                                type="button"
+                                className="rounded-xl border px-3 py-1.5 text-sm font-semibold hover:opacity-90 transition"
+                                style={{
+                                  borderColor: "rgb(var(--border))",
+                                  background: "rgba(var(--bg), 0.25)",
+                                }}
+                                onClick={() => setMonthCursor((d) => addMonths(d, 1))}
+                              >
+                                ›
+                              </button>
+                            </div>
                           </div>
 
-                          <label className="mt-2 flex items-center gap-2 text-sm">
-                            <input
-                              type="checkbox"
-                              checked={recurringSameTime}
-                              onChange={(e) => setRecurringSameTime(e.target.checked)}
+                          <div
+                            className="mt-4 grid grid-cols-7 gap-1 text-xs"
+                            style={{ color: "rgb(var(--muted))" }}
+                          >
+                            {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((w) => (
+                              <div key={w} className="text-center font-semibold py-1">
+                                {w}
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="mt-1 grid grid-cols-7 gap-1">
+                            {calendarCells.map((c) => {
+                              const disabled = isPastDate(c.ymd) || c.ymd > maxBookDateYmd;
+                              const active = isSameYmd(c.ymd, selectedDateYmd);
+                              const isToday = isSameYmd(c.ymd, todayYmd);
+                              return (
+                                <button
+                                  key={c.ymd}
+                                  type="button"
+                                  onClick={() => {
+                                    if (disabled) return;
+                                    setSelectedDateYmd(c.ymd);
+                                    setSelectedStartHour(null);
+                                    setPendingStartHour(null);
+                                  }}
+                                  disabled={disabled}
+                                  className={cn(
+                                    "rounded-xl border py-2 text-sm transition",
+                                    active && "ring-2",
+                                    disabled && "cursor-not-allowed opacity-40"
+                                  )}
+                                  style={{
+                                    borderColor: "rgb(var(--border))",
+                                    background: active
+                                      ? "rgba(var(--bg), 0.55)"
+                                      : "rgba(var(--bg), 0.20)",
+                                  }}
+                                >
+                                  <div className="flex items-center justify-center gap-1">
+                                    <span className={cn(!c.inMonth && "opacity-50")}>
+                                      {c.date.getDate()}
+                                    </span>
+                                    {isToday ? (
+                                      <span
+                                        className="inline-block h-1.5 w-1.5 rounded-full"
+                                        style={{ background: "rgb(59 130 246)" }}
+                                      />
+                                    ) : null}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <div className="mt-3 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                            <span className="font-medium">
+                              {formatSelectedHeader(selectedDateYmd, selectedStartHour, neededBlocks)}
+                            </span>
+                            {availLoading ? (
+                              <span className="ml-2 opacity-70">• Checking availability…</span>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        {/* Time slots */}
+                        <div
+                          className="rounded-2xl border p-4"
+                          style={{
+                            borderColor: "rgb(var(--border))",
+                            background: "rgba(var(--bg), 0.15)",
+                          }}
+                        >
+                          <div className="flex items-center gap-2 mb-3">
+                            <Clock
+                              className="h-4 w-4 shrink-0"
+                              style={{ color: "rgb(var(--muted))" }}
                             />
-                            Prefer the same day and time each visit
-                          </label>
+                            <div>
+                              <div className="text-sm font-semibold">Available Times</div>
+                              <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                                {neededBlocks} hour block
+                              </div>
+                            </div>
+                          </div>
+
+                          <div
+                            ref={timeListRef}
+                            className="grid gap-1.5 overflow-y-auto pr-1"
+                            style={{ maxHeight: "300px" }}
+                          >
+                            {hours.map((h) => {
+                              const blocked = slotIsBlocked(selectedDateYmd, h);
+                              const active = selectedStartHour === h;
+                              const pending = pendingStartHour === h;
+                              return (
+                                <button
+                                  key={h}
+                                  type="button"
+                                  disabled={blocked}
+                                  onClick={() => setPendingStartHour(h)}
+                                  className={cn(
+                                    "w-full rounded-xl border px-3 py-2 text-left text-sm font-semibold transition",
+                                    (active || pending) && "ring-2",
+                                    blocked && "cursor-not-allowed opacity-40"
+                                  )}
+                                  style={{
+                                    borderColor: "rgb(var(--border))",
+                                    background: active
+                                      ? "rgba(var(--bg), 0.55)"
+                                      : pending
+                                        ? "rgba(var(--bg), 0.40)"
+                                        : "rgba(var(--bg), 0.22)",
+                                  }}
+                                >
+                                  {formatTimeLabel(h)}
+                                  {neededBlocks > 1 ? (
+                                    <span
+                                      className="ml-2 text-xs"
+                                      style={{ color: "rgb(var(--muted))" }}
+                                    >
+                                      → {formatTimeLabel((h + neededBlocks) % 24)}
+                                    </span>
+                                  ) : null}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <AnimatePresence>
+                            {pendingStartHour !== null ? (
+                              <motion.div
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -4 }}
+                                transition={{ duration: 0.18 }}
+                                className="mt-3 rounded-xl border p-3"
+                                style={{
+                                  borderColor: "rgb(var(--border))",
+                                  background: "rgba(var(--bg), 0.25)",
+                                }}
+                              >
+                                <div
+                                  className="text-xs font-semibold"
+                                  style={{ color: "rgb(var(--muted))" }}
+                                >
+                                  Confirm this time?
+                                </div>
+                                <div className="mt-1 text-sm font-semibold">
+                                  {formatSelectedHeader(
+                                    selectedDateYmd,
+                                    pendingStartHour,
+                                    neededBlocks
+                                  )}
+                                </div>
+                                <div className="mt-3 flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (slotIsBlocked(selectedDateYmd, pendingStartHour)) return;
+                                      setSelectedStartHour(pendingStartHour);
+                                      setPendingStartHour(null);
+                                    }}
+                                    className="rounded-xl border px-3 py-1.5 text-sm font-semibold hover:opacity-90 transition disabled:opacity-60"
+                                    style={{
+                                      borderColor: "rgb(var(--border))",
+                                      background: "rgb(var(--card))",
+                                    }}
+                                    disabled={slotIsBlocked(selectedDateYmd, pendingStartHour)}
+                                  >
+                                    Confirm
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPendingStartHour(null)}
+                                    className="rounded-xl border px-3 py-1.5 text-sm font-semibold hover:opacity-90 transition"
+                                    style={{
+                                      borderColor: "rgb(var(--border))",
+                                      background: "transparent",
+                                    }}
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </motion.div>
+                            ) : null}
+                          </AnimatePresence>
+
+                          <div className="mt-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                            Reserved slots are disabled automatically.
+                          </div>
                         </div>
                       </div>
-                    ) : null}
-                  </div>
-                </div>
+                    </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold">Service address *</label>
-                  <input
-                    className="w-full rounded-xl border px-3 py-2 text-sm"
-                    style={{
-                      borderColor: "rgb(var(--border))",
-                      background: "rgba(var(--bg), 0.35)",
-                    }}
-                    placeholder="Street, City, State"
-                    value={serviceAddress}
-                    onChange={(e) => setServiceAddress(e.target.value)}
-                  />
-                </div>
+                    {/* Service address + notes */}
+                    <div
+                      className="rounded-2xl border p-5"
+                      style={{
+                        borderColor: "rgb(var(--border))",
+                        background: "rgba(var(--bg), 0.28)",
+                      }}
+                    >
+                      <SectionHeader
+                        icon={<MapPin className="h-4 w-4" />}
+                        title="Service Details"
+                        subtitle="Where we're coming and what to expect"
+                      />
+                      <div className="space-y-4">
+                        <Field label="Service address *">
+                          <input
+                            value={serviceAddress}
+                            onChange={(e) => setServiceAddress(e.target.value)}
+                            placeholder="123 Main St, San Jose, CA 95101"
+                            className={INPUT_CLS}
+                            style={{
+                              borderColor: "rgb(var(--border))",
+                              background: "rgba(var(--bg), 0.35)",
+                            }}
+                          />
+                        </Field>
+                        <Field label="Description *">
+                          <textarea
+                            value={notes}
+                            onChange={(e) => setNotes(e.target.value)}
+                            placeholder="Describe the issue (gate code, pets on-site, anything we should know…)"
+                            className={cn(INPUT_CLS, "min-h-[100px] resize-none")}
+                            style={{
+                              borderColor: "rgb(var(--border))",
+                              background: "rgba(var(--bg), 0.35)",
+                            }}
+                            maxLength={2000}
+                          />
+                          <div
+                            className="text-xs text-right"
+                            style={{ color: "rgb(var(--muted))" }}
+                          >
+                            {notes.length}/2000
+                          </div>
+                        </Field>
+                      </div>
+                    </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold">Description *</label>
-                  <textarea
-                    className="w-full min-h-[110px] rounded-xl border px-3 py-2 text-sm"
-                    style={{
-                      borderColor: "rgb(var(--border))",
-                      background: "rgba(var(--bg), 0.35)",
-                    }}
-                    placeholder="Describe the issue, service request, pests seen, affected area, or anything we should know…"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    maxLength={2000}
-                  />
-                  <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                    {notes.length}/2000
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end gap-3">
-                  <button
-                    type="button"
-                    className="rounded-xl border px-4 py-2 text-sm font-semibold hover:opacity-90"
-                    style={{ borderColor: "rgb(var(--border))", background: "transparent" }}
-                    onClick={() => router.push("/login")}
-                    disabled={loadingSubmit}
-                  >
-                    Back
-                  </button>
-
-                  <button
-                    type="submit"
-                    className="rounded-xl border px-4 py-2 text-sm font-semibold shadow-sm hover:opacity-90 disabled:opacity-60"
-                    style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
-                    disabled={loadingSubmit || selectedStartHour === null || !servicePublicId}
-                  >
-                    {loadingSubmit ? "Booking…" : "Confirm Booking"}
-                  </button>
-                </div>
-              </form>
+                    {/* Submit */}
+                    <div className="flex items-center justify-end gap-3">
+                      <motion.button
+                        type="submit"
+                        disabled={loadingSubmit || selectedStartHour === null}
+                        whileHover={
+                          !loadingSubmit && selectedStartHour !== null
+                            ? { scale: 1.01, y: -1 }
+                            : {}
+                        }
+                        whileTap={
+                          !loadingSubmit && selectedStartHour !== null ? { scale: 0.99 } : {}
+                        }
+                        className="rounded-xl px-6 py-2.5 text-sm font-semibold shadow-sm transition disabled:opacity-60"
+                        style={{
+                          background: "rgb(var(--primary))",
+                          color: "rgb(var(--primary-fg))",
+                        }}
+                        title={
+                          selectedStartHour === null
+                            ? "Select and confirm a time first"
+                            : undefined
+                        }
+                      >
+                        {loadingSubmit ? "Submitting…" : "Request Booking"}
+                      </motion.button>
+                    </div>
+                  </motion.form>
+                )}
+              </AnimatePresence>
             )}
           </div>
-        </section>
+        </motion.section>
       </PageContainer>
     </main>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="space-y-1">
-      <div className="text-xs font-semibold" style={{ color: "rgb(var(--muted))" }}>
+    <div className="space-y-1.5">
+      <div
+        className="text-xs font-semibold uppercase tracking-wide"
+        style={{ color: "rgb(var(--muted))" }}
+      >
         {label}
       </div>
       {children}

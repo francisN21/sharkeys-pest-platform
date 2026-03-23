@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Bell } from "lucide-react";
 import NotificationDropdown from "../notifications/NotificationDropdown";
 import type { NavbarNotificationsProps } from "./navbar.types";
@@ -24,6 +24,16 @@ export default function NavbarNotifications({
   onToggleBrowserNotifications,
   notifRef,
 }: Props) {
+  const prevCountRef = useRef(unreadCount);
+  const [bellRinging, setBellRinging] = useState(false);
+
+  useEffect(() => {
+    if (unreadCount > prevCountRef.current) {
+      setBellRinging(true);
+    }
+    prevCountRef.current = unreadCount;
+  }, [unreadCount]);
+
   if (!isAuthed) return null;
 
   return (
@@ -40,10 +50,17 @@ export default function NavbarNotifications({
         aria-haspopup="menu"
         aria-expanded={notifOpen}
       >
-        <Bell className="h-5 w-5" />
+        <span
+          className={bellRinging ? "bell-ring" : undefined}
+          onAnimationEnd={() => setBellRinging(false)}
+        >
+          <Bell className="h-5 w-5" />
+        </span>
+
         {unreadCount > 0 ? (
           <span
-            className="absolute -right-1 -top-1 min-w-[18px] rounded-full px-1 text-center text-[10px] font-bold"
+            key={unreadCount}
+            className="badge-pop absolute -right-1 -top-1 min-w-[18px] rounded-full px-1 text-center text-[10px] font-bold"
             style={{
               background: "rgb(239 68 68)",
               color: "white",
