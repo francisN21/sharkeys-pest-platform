@@ -16,7 +16,7 @@ export default function SectionCard({
   icon?: React.ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02]">
+    <section className="rounded-2xl border border-white/[0.08] bg-white/[0.02]">
       <div className="border-b border-white/[0.07] bg-white/[0.03] px-4 py-4 sm:px-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
