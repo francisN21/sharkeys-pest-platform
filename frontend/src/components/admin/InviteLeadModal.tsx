@@ -5,7 +5,6 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   CheckCircle2,
   Mail,
-  MapPin,
   Phone,
   UserPlus,
   X,
@@ -15,6 +14,7 @@ import {
   adminCreateLead,
   type AdminCreateLeadPayload,
 } from "../../lib/api/adminCustomers";
+import AddressAutocomplete from "../AddressAutocomplete";
 
 type LeadForm = {
   email: string;
@@ -240,19 +240,18 @@ export default function InviteLeadModal({
                     }
                   />
 
-                  <Field
-                    label="Address"
-                    icon={<MapPin className="h-4 w-4" />}
-                    input={
-                      <input
-                        type="text"
-                        value={form.address}
-                        onChange={(e) => updateField("address", e.target.value)}
-                        placeholder="123 Main St, City, CA"
-                        className={inputCls}
-                      />
-                    }
-                  />
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-[rgb(var(--fg))]">
+                      Address
+                    </label>
+                    <AddressAutocomplete
+                      value={form.address}
+                      onChange={(val) => updateField("address", val)}
+                      placeholder="123 Main St, City, CA"
+                      className={inputCls}
+                      disabled={submitting}
+                    />
+                  </div>
                 </div>
 
                 {/* Info note */}
