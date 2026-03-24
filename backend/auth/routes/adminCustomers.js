@@ -768,4 +768,118 @@ router.patch("/:kind/:publicId/tag", requireAuth, requireAdminOrSuperuser, async
   }
 });
 
+/**
+ * POST /admin/customers/leads
+ * Create a new lead and immediately send them an account-setup invite email.
+ */
+const createLeadSchema = z.object({
+  email: z.string().trim().email("A valid email is required"),
+  first_name: z.string().trim().min(1, "First name is required"),
+  last_name: z.string().trim().min(1, "Last name is required"),
+  phone: z.string().trim().optional().default(""),
+  address: z.string().trim().optional().default(""),
+});
+
+router.post("/leads", requireAuth, requireAdminOrSuperuser, async (req, res, next) => {
+  const client = await pool.connect();
+
+  try {
+    const parsed = createLeadSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(422).json({
+        ok: false,
+        message: parsed.error.errors[0]?.message ?? "Validation error",
+      });
+    }
+
+    const { email, first_name, last_name, phone, address } = parsed.data;
+    const actorUserId = req.user?.id ?? req.auth?.userId ?? null;
+
+    await client.query("BEGIN");
+
+    // Check if a registered user already exists with this email
+    const existingUserRes = await client.query(
+      `SELECT id FROM users WHERE email = $1 LIMIT 1`,
+      [email]
+    );
+    if (existingUserRes.rowCount > 0) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({
+        ok: false,
+        message: "A registered account already exists with this email address.",
+      });
+    }
+
+    // Upsert the lead — if the email already exists as a lead, update and re-invite
+    const leadRes = await client.query(
+      `
+      INSERT INTO leads (email, first_name, last_name, phone, address)
+      VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (email) DO UPDATE SET
+        first_name = EXCLUDED.first_name,
+        last_name  = EXCLUDED.last_name,
+        phone      = EXCLUDED.phone,
+        address    = EXCLUDED.address,
+        updated_at = now()
+      RETURNING id, public_id, email, first_name, last_name, phone, address, created_at
+      `,
+      [email, first_name, last_name, phone || null, address || null]
+    );
+
+    const lead = leadRes.rows[0];
+
+    // Clear any existing unconsumed invite tokens for this lead
+    await client.query(
+      `DELETE FROM lead_account_invites WHERE lead_id = $1 AND consumed_at IS NULL`,
+      [lead.id]
+    );
+
+    // Generate a fresh invite token
+    const token = generateInviteToken();
+    const tokenHash = hashValue(token);
+    const expiresAt = addDays(new Date(), 7).toISOString();
+
+    await client.query(
+      `
+      INSERT INTO lead_account_invites (lead_id, token_hash, expires_at, sent_by_user_id)
+      VALUES ($1, $2, $3, $4)
+      `,
+      [lead.id, tokenHash, expiresAt, actorUserId]
+    );
+
+    await client.query("COMMIT");
+
+    // Send invite email
+    const setupPath = process.env.NEW_ACCOUNT_SETUP_PATH || "/new-account-setup";
+    const setupUrl = buildAppUrl(setupPath, { token, email: lead.email });
+
+    const emailResult = await sendLeadBookingInviteEmail({
+      to: lead.email,
+      firstName: lead.first_name,
+      resetUrl: setupUrl,
+    });
+
+    return res.status(201).json({
+      ok: true,
+      message: "Lead created and invite email sent",
+      lead: {
+        public_id: lead.public_id,
+        email: lead.email,
+        first_name: lead.first_name,
+        last_name: lead.last_name,
+        phone: lead.phone,
+        address: lead.address,
+        created_at: lead.created_at,
+      },
+      invite: { expiresAt },
+      email: emailResult,
+    });
+  } catch (err) {
+    try { await client.query("ROLLBACK"); } catch {}
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;

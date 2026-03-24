@@ -11,6 +11,7 @@ import {
   Square,
   Tag,
   User,
+  UserPlus,
   X,
 } from "lucide-react";
 import {
@@ -25,6 +26,7 @@ import {
 } from "../../../../lib/api/adminCustomers";
 import UndoToast, { type UndoToastState } from "../_components/UndoToast";
 import { usePolling } from "../_components/usePolling";
+import InviteLeadModal from "../../../../components/admin/InviteLeadModal";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -410,6 +412,9 @@ export default function AdminCustomersPage() {
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
   const [bulkTagValue, setBulkTagValue] = useState<string>("");
   const [bulkTagBusy, setBulkTagBusy] = useState(false);
+
+  // Invite Lead modal
+  const [inviteLeadOpen, setInviteLeadOpen] = useState(false);
   const shouldReduceMotion = useReducedMotion();
 
   const refresh = useCallback(async (opts?: { page?: number; q?: string }) => {
@@ -878,6 +883,14 @@ export default function AdminCustomersPage() {
             >
               Refresh
             </button>
+            <button
+              type="button"
+              onClick={() => setInviteLeadOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-200 transition hover:bg-amber-500/20"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              Invite Lead
+            </button>
           </div>
         </div>
 
@@ -1168,6 +1181,12 @@ export default function AdminCustomersPage() {
           </section>
         ) : null}
       </div>
+
+      <InviteLeadModal
+        open={inviteLeadOpen}
+        onClose={() => setInviteLeadOpen(false)}
+        onSuccess={() => refresh({ page: 1 })}
+      />
     </>
   );
 }

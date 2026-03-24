@@ -7,7 +7,7 @@ import {
   getAdminTechBookingDetail,
   type TechBookingDetail,
 } from "../../../../../../lib/api/adminTechBookings";
-import SectionCard from "../../../components/SectionCard";
+import SectionCard from "../../../../../../app/account/bookings/components/SectionCard";
 
 function formatDateTime(iso: string | null | undefined) {
   if (!iso) return "—";

@@ -262,3 +262,31 @@ export function adminSendInvite(kind: AdminCustomerKind, publicId: string) {
     { method: "POST" }
   );
 }
+
+export type AdminCreateLeadPayload = {
+  email: string;
+  first_name: string;
+  last_name: string;
+  phone?: string;
+  address?: string;
+};
+
+export function adminCreateLead(data: AdminCreateLeadPayload) {
+  return jsonFetch<{
+    ok: boolean;
+    message?: string;
+    lead?: {
+      public_id: string;
+      email: string;
+      first_name: string | null;
+      last_name: string | null;
+      phone: string | null;
+      address: string | null;
+      created_at: string;
+    };
+    invite?: { expiresAt?: string | null };
+  }>("/admin/customers/leads", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
