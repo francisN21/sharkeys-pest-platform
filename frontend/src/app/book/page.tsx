@@ -6,6 +6,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   CalendarDays,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   FileText,
   MapPin,
@@ -123,39 +125,22 @@ function SectionCard({
 }: {
   icon: React.ReactNode;
   title: string;
-  subtitle?: string;
+  subtitle?: React.ReactNode;
   accentClass?: string;
   complete?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <div
-      className="overflow-hidden rounded-2xl border"
-      style={{
-        borderColor: "rgb(var(--border))",
-        background: "rgba(var(--bg), 0.02)",
-      }}
-    >
-      <div
-        className="flex items-center gap-3 border-b px-5 py-4"
-        style={{ borderColor: "rgb(var(--border))" }}
-      >
-        <div
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${accentClass}`}
-        >
+    <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02]">
+      <div className="flex items-center gap-3 border-b border-white/10 px-5 py-4">
+        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${accentClass}`}>
           {icon}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-semibold">{title}</div>
-          {subtitle ? (
-            <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-              {subtitle}
-            </div>
-          ) : null}
+          <div className="text-sm font-semibold text-[rgb(var(--fg))]">{title}</div>
+          {subtitle ? <div className="text-xs text-[rgb(var(--muted))]">{subtitle}</div> : null}
         </div>
-        {complete ? (
-          <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
-        ) : null}
+        {complete ? <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" /> : null}
       </div>
       <div className="p-5">{children}</div>
     </div>
@@ -163,7 +148,7 @@ function SectionCard({
 }
 
 const INPUT_CLS =
-  "w-full rounded-xl border px-3 py-2.5 text-sm transition focus:outline-none focus:ring-2";
+  "h-10 w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 text-sm text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted))] focus:border-white/20 focus:outline-none focus:ring-2 focus:ring-white/10 transition";
 
 // --- Main Page ---
 
@@ -210,7 +195,7 @@ export default function BookPage() {
   const durationMinutes = selectedService?.duration_minutes ?? 60;
   const neededBlocks = useMemo(() => blocksNeeded(durationMinutes), [durationMinutes]);
   const maxBookDateYmd = useMemo(() => ymdLocal(addDays(new Date(), 60)), []);
-  const hours = useMemo(() => Array.from({ length: 24 }, (_, i) => i), []);
+  const hours = useMemo(() => Array.from({ length: 14 }, (_, i) => i + 8), []);
 
   const defaultAddress = (user?.address || "").trim();
 
@@ -474,11 +459,12 @@ export default function BookPage() {
           <AnimatePresence>
             {error ? (
               <motion.div
-                initial={{ opacity: 0, y: -4 }}
+                key="error"
+                initial={{ opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                className="rounded-xl border p-3 text-sm"
-                style={{ borderColor: "rgb(239 68 68)" }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.15 }}
+                className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400"
               >
                 {error}
               </motion.div>
@@ -502,8 +488,8 @@ export default function BookPage() {
                 {/* Service picker */}
                 <SectionCard
                   icon={<FileText className="h-5 w-5" />}
-                  title="Select a Service"
-                  subtitle="Choose the type of pest control service you need"
+                  title="Service"
+                  subtitle="Choose the service type for this booking"
                   accentClass="bg-sky-500/10 text-sky-400"
                   complete={!!servicePublicId}
                 >
@@ -512,10 +498,6 @@ export default function BookPage() {
                   <div className="sm:hidden">
                     <select
                       className={INPUT_CLS}
-                      style={{
-                        borderColor: "rgb(var(--border))",
-                        background: "rgba(var(--bg), 0.35)",
-                      }}
                       value={servicePublicId}
                       onChange={(e) => setServicePublicId(e.target.value)}
                     >
@@ -538,54 +520,28 @@ export default function BookPage() {
                           key={s.public_id}
                           type="button"
                           onClick={() => setServicePublicId(s.public_id)}
-                          className={cn(
-                            "text-left rounded-2xl border p-4 transition hover:opacity-95",
-                            active && "ring-2"
-                          )}
+                          className="group relative flex flex-col rounded-2xl border p-4 text-left transition hover:bg-white/[0.04]"
                           style={{
-                            borderColor: "rgb(var(--border))",
-                            background: active
-                              ? "rgba(var(--bg), 0.45)"
-                              : "rgba(var(--bg), 0.22)",
+                            borderColor: active ? "rgba(56,189,248,0.45)" : "rgba(255,255,255,0.08)",
+                            background: active ? "rgba(14,165,233,0.08)" : "rgba(255,255,255,0.02)",
                           }}
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <div className="font-semibold truncate">{s.title}</div>
-                              <div
-                                className="mt-1 text-sm"
-                                style={{ color: "rgb(var(--muted))" }}
-                              >
+                              <div className="mt-1 text-xs text-[rgb(var(--muted))] line-clamp-2">
                                 {s.description}
                               </div>
                             </div>
-                            {active ? (
-                              <span
-                                className="shrink-0 rounded-full border px-2 py-1 text-xs"
-                                style={{
-                                  borderColor: "rgb(var(--border))",
-                                  background: "rgba(var(--bg), 0.35)",
-                                }}
-                              >
-                                Selected
-                              </span>
-                            ) : null}
+                            {active ? <CheckCircle2 className="h-4 w-4 shrink-0 text-sky-400" /> : null}
                           </div>
-                          <div
-                            className="mt-3 flex items-center gap-2 text-xs"
-                            style={{ color: "rgb(var(--muted))" }}
-                          >
-                            <span
-                              className="rounded-full border px-2 py-1"
-                              style={{ borderColor: "rgb(var(--border))" }}
-                            >
+                          <div className="mt-3 flex items-center gap-2">
+                            <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 text-xs text-[rgb(var(--muted))]">
+                              <Clock className="h-3 w-3" />
                               {hrs} hr{hrs !== 1 ? "s" : ""}
                             </span>
                             {price ? (
-                              <span
-                                className="rounded-full border px-2 py-1"
-                                style={{ borderColor: "rgb(var(--border))" }}
-                              >
+                              <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 text-xs text-[rgb(var(--muted))]">
                                 ${price}
                               </span>
                             ) : null}
@@ -599,8 +555,8 @@ export default function BookPage() {
                 {/* Calendar + Time */}
                 <SectionCard
                   icon={<CalendarDays className="h-5 w-5" />}
-                  title="Pick a Date & Time"
-                  subtitle="Select an available slot for your service"
+                  title="Schedule"
+                  subtitle={selectedStartHour !== null ? formatSelectedHeader(selectedDateYmd, selectedStartHour, neededBlocks) : "Select a date and time"}
                   accentClass="bg-orange-500/10 text-orange-400"
                   complete={selectedStartHour !== null}
                 >
@@ -620,25 +576,17 @@ export default function BookPage() {
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
-                            className="rounded-xl border px-3 py-1.5 text-sm font-semibold hover:opacity-90 transition"
-                            style={{
-                              borderColor: "rgb(var(--border))",
-                              background: "rgba(var(--bg), 0.25)",
-                            }}
                             onClick={() => setMonthCursor((d) => addMonths(d, -1))}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-[rgb(var(--muted))] transition hover:bg-white/[0.07]"
                           >
-                            ‹
+                            <ChevronLeft className="h-4 w-4" />
                           </button>
                           <button
                             type="button"
-                            className="rounded-xl border px-3 py-1.5 text-sm font-semibold hover:opacity-90 transition"
-                            style={{
-                              borderColor: "rgb(var(--border))",
-                              background: "rgba(var(--bg), 0.25)",
-                            }}
                             onClick={() => setMonthCursor((d) => addMonths(d, 1))}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-[rgb(var(--muted))] transition hover:bg-white/[0.07]"
                           >
-                            ›
+                            <ChevronRight className="h-4 w-4" />
                           </button>
                         </div>
                       </div>
@@ -670,36 +618,31 @@ export default function BookPage() {
                                 setPendingStartHour(null);
                               }}
                               disabled={disabled}
-                              className={cn(
-                                "rounded-xl border py-2 text-sm transition",
-                                active && "ring-2",
-                                disabled && "opacity-40 cursor-not-allowed"
-                              )}
+                              className="flex flex-col items-center justify-center rounded-xl py-2 text-sm transition"
                               style={{
-                                borderColor: "rgb(var(--border))",
-                                background: active
-                                  ? "rgba(var(--bg), 0.55)"
-                                  : "rgba(var(--bg), 0.20)",
+                                background: active ? "rgb(var(--primary))" : "transparent",
+                                color: active
+                                  ? "rgb(var(--primary-fg))"
+                                  : disabled
+                                  ? "rgba(var(--muted), 0.4)"
+                                  : c.inMonth
+                                  ? "rgb(var(--fg))"
+                                  : "rgb(var(--muted))",
+                                cursor: disabled ? "not-allowed" : "pointer",
+                                opacity: disabled ? 0.4 : 1,
                               }}
                               title={
                                 isPastDate(c.ymd)
-                                  ? "Past date"
+                                  ? "Past dates are not available"
                                   : c.ymd > maxBookDateYmd
-                                    ? "Bookings available up to 60 days out"
-                                    : undefined
+                                  ? "Bookings are available up to 60 days out"
+                                  : c.ymd
                               }
                             >
-                              <div className="flex items-center justify-center gap-1">
-                                <span className={cn(!c.inMonth && "opacity-50")}>
-                                  {c.date.getDate()}
-                                </span>
-                                {isToday ? (
-                                  <span
-                                    className="inline-block h-1.5 w-1.5 rounded-full"
-                                    style={{ background: "rgb(59 130 246)" }}
-                                  />
-                                ) : null}
-                              </div>
+                              <span>{c.date.getDate()}</span>
+                              {isToday && !active ? (
+                                <span className="mt-0.5 h-1 w-1 rounded-full" style={{ background: "rgb(var(--primary))" }} />
+                              ) : null}
                             </button>
                           );
                         })}
@@ -751,30 +694,30 @@ export default function BookPage() {
                               type="button"
                               disabled={blocked}
                               onClick={() => setPendingStartHour(h)}
-                              className={cn(
-                                "w-full rounded-xl border px-3 py-2 text-left text-sm font-semibold transition",
-                                (active || pending) && "ring-2",
-                                blocked && "opacity-40 cursor-not-allowed"
-                              )}
+                              className="flex w-full items-center justify-between rounded-xl border px-3 py-2 text-sm font-medium transition"
                               style={{
-                                borderColor: "rgb(var(--border))",
-                                background: active
-                                  ? "rgba(var(--bg), 0.55)"
+                                borderColor: active
+                                  ? "rgba(139,92,246,0.5)"
                                   : pending
-                                    ? "rgba(var(--bg), 0.40)"
-                                    : "rgba(var(--bg), 0.22)",
+                                  ? "rgba(139,92,246,0.3)"
+                                  : blocked
+                                  ? "rgba(255,255,255,0.05)"
+                                  : "rgba(255,255,255,0.08)",
+                                background: active
+                                  ? "rgba(139,92,246,0.15)"
+                                  : pending
+                                  ? "rgba(139,92,246,0.08)"
+                                  : "rgba(255,255,255,0.02)",
+                                color: blocked ? "rgb(var(--muted))" : "rgb(var(--fg))",
+                                cursor: blocked ? "not-allowed" : "pointer",
+                                opacity: blocked ? 0.45 : 1,
                               }}
-                              title={blocked ? "Unavailable" : undefined}
                             >
-                              {formatTimeLabel(h)}
+                              <span>{formatTimeLabel(h)}</span>
                               {neededBlocks > 1 ? (
-                                <span
-                                  className="ml-2 text-xs"
-                                  style={{ color: "rgb(var(--muted))" }}
-                                >
-                                  → {formatTimeLabel((h + neededBlocks) % 24)}
-                                </span>
+                                <span className="text-xs text-[rgb(var(--muted))]">→ {formatTimeLabel((h + neededBlocks) % 24)}</span>
                               ) : null}
+                              {active ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-violet-400" /> : null}
                             </button>
                           );
                         })}
@@ -855,7 +798,7 @@ export default function BookPage() {
                 <SectionCard
                   icon={<MapPin className="h-5 w-5" />}
                   title="Service Address"
-                  subtitle="Where we're coming"
+                  subtitle="Where should we go?"
                   accentClass="bg-emerald-500/10 text-emerald-400"
                   complete={finalAddress.length >= 5}
                 >
@@ -888,10 +831,6 @@ export default function BookPage() {
                   {useDifferentAddress ? (
                     <AddressAutocomplete
                       className={cn(INPUT_CLS, "mt-3")}
-                      style={{
-                        borderColor: "rgb(var(--border))",
-                        background: "rgba(var(--bg), 0.35)",
-                      }}
                       placeholder="Enter service address"
                       value={serviceAddress}
                       onChange={setServiceAddress}
@@ -903,16 +842,12 @@ export default function BookPage() {
                 <SectionCard
                   icon={<FileText className="h-5 w-5" />}
                   title="Notes"
-                  subtitle="Optional details to help our technician"
+                  subtitle="Optional — gate codes, pets, special instructions"
                   accentClass="bg-violet-500/10 text-violet-400"
                   complete={notes.trim().length > 0}
                 >
                   <textarea
                     className={cn(INPUT_CLS, "min-h-[100px] resize-none")}
-                    style={{
-                      borderColor: "rgb(var(--border))",
-                      background: "rgba(var(--bg), 0.35)",
-                    }}
                     placeholder="Gate code, pets on-site, anything we should know…"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}

@@ -137,12 +137,14 @@ function SectionCard({
   title,
   subtitle,
   accentClass = "bg-sky-500/10 text-sky-400",
+  complete = false,
   children,
 }: {
   icon: React.ReactNode;
   title: string;
-  subtitle?: string;
+  subtitle?: React.ReactNode;
   accentClass?: string;
+  complete?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -151,10 +153,11 @@ function SectionCard({
         <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${accentClass}`}>
           {icon}
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <div className="text-sm font-semibold text-[rgb(var(--fg))]">{title}</div>
           {subtitle ? <div className="text-xs text-[rgb(var(--muted))]">{subtitle}</div> : null}
         </div>
+        {complete ? <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" /> : null}
       </div>
       <div className="p-5">{children}</div>
     </div>
@@ -188,7 +191,6 @@ export default function AdminLeadsPage() {
   const [loadingSubmit, setLoadingSubmit] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const [meRes, setMeRes] = useState<MeResponse | null>(null);
 
@@ -248,7 +250,7 @@ export default function AdminLeadsPage() {
   const durationMinutes = selectedService?.duration_minutes ?? 60;
   const neededBlocks = useMemo(() => blocksNeeded(durationMinutes), [durationMinutes]);
   const maxBookDateYmd = useMemo(() => ymdLocal(addDays(new Date(), 60)), []);
-  const hours = useMemo(() => Array.from({ length: 24 }, (_, i) => i), []);
+  const hours = useMemo(() => Array.from({ length: 14 }, (_, i) => i + 8), []);
 
   const finalAddress = useMemo(() => {
     if (targetMode === "new") return leadAddress.trim();
@@ -360,7 +362,6 @@ export default function AdminLeadsPage() {
   // When target mode changes, reset relevant fields
   useEffect(() => {
     setError(null);
-    setSuccessMsg(null);
     setSelectedStartHour(null);
     setPendingStartHour(null);
 
@@ -484,7 +485,6 @@ export default function AdminLeadsPage() {
 
   function resetForm() {
     setError(null);
-    setSuccessMsg(null);
 
     setTargetMode("existing");
     setCustQ("");
@@ -509,7 +509,6 @@ export default function AdminLeadsPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSuccessMsg(null);
     setError(null);
 
     if (!canUsePage) return setError("Not authorized.");
@@ -597,9 +596,7 @@ export default function AdminLeadsPage() {
               notes: finalNotes.trim() ? finalNotes.trim() : undefined,
             });
 
-      const pid = created?.booking?.public_id ? ` (${created.booking.public_id})` : "";
       resetForm();
-      setSuccessMsg(`Booking created!${pid}`);
       toast.success("Booking created!", {
         description: created?.booking?.public_id
           ? `Booking ID: ${created.booking.public_id}`
@@ -704,19 +701,6 @@ export default function AdminLeadsPage() {
           </motion.div>
         ) : null}
 
-        {successMsg ? (
-          <motion.div
-            key="success"
-            initial={shouldReduceMotion ? undefined : { opacity: 0, y: -6 }}
-            animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
-            exit={shouldReduceMotion ? undefined : { opacity: 0, y: -6 }}
-            transition={{ duration: 0.15 }}
-            className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-400"
-          >
-            <CheckCircle2 className="h-4 w-4 shrink-0" />
-            {successMsg}
-          </motion.div>
-        ) : null}
       </AnimatePresence>
 
       {pageLoading ? (
@@ -732,6 +716,7 @@ export default function AdminLeadsPage() {
             title="Service"
             subtitle="Choose the service type for this booking"
             accentClass="bg-sky-500/10 text-sky-400"
+            complete={servicePublicId !== ""}
           >
             {/* Mobile dropdown */}
             <div className="sm:hidden">
@@ -801,6 +786,7 @@ export default function AdminLeadsPage() {
             title="Customer"
             subtitle="Book for an existing account or create a new lead"
             accentClass="bg-indigo-500/10 text-indigo-400"
+            complete={(targetMode === "existing" && selectedPerson !== null) || (targetMode === "new" && leadEmail.trim().length >= 5 && leadAddress.trim().length >= 5)}
           >
             {/* Mode tabs */}
             <div className="mb-4 flex gap-2">
@@ -1012,6 +998,7 @@ export default function AdminLeadsPage() {
                 : "Select a date and time"
             }
             accentClass="bg-violet-500/10 text-violet-400"
+            complete={selectedStartHour !== null}
           >
             <div className="grid gap-4 lg:grid-cols-3">
               {/* Calendar */}
@@ -1237,6 +1224,7 @@ export default function AdminLeadsPage() {
                   title="Service Address"
                   subtitle="Where should we go?"
                   accentClass="bg-amber-500/10 text-amber-400"
+                  complete={finalAddress.length >= 5}
                 >
                   <div className="space-y-3">
                     <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
@@ -1300,6 +1288,72 @@ export default function AdminLeadsPage() {
             />
             <div className="mt-1.5 text-right text-xs text-[rgb(var(--muted))]">{notes.length}/2000</div>
           </SectionCard>
+
+          {/* ── Booking Summary Strip ── */}
+          <AnimatePresence>
+            {selectedStartHour !== null && servicePublicId ? (
+              <motion.div
+                key="summary"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden rounded-2xl border"
+                style={{
+                  borderColor: "rgba(34,197,94,0.3)",
+                  background: "rgba(34,197,94,0.05)",
+                }}
+              >
+                <div
+                  className="flex items-center gap-2 border-b px-5 py-3"
+                  style={{ borderColor: "rgba(34,197,94,0.2)" }}
+                >
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
+                  <span className="text-sm font-semibold text-green-500">Booking Summary</span>
+                </div>
+                <div className="flex flex-wrap gap-x-6 gap-y-3 px-5 py-4">
+                  {services.find((s) => s.public_id === servicePublicId) ? (
+                    <div>
+                      <div className="text-xs font-semibold text-[rgb(var(--muted))]">Service</div>
+                      <div className="text-sm font-medium text-[rgb(var(--fg))]">
+                        {services.find((s) => s.public_id === servicePublicId)!.title}
+                      </div>
+                    </div>
+                  ) : null}
+                  <div>
+                    <div className="text-xs font-semibold text-[rgb(var(--muted))]">Date & Time</div>
+                    <div className="text-sm font-medium text-[rgb(var(--fg))]">
+                      {formatSelectedHeader(selectedDateYmd, selectedStartHour, neededBlocks)}
+                    </div>
+                  </div>
+                  {finalAddress ? (
+                    <div>
+                      <div className="text-xs font-semibold text-[rgb(var(--muted))]">Address</div>
+                      <div className="text-sm font-medium text-[rgb(var(--fg))]">{finalAddress}</div>
+                    </div>
+                  ) : null}
+                  {selectedPerson || (targetMode === "new" && leadEmail.trim()) ? (
+                    <div>
+                      <div className="text-xs font-semibold text-[rgb(var(--muted))]">Customer</div>
+                      <div className="text-sm font-medium text-[rgb(var(--fg))]">
+                        {targetMode === "new"
+                          ? [leadFirst.trim(), leadLast.trim()].filter(Boolean).join(" ") || leadEmail.trim()
+                          : custRows.find((r) => selectedPerson && r.public_id === selectedPerson.public_id)
+                            ? [
+                                custRows.find((r) => selectedPerson && r.public_id === selectedPerson.public_id)!.first_name,
+                                custRows.find((r) => selectedPerson && r.public_id === selectedPerson.public_id)!.last_name,
+                              ]
+                              .filter(Boolean)
+                              .join(" ") ||
+                              custRows.find((r) => selectedPerson && r.public_id === selectedPerson.public_id)!.email
+                            : ""}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
 
           {/* ── Submit ── */}
           <div className="flex items-center justify-end gap-3 pt-1">

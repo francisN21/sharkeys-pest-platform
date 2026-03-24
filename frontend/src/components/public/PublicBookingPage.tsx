@@ -9,9 +9,11 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronLeft,
+  ChevronRight,
   Clock,
   FileText,
   MapPin,
+  StickyNote,
   User2,
 } from "lucide-react";
 import { me as apiMe } from "../../lib/api/auth";
@@ -183,39 +185,22 @@ function SectionCard({
 }: {
   icon: React.ReactNode;
   title: string;
-  subtitle?: string;
+  subtitle?: React.ReactNode;
   accentClass?: string;
   complete?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <div
-      className="overflow-hidden rounded-2xl border"
-      style={{
-        borderColor: "rgb(var(--border))",
-        background: "rgba(var(--bg), 0.02)",
-      }}
-    >
-      <div
-        className="flex items-center gap-3 border-b px-5 py-4"
-        style={{ borderColor: "rgb(var(--border))" }}
-      >
-        <div
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${accentClass}`}
-        >
+    <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02]">
+      <div className="flex items-center gap-3 border-b border-white/10 px-5 py-4">
+        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${accentClass}`}>
           {icon}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-semibold">{title}</div>
-          {subtitle ? (
-            <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-              {subtitle}
-            </div>
-          ) : null}
+          <div className="text-sm font-semibold text-[rgb(var(--fg))]">{title}</div>
+          {subtitle ? <div className="text-xs text-[rgb(var(--muted))]">{subtitle}</div> : null}
         </div>
-        {complete ? (
-          <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
-        ) : null}
+        {complete ? <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" /> : null}
       </div>
       <div className="p-5">{children}</div>
     </div>
@@ -223,7 +208,7 @@ function SectionCard({
 }
 
 const INPUT_CLS =
-  "w-full rounded-xl border px-3 py-2.5 text-sm transition focus:outline-none focus:ring-2";
+  "h-10 w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 text-sm text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted))] focus:border-white/20 focus:outline-none focus:ring-2 focus:ring-white/10 transition";
 
 // --- Main Component ---
 
@@ -277,7 +262,7 @@ export default function PublicBookingPage({
   const durationMinutes = selectedService?.duration_minutes ?? 60;
   const neededBlocks = useMemo(() => blocksNeeded(durationMinutes), [durationMinutes]);
   const maxBookDateYmd = useMemo(() => ymdLocal(addDays(new Date(), 60)), []);
-  const hours = useMemo(() => Array.from({ length: 24 }, (_, i) => i), []);
+  const hours = useMemo(() => Array.from({ length: 14 }, (_, i) => i + 8), []);
 
   const startsAtIso = useMemo(() => {
     if (!selectedDateYmd || selectedStartHour === null) return null;
@@ -580,11 +565,12 @@ export default function PublicBookingPage({
           <AnimatePresence>
             {error ? (
               <motion.div
-                initial={{ opacity: 0, y: -4 }}
+                key="error"
+                initial={{ opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                className="rounded-xl border p-3 text-sm"
-                style={{ borderColor: "rgb(239 68 68)" }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.15 }}
+                className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400"
               >
                 {error}
               </motion.div>
@@ -687,8 +673,8 @@ export default function PublicBookingPage({
                     {/* Locked service display */}
                     <SectionCard
                       icon={<FileText className="h-5 w-5" />}
-                      title="Selected Service"
-                      subtitle="This booking is pre-configured for this service"
+                      title="Service"
+                      subtitle="Choose the service type for this booking"
                       accentClass="bg-sky-500/10 text-sky-400"
                       complete={!!selectedService}
                     >
@@ -760,10 +746,6 @@ export default function PublicBookingPage({
                             value={firstName}
                             onChange={(e) => setFirstName(e.target.value)}
                             className={INPUT_CLS}
-                            style={{
-                              borderColor: "rgb(var(--border))",
-                              background: "rgba(var(--bg), 0.35)",
-                            }}
                           />
                         </Field>
                         <Field label="Last name *">
@@ -771,10 +753,6 @@ export default function PublicBookingPage({
                             value={lastName}
                             onChange={(e) => setLastName(e.target.value)}
                             className={INPUT_CLS}
-                            style={{
-                              borderColor: "rgb(var(--border))",
-                              background: "rgba(var(--bg), 0.35)",
-                            }}
                           />
                         </Field>
                         <Field label="Email *">
@@ -784,10 +762,6 @@ export default function PublicBookingPage({
                             onChange={(e) => setEmail(e.target.value)}
                             placeholder="you@example.com"
                             className={INPUT_CLS}
-                            style={{
-                              borderColor: "rgb(var(--border))",
-                              background: "rgba(var(--bg), 0.35)",
-                            }}
                           />
                         </Field>
                         <Field label="Phone">
@@ -796,10 +770,6 @@ export default function PublicBookingPage({
                             onChange={(e) => setPhone(e.target.value)}
                             placeholder="702-555-1234"
                             className={INPUT_CLS}
-                            style={{
-                              borderColor: "rgb(var(--border))",
-                              background: "rgba(var(--bg), 0.35)",
-                            }}
                           />
                         </Field>
                       </div>
@@ -808,8 +778,8 @@ export default function PublicBookingPage({
                     {/* Calendar + Time */}
                     <SectionCard
                       icon={<CalendarDays className="h-5 w-5" />}
-                      title="Pick a Date & Time"
-                      subtitle="Select an available slot for your service"
+                      title="Schedule"
+                      subtitle={selectedStartHour !== null ? formatSelectedHeader(selectedDateYmd, selectedStartHour, neededBlocks) : "Select a date and time"}
                       accentClass="bg-orange-500/10 text-orange-400"
                       complete={selectedStartHour !== null}
                     >
@@ -829,25 +799,17 @@ export default function PublicBookingPage({
                             <div className="flex items-center gap-1">
                               <button
                                 type="button"
-                                className="rounded-xl border px-3 py-1.5 text-sm font-semibold hover:opacity-90 transition"
-                                style={{
-                                  borderColor: "rgb(var(--border))",
-                                  background: "rgba(var(--bg), 0.25)",
-                                }}
                                 onClick={() => setMonthCursor((d) => addMonths(d, -1))}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-[rgb(var(--muted))] transition hover:bg-white/[0.07]"
                               >
-                                ‹
+                                <ChevronLeft className="h-4 w-4" />
                               </button>
                               <button
                                 type="button"
-                                className="rounded-xl border px-3 py-1.5 text-sm font-semibold hover:opacity-90 transition"
-                                style={{
-                                  borderColor: "rgb(var(--border))",
-                                  background: "rgba(var(--bg), 0.25)",
-                                }}
                                 onClick={() => setMonthCursor((d) => addMonths(d, 1))}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-[rgb(var(--muted))] transition hover:bg-white/[0.07]"
                               >
-                                ›
+                                <ChevronRight className="h-4 w-4" />
                               </button>
                             </div>
                           </div>
@@ -879,29 +841,24 @@ export default function PublicBookingPage({
                                     setPendingStartHour(null);
                                   }}
                                   disabled={disabled}
-                                  className={cn(
-                                    "rounded-xl border py-2 text-sm transition",
-                                    active && "ring-2",
-                                    disabled && "cursor-not-allowed opacity-40"
-                                  )}
+                                  className="flex flex-col items-center justify-center rounded-xl py-2 text-sm transition"
                                   style={{
-                                    borderColor: "rgb(var(--border))",
-                                    background: active
-                                      ? "rgba(var(--bg), 0.55)"
-                                      : "rgba(var(--bg), 0.20)",
+                                    background: active ? "rgb(var(--primary))" : "transparent",
+                                    color: active
+                                      ? "rgb(var(--primary-fg))"
+                                      : disabled
+                                      ? "rgba(var(--muted), 0.4)"
+                                      : c.inMonth
+                                      ? "rgb(var(--fg))"
+                                      : "rgb(var(--muted))",
+                                    cursor: disabled ? "not-allowed" : "pointer",
+                                    opacity: disabled ? 0.4 : 1,
                                   }}
                                 >
-                                  <div className="flex items-center justify-center gap-1">
-                                    <span className={cn(!c.inMonth && "opacity-50")}>
-                                      {c.date.getDate()}
-                                    </span>
-                                    {isToday ? (
-                                      <span
-                                        className="inline-block h-1.5 w-1.5 rounded-full"
-                                        style={{ background: "rgb(59 130 246)" }}
-                                      />
-                                    ) : null}
-                                  </div>
+                                  <span>{c.date.getDate()}</span>
+                                  {isToday && !active ? (
+                                    <span className="mt-0.5 h-1 w-1 rounded-full" style={{ background: "rgb(var(--primary))" }} />
+                                  ) : null}
                                 </button>
                               );
                             })}
@@ -945,37 +902,39 @@ export default function PublicBookingPage({
                           >
                             {hours.map((h) => {
                               const blocked = slotIsBlocked(selectedDateYmd, h);
+                              const disableTimeSlots = false;
                               const active = selectedStartHour === h;
                               const pending = pendingStartHour === h;
                               return (
                                 <button
                                   key={h}
                                   type="button"
-                                  disabled={blocked}
+                                  disabled={blocked || disableTimeSlots}
                                   onClick={() => setPendingStartHour(h)}
-                                  className={cn(
-                                    "w-full rounded-xl border px-3 py-2 text-left text-sm font-semibold transition",
-                                    (active || pending) && "ring-2",
-                                    blocked && "cursor-not-allowed opacity-40"
-                                  )}
+                                  className="flex w-full items-center justify-between rounded-xl border px-3 py-2 text-sm font-medium transition"
                                   style={{
-                                    borderColor: "rgb(var(--border))",
-                                    background: active
-                                      ? "rgba(var(--bg), 0.55)"
+                                    borderColor: active
+                                      ? "rgba(139,92,246,0.5)"
                                       : pending
-                                        ? "rgba(var(--bg), 0.40)"
-                                        : "rgba(var(--bg), 0.22)",
+                                      ? "rgba(139,92,246,0.3)"
+                                      : blocked || disableTimeSlots
+                                      ? "rgba(255,255,255,0.05)"
+                                      : "rgba(255,255,255,0.08)",
+                                    background: active
+                                      ? "rgba(139,92,246,0.15)"
+                                      : pending
+                                      ? "rgba(139,92,246,0.08)"
+                                      : "rgba(255,255,255,0.02)",
+                                    color: blocked || disableTimeSlots ? "rgb(var(--muted))" : "rgb(var(--fg))",
+                                    cursor: blocked || disableTimeSlots ? "not-allowed" : "pointer",
+                                    opacity: blocked || disableTimeSlots ? 0.45 : 1,
                                   }}
                                 >
-                                  {formatTimeLabel(h)}
+                                  <span>{formatTimeLabel(h)}</span>
                                   {neededBlocks > 1 ? (
-                                    <span
-                                      className="ml-2 text-xs"
-                                      style={{ color: "rgb(var(--muted))" }}
-                                    >
-                                      → {formatTimeLabel((h + neededBlocks) % 24)}
-                                    </span>
+                                    <span className="text-xs text-[rgb(var(--muted))]">→ {formatTimeLabel((h + neededBlocks) % 24)}</span>
                                   ) : null}
+                                  {active ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-violet-400" /> : null}
                                 </button>
                               );
                             })}
@@ -1047,47 +1006,40 @@ export default function PublicBookingPage({
                       </div>
                     </SectionCard>
 
-                    {/* Service address + notes */}
+                    {/* Service address */}
                     <SectionCard
-                      icon={<MapPin className="h-5 w-5" />}
-                      title="Service Details"
-                      subtitle="Where we're coming and what to expect"
+                      icon={<MapPin className="h-4 w-4" />}
+                      title="Service Address"
+                      subtitle="Where should we go?"
                       accentClass="bg-emerald-500/10 text-emerald-400"
-                      complete={serviceAddress.trim().length >= 5 && notes.trim().length >= 5}
+                      complete={serviceAddress.trim().length >= 5}
                     >
-                      <div className="space-y-4">
-                        <Field label="Service address *">
-                          <AddressAutocomplete
-                            value={serviceAddress}
-                            onChange={setServiceAddress}
-                            placeholder="123 Main St, San Jose, CA 95101"
-                            className={INPUT_CLS}
-                            style={{
-                              borderColor: "rgb(var(--border))",
-                              background: "rgba(var(--bg), 0.35)",
-                            }}
-                          />
-                        </Field>
-                        <Field label="Description *">
-                          <textarea
-                            value={notes}
-                            onChange={(e) => setNotes(e.target.value)}
-                            placeholder="Describe the issue (gate code, pets on-site, anything we should know…)"
-                            className={cn(INPUT_CLS, "min-h-[100px] resize-none")}
-                            style={{
-                              borderColor: "rgb(var(--border))",
-                              background: "rgba(var(--bg), 0.35)",
-                            }}
-                            maxLength={2000}
-                          />
-                          <div
-                            className="text-xs text-right"
-                            style={{ color: "rgb(var(--muted))" }}
-                          >
-                            {notes.length}/2000
-                          </div>
-                        </Field>
-                      </div>
+                      <Field label="Service address *">
+                        <AddressAutocomplete
+                          value={serviceAddress}
+                          onChange={setServiceAddress}
+                          placeholder="123 Main St, San Jose, CA 95101"
+                          className={INPUT_CLS}
+                        />
+                      </Field>
+                    </SectionCard>
+
+                    {/* Notes */}
+                    <SectionCard
+                      icon={<StickyNote className="h-4 w-4" />}
+                      title="Notes"
+                      subtitle="Optional — gate codes, pets, special instructions"
+                      accentClass="bg-zinc-500/10 text-zinc-400"
+                      complete={notes.trim().length >= 5}
+                    >
+                      <textarea
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        placeholder="Gate code, pets on-site, anything we should know…"
+                        className={cn(INPUT_CLS, "min-h-[100px] resize-none")}
+                        maxLength={2000}
+                      />
+                      <div className="mt-1.5 text-right text-xs text-[rgb(var(--muted))]">{notes.length}/2000</div>
                     </SectionCard>
 
                     {/* Booking summary strip */}
@@ -1201,10 +1153,7 @@ function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <div
-        className="text-xs font-semibold uppercase tracking-wide"
-        style={{ color: "rgb(var(--muted))" }}
-      >
+      <div className="text-xs font-semibold text-[rgb(var(--muted))]">
         {label}
       </div>
       {children}
