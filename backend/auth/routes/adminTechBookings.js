@@ -201,6 +201,10 @@ router.get("/admin/tech-bookings/:publicId", requireAuth, async (req, res, next)
         b.notes,
         s.title AS service_title,
         s.base_price_cents AS service_base_price_cents,
+        COALESCE(bp.final_price_cents, bp.initial_price_cents, s.base_price_cents, 0)::bigint AS effective_price_cents,
+
+        b.completed_at,
+        b.cancelled_at,
 
         ba.worker_user_id,
 
@@ -233,6 +237,7 @@ router.get("/admin/tech-bookings/:publicId", requireAuth, async (req, res, next)
       JOIN services s ON s.id = b.service_id
       LEFT JOIN users cu ON cu.id = b.customer_user_id
       LEFT JOIN leads l  ON l.id = b.lead_id
+      LEFT JOIN booking_prices bp ON bp.booking_id = b.id
 
       LEFT JOIN customer_tags ct_reg
         ON ct_reg.kind = 'registered' AND ct_reg.entity_id = b.customer_user_id
@@ -285,6 +290,9 @@ router.get("/admin/tech-bookings/:publicId", requireAuth, async (req, res, next)
       service_title: r.service_title ?? null,
       service_base_price_cents:
         typeof r.service_base_price_cents === "number" ? r.service_base_price_cents : 0,
+      effective_price_cents: Number(r.effective_price_cents) || 0,
+      completed_at: r.completed_at ?? null,
+      cancelled_at: r.cancelled_at ?? null,
       worker_user_id: r.worker_user_id ?? null,
       worker_first_name: r.worker_first_name ?? null,
       worker_last_name: r.worker_last_name ?? null,

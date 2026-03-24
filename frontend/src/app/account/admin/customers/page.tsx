@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   CheckCircle2,
@@ -230,12 +231,25 @@ function DetailRow({ label, value, mono }: { label: string; value: string; mono?
 function BookingCard({
   b,
   showPricePanel = false,
+  groupType,
 }: {
   b: AdminCustomerBookingRow & { effective_price_cents?: number | null };
   showPricePanel?: boolean;
+  groupType: "in_progress" | "completed" | "cancelled";
 }) {
+  const router = useRouter();
   const hasNotes = Boolean(b.notes);
   const priceValue = formatMoneyFromCents(b.effective_price_cents);
+
+  function handleOpen() {
+    if (groupType === "in_progress") {
+      router.push(`/account/techbookings/bookings/${b.public_id}`);
+    } else if (groupType === "completed") {
+      router.push(`/account/admin/customers/complete/${b.public_id}`);
+    } else {
+      router.push(`/account/admin/customers/cancelled/${b.public_id}`);
+    }
+  }
 
   const statusColor: Record<string, { bg: string; text: string; border: string }> = {
     pending: { bg: "rgba(245,158,11,0.12)", border: "rgba(245,158,11,0.30)", text: "rgb(253 230 138)" },
@@ -247,7 +261,13 @@ function BookingCard({
   const sc = statusColor[b.status] ?? statusColor.pending;
 
   return (
-    <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-3 sm:p-4">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={handleOpen}
+      onKeyDown={(e) => e.key === "Enter" && handleOpen()}
+      className="cursor-pointer rounded-2xl border border-white/[0.07] bg-white/[0.02] p-3 sm:p-4 transition-colors duration-200 hover:bg-white/[0.05] hover:border-white/[0.12]"
+    >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -277,9 +297,12 @@ function BookingCard({
         </div>
       ) : null}
 
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[rgb(var(--muted))]">
-        <span className="font-mono">{b.public_id}</span>
-        <span>Created {formatCreated(b.created_at)}</span>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-[rgb(var(--muted))]">
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          <span className="font-mono">{b.public_id}</span>
+          <span>Created {formatCreated(b.created_at)}</span>
+        </div>
+        <span className="text-[11px] font-medium opacity-60">View details →</span>
       </div>
     </div>
   );
@@ -292,6 +315,7 @@ function BookingGroupSection({
   emptyText,
   initiallyExpanded = false,
   showCompletedPrice = false,
+  groupType,
 }: {
   title: string;
   subtitle?: string;
@@ -299,6 +323,7 @@ function BookingGroupSection({
   emptyText: string;
   initiallyExpanded?: boolean;
   showCompletedPrice?: boolean;
+  groupType: "in_progress" | "completed" | "cancelled";
 }) {
   const [expanded, setExpanded] = useState(initiallyExpanded);
   const count = bookings.length;
@@ -338,7 +363,7 @@ function BookingGroupSection({
       ) : expanded ? (
         <div className="grid gap-3">
           {bookings.map((b) => (
-            <BookingCard key={b.public_id} b={b} showPricePanel={showCompletedPrice} />
+            <BookingCard key={b.public_id} b={b} showPricePanel={showCompletedPrice} groupType={groupType} />
           ))}
         </div>
       ) : (
@@ -790,6 +815,7 @@ export default function AdminCustomersPage() {
                   bookings={detail.bookings.in_progress}
                   emptyText="No in-progress bookings."
                   initiallyExpanded={detail.bookings.in_progress.length > 0 && detail.bookings.in_progress.length <= 3}
+                  groupType="in_progress"
                 />
 
                 <BookingGroupSection
@@ -799,6 +825,7 @@ export default function AdminCustomersPage() {
                   emptyText="No completed bookings."
                   initiallyExpanded={detail.bookings.completed.length > 0 && detail.bookings.completed.length <= 3}
                   showCompletedPrice
+                  groupType="completed"
                 />
 
                 <BookingGroupSection
@@ -807,6 +834,7 @@ export default function AdminCustomersPage() {
                   bookings={detail.bookings.cancelled}
                   emptyText="No cancelled bookings."
                   initiallyExpanded={detail.bookings.cancelled.length > 0 && detail.bookings.cancelled.length <= 3}
+                  groupType="cancelled"
                 />
               </div>
             </>

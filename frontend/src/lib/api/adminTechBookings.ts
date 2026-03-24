@@ -68,6 +68,10 @@ export type TechBookingDetail = {
 
   service_title: string | null;
   service_base_price_cents?: number;
+  effective_price_cents?: number | null;
+
+  completed_at?: string | null;
+  cancelled_at?: string | null;
 
   worker_user_id: number | null;
   worker_first_name: string | null;
