@@ -25,13 +25,11 @@ const LINKEDIN_SOFTWARE_BY_HREF = "https://www.linkedin.com/in/franciscorones/";
 
 
 function ImagePlaceholder({
-  label,
-  hint,
   height = "h-[260px]",
   imageUrl,
 }: {
-  label: string;
-  hint: string;
+  label?: string;
+  hint?: string;
   height?: string;
   imageUrl?: string | null;
 }) {
@@ -54,7 +52,6 @@ function ImagePlaceholder({
                 "radial-gradient(circle at top right, rgba(255,255,255,0.12), transparent 32%)",
             }}
           />
-
           <div
             className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
             style={{
@@ -62,21 +59,6 @@ function ImagePlaceholder({
                 "linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.08) 35%, transparent 70%)",
             }}
           />
-
-          <div className="relative flex h-full flex-col justify-between p-6">
-            <div>
-              <div className="inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/90">
-                Image Placeholder
-              </div>
-            </div>
-
-            <div>
-              <div className="text-lg font-semibold text-white">{label}</div>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-white/80">
-                {hint}
-              </p>
-            </div>
-          </div>
         </>
       )}
     </div>

@@ -449,7 +449,6 @@ export default function HomePage() {
                     title={item.title}
                     imageSrc={item.imageSrc}
                     imageAlt={item.imageAlt}
-                    href={item.href}
                   />
                 ))}
               </div>

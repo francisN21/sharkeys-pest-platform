@@ -35,13 +35,11 @@ const AREAS = [
 ];
 
 function ImagePlaceholder({
-  label,
-  hint,
   height = "h-[260px]",
   imageUrl,
 }: {
-  label: string;
-  hint: string;
+  label?: string;
+  hint?: string;
   height?: string;
   imageUrl?: string | null;
 }) {
@@ -95,23 +93,6 @@ function ImagePlaceholder({
             }}
           />
         </>
-      )}
-
-      {!imageUrl && (
-        <div className="relative flex h-full flex-col justify-between p-6">
-          <div>
-            <div className="inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/90">
-              Image Placeholder
-            </div>
-          </div>
-
-          <div>
-            <div className="text-lg font-semibold text-white">{label}</div>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/80">
-              {hint}
-            </p>
-          </div>
-        </div>
       )}
     </div>
   );
@@ -171,15 +152,6 @@ function ServiceAreaHeroImage({
                 "linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.08) 35%, transparent 70%)",
             }}
           />
-          <div className="relative flex h-full flex-col justify-end p-6">
-            <div className="text-lg font-semibold text-white">
-              Service Area Hero Image Placeholder
-            </div>
-            <p className="mt-2 text-sm leading-6 text-white/80">
-              Suggested image: Bay Area residential neighborhood, technician at
-              a home exterior, service truck, or local community streetscape.
-            </p>
-          </div>
         </>
       )}
     </div>

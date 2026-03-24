@@ -63,25 +63,13 @@ function BlogHeroImage({
       }}
     >
       {!imageUrl && (
-        <>
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(circle at top right, rgba(255,255,255,0.12), transparent 32%)",
-            }}
-          />
-
-          <div className="relative flex h-full flex-col justify-end p-6">
-            <div className="text-lg font-semibold text-white">
-              Blog Hero Image Placeholder
-            </div>
-            <p className="mt-2 text-sm text-white/80">
-              Suggested image: technician inspecting a home exterior, pest
-              control truck, or close-up of common household pests.
-            </p>
-          </div>
-        </>
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(circle at top right, rgba(255,255,255,0.12), transparent 32%)",
+          }}
+        />
       )}
     </div>
   );
