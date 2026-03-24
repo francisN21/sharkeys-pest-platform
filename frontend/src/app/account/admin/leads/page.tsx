@@ -148,7 +148,7 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02]">
+    <div className="rounded-2xl border border-white/10 bg-white/[0.02]">
       <div className="flex items-center gap-3 border-b border-white/10 px-5 py-4">
         <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${accentClass}`}>
           {icon}
@@ -1255,7 +1255,6 @@ export default function AdminLeadsPage() {
                           animate={shouldReduceMotion ? undefined : { opacity: 1, height: "auto" }}
                           exit={shouldReduceMotion ? undefined : { opacity: 0, height: 0 }}
                           transition={{ duration: 0.18 }}
-                          className="overflow-hidden"
                         >
                           <AddressAutocomplete
                             className={INPUT_CLS}
