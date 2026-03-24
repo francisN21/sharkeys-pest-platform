@@ -157,7 +157,7 @@ export function RevenueGraphCard({
                   tick={{ fontSize: 12, fill: "rgb(var(--muted))" }}
                   width={40}
                   domain={[0, maxRevenueCents]}
-                  tickFormatter={(v) => compactMoneyFromCents(Number(v))}
+                  tickFormatter={(v: number) => compactMoneyFromCents(Number(v))}
                 />
                 <Tooltip
                   cursor={{ opacity: 0.08 }}
@@ -168,13 +168,13 @@ export function RevenueGraphCard({
                     color: "rgb(var(--fg))",
                   }}
                   labelStyle={{ color: "rgb(var(--muted))" }}
-                  formatter={(v: unknown, name: string, item: any) => {
+                  formatter={(v, name, item) => {
                     if (name === "revenueCents") {
                       const dollars = fmtMoneyFromCents(num(v));
-                      const completed = item?.payload?.completed ?? 0;
-                      return [dollars, `Revenue • Completed: ${fmtNum(num(completed))}`];
+                      const completed = (item as { payload?: { completed?: number } })?.payload?.completed ?? 0;
+                      return [dollars, `Revenue • Completed: ${fmtNum(num(completed))}`] as [string, string];
                     }
-                    return [String(v), name];
+                    return [String(v), String(name)] as [string, string];
                   }}
                 />
                 <Bar dataKey="revenueCents" fill={color} radius={[8, 8, 0, 0]} isAnimationActive />

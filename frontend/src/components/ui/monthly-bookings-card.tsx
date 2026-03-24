@@ -87,10 +87,10 @@ export function MonthlyBookingsCard({
                       color: "rgb(var(--fg))",
                     }}
                     labelStyle={{ color: "rgb(var(--muted))" }}
-                    formatter={(v: unknown, name: string) => {
+                    formatter={(v, name) => {
                       const label =
                         name === "created" ? "Created" : name === "completed" ? "Completed" : "Cancelled";
-                      return [String(v), label];
+                      return [String(v), label] as [string, string];
                     }}
                   />
                   {/* Modern + clean: show Created as the main bar */}

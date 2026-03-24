@@ -24,7 +24,7 @@ export type MeApiResponse = {
 
 export type RawBookingMessage = {
   id: number | string;
-  sender_user_id: number | string;
+  sender_user_id: number | string | null;
   sender_role: string;
   body: string;
   created_at: string;

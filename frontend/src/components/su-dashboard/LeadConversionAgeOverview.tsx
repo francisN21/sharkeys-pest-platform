@@ -37,7 +37,7 @@ const BUCKET_META: Record<string, { label: string; color: string }> = {
   "90d_plus": { label: "90 days+",   color: "rgb(239,68,68)" },
 };
 
-const BUCKET_ORDER = ["same_day", "1_to_7d", "7_to_30d", "30_to_90d", "90d_plus"];
+const BUCKET_ORDER = ["same_day", "1_to_7d", "7_to_30d", "30_to_90d", "90d_plus"] as const;
 
 type Preset = RangePreset;
 function presetRange(p: Preset) {

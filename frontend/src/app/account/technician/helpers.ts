@@ -1,4 +1,5 @@
 import type { WorkerBookingRow } from "../../../lib/api/workerBookings";
+import type { MessengerMessage } from "../../../components/messenger/Messenger";
 import type {
   BookeeKind,
   GroupedAssigned,
@@ -118,8 +119,8 @@ export function pickDisplayName(b: WorkerBookingRow) {
   };
 }
 
-export function toMessengerMessage(m: RawBookingMessage) {
-  const senderId = typeof m.sender_user_id === "string" ? Number(m.sender_user_id) : m.sender_user_id;
+export function toMessengerMessage(m: RawBookingMessage): MessengerMessage | null {
+  const senderId = typeof m.sender_user_id === "string" ? Number(m.sender_user_id) : (m.sender_user_id ?? NaN);
   const messageId = typeof m.id === "string" ? Number(m.id) : m.id;
 
   if (!Number.isFinite(senderId) || senderId <= 0) return null;

@@ -165,7 +165,7 @@ export default function InviteEmployeeModal({
         animate: { opacity: 1 },
         exit: { opacity: 0 },
         transition: { duration: 0.18 },
-      };
+      } as const;
 
   const modalAnim = shouldReduceMotion
     ? {}
@@ -174,7 +174,7 @@ export default function InviteEmployeeModal({
         animate: { opacity: 1, y: 0, scale: 1, filter: "blur(0px)" },
         exit: { opacity: 0, y: 10, scale: 0.98, filter: "blur(4px)" },
         transition: {
-          type: "spring",
+          type: "spring" as const,
           stiffness: 320,
           damping: 28,
           mass: 0.8,
