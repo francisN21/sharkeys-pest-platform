@@ -262,7 +262,7 @@ export default function PublicBookingPage({
   const durationMinutes = selectedService?.duration_minutes ?? 60;
   const neededBlocks = useMemo(() => blocksNeeded(durationMinutes), [durationMinutes]);
   const maxBookDateYmd = useMemo(() => ymdLocal(addDays(new Date(), 60)), []);
-  const hours = useMemo(() => Array.from({ length: 14 }, (_, i) => i + 8), []);
+  const hours = useMemo(() => Array.from({ length: 24 }, (_, i) => (i + 8) % 24), []);
 
   const startsAtIso = useMemo(() => {
     if (!selectedDateYmd || selectedStartHour === null) return null;
