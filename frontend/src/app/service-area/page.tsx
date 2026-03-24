@@ -1,8 +1,24 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import Navbar from "../../components/Navbar";
 import PageTracker from "../../components/PageTracker";
-
 import SiteFooter from "@/src/components/home/SiteFooter";
+import ScrollReveal from "../../components/ScrollReveal";
+
+export const metadata: Metadata = {
+  title: "Pest Control Service Area – Bay Area | Sharkys Pest Control",
+  description:
+    "Sharkys Pest Control serves Benicia, Vallejo, Fairfield, Concord, Martinez, San Francisco, Oakland, and surrounding Bay Area communities with residential and commercial pest management.",
+  openGraph: {
+    title: "Pest Control Service Area – Bay Area | Sharkys Pest Control",
+    description:
+      "Bay Area pest control serving Benicia and surrounding cities. Residential and commercial pest management from a locally owned team.",
+    url: "https://sharkyspestcontrolbayarea.com/service-area",
+    siteName: "Sharkys Pest Control",
+    images: [{ url: "https://sharkyspestcontrolbayarea.com/golden-gate-sharkyspestcontrol.png" }],
+    type: "website",
+  },
+};
 
 const LINKEDIN_SOFTWARE_BY_HREF = "https://www.linkedin.com/in/franciscorones/";
 
@@ -188,6 +204,43 @@ function AreaCard({ area }: { area: string }) {
 export default function ServiceAreaPage() {
   return (
     <main className="min-h-screen">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "LocalBusiness",
+            name: "Sharkys Pest Control",
+            url: "https://sharkyspestcontrolbayarea.com",
+            image: "https://sharkyspestcontrolbayarea.com/main-logo.jpg",
+            email: "office.sharkyspestcontrol@gmail.com",
+            address: {
+              "@type": "PostalAddress",
+              addressLocality: "Benicia",
+              addressRegion: "CA",
+              addressCountry: "US",
+            },
+            areaServed: [
+              "Benicia, CA",
+              "Vallejo, CA",
+              "Fairfield, CA",
+              "Concord, CA",
+              "Martinez, CA",
+              "San Francisco, CA",
+              "Daly City, CA",
+              "San Ramon, CA",
+              "Oakland, CA",
+            ],
+            serviceType: [
+              "Residential Pest Control",
+              "Commercial Pest Control",
+              "Rodent Control",
+              "Wildlife Control",
+              "Ant Control",
+            ],
+          }),
+        }}
+      />
       <Navbar />
 
       <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
@@ -274,6 +327,7 @@ export default function ServiceAreaPage() {
 
           <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="space-y-8">
+              <ScrollReveal>
               <section
                 className="rounded-[2rem] border p-6 sm:p-8"
                 style={{
@@ -303,7 +357,9 @@ export default function ServiceAreaPage() {
                   </div>
                 </div>
               </section>
+              </ScrollReveal>
 
+              <ScrollReveal delay={80}>
               <section
                 className="rounded-[2rem] border p-6 sm:p-8"
                 style={{
@@ -312,7 +368,7 @@ export default function ServiceAreaPage() {
                 }}
               >
                 <div className="grid gap-6 md:grid-cols-[0.95fr_1.05fr] md:items-start">
-                  
+
                   <ImagePlaceholder
                     imageUrl="/sharkys-pest-control-bayarea.png"
                     label="Hero image: rat activity near a home exterior"
@@ -347,7 +403,9 @@ export default function ServiceAreaPage() {
                   </div>
                 </div>
               </section>
+              </ScrollReveal>
 
+              <ScrollReveal delay={160}>
               <section
                 className="rounded-[2rem] border p-6 sm:p-8"
                 style={{
@@ -393,6 +451,7 @@ export default function ServiceAreaPage() {
                   </Link>
                 </div>
               </section>
+              </ScrollReveal>
             </div>
 
             <aside className="space-y-6">
@@ -415,24 +474,6 @@ export default function ServiceAreaPage() {
                 </ul>
               </div>
 
-              <div
-                className="rounded-[2rem] border p-6"
-                style={{
-                  borderColor: "rgb(var(--border))",
-                  background:
-                    "linear-gradient(135deg, rgba(59,130,246,0.08), rgba(79,70,229,0.10))",
-                }}
-              >
-                <div className="text-lg font-semibold">Suggested image list</div>
-                <div
-                  className="mt-3 space-y-3 text-sm leading-7"
-                  style={{ color: "rgb(var(--muted))" }}
-                >
-                  <p>Hero: Bay Area neighborhood or technician on-site</p>
-                  <p>Section image: service truck or residential property visit</p>
-                  <p>Optional: local city signage or neighborhood exterior</p>
-                </div>
-              </div>
             </aside>
           </div>
         </div>

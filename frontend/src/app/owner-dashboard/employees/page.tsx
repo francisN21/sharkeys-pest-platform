@@ -145,7 +145,7 @@ export default function EmployeesPage() {
               <div>
                 <h1 className="text-lg font-bold tracking-tight">Employees</h1>
                 <p className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                  Sharkeys Pest Control · Technicians, Admins &amp; Staff
+                  Sharkys Pest Control · Technicians, Admins &amp; Staff
                 </p>
               </div>
             </div>

@@ -942,7 +942,7 @@ export default function LogsPage() {
               <div>
                 <h1 className="text-lg font-bold tracking-tight">System Logs</h1>
                 <p className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                  Sharkeys Pest Control · Sessions, tokens &amp; security events
+                  Sharkys Pest Control · Sessions, tokens &amp; security events
                 </p>
               </div>
             </div>

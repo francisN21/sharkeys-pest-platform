@@ -129,7 +129,7 @@ export default function OwnerDashboardPage() {
               <div>
                 <h1 className="text-lg font-bold tracking-tight">Owner Dashboard</h1>
                 <p className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                  Sharkeys Pest Control · Bay Area · Analytics &amp; CRM
+                  Sharkys Pest Control · Bay Area · Analytics &amp; CRM
                 </p>
               </div>
             </div>

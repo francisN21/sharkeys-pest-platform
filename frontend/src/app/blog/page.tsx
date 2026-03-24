@@ -1,28 +1,48 @@
+import type { Metadata } from "next";
 import Navbar from "../../components/Navbar";
 import PageTracker from "../../components/PageTracker";
 import BlogCard from "../../../src/app/blog/BlogCard";
 import SiteFooter from "@/src/components/home/SiteFooter";
+import ScrollReveal from "../../components/ScrollReveal";
+
+export const metadata: Metadata = {
+  title: "Blog | Pest Control Tips & Guides | Sharkys Pest Control",
+  description:
+    "Pest control tips, prevention guides, and local pest insights from Sharkys Pest Control — serving Bay Area homeowners.",
+  openGraph: {
+    title: "Blog | Sharkys Pest Control",
+    description:
+      "Pest control tips and prevention guides from Bay Area professionals.",
+    url: "https://sharkyspestcontrolbayarea.com/blog",
+    siteName: "Sharkys Pest Control",
+    images: [{ url: "https://sharkyspestcontrolbayarea.com/main-hero-blog.png" }],
+    type: "website",
+  },
+};
 
 const POSTS = [
   {
     title: "Common Pests in Benicia, CA Homes",
     desc: "Learn which pests homeowners in Benicia commonly deal with and when it may be time to call a professional.",
     href: "/blog/common-pests-benicia-ca",
-    date: null,
+    date: "March 10, 2025",
+    readTime: "5 min read",
     imageUrl: "/pest-infested-house.png",
   },
   {
     title: "How to Prevent Ant Infestations in the Bay Area",
     desc: "Simple prevention steps that help reduce ant activity around your home and property.",
     href: "/blog/how-to-prevent-ants-in-the-bay-area",
-    date: null,
+    date: "March 15, 2025",
+    readTime: "4 min read",
     imageUrl: "/ant-infested-home.png",
   },
   {
     title: "What Attracts Rats to Homes?",
     desc: "Understand the most common causes of rodent activity and how to reduce the risk of infestation.",
     href: "/blog/what-attracts-rats-to-homes",
-    date: null,
+    date: "March 20, 2025",
+    readTime: "5 min read",
     imageUrl: "/rat-infested-home.png",
   },
 ];
@@ -159,14 +179,17 @@ export default function BlogPage() {
 
           {/* Blog Cards */}
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {POSTS.map((post) => (
-              <BlogCard
-                key={post.href}
-                title={post.title}
-                desc={post.desc}
-                href={post.href}
-                imageUrl={post.imageUrl}
-              />
+            {POSTS.map((post, i) => (
+              <ScrollReveal key={post.href} delay={i * 80}>
+                <BlogCard
+                  title={post.title}
+                  desc={post.desc}
+                  href={post.href}
+                  date={post.date}
+                  readTime={post.readTime}
+                  imageUrl={post.imageUrl}
+                />
+              </ScrollReveal>
             ))}
           </div>
         </div>

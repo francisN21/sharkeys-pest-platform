@@ -1,7 +1,25 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import React from "react";
 import Navbar from "../../../components/Navbar";
 import PageTracker from "../../../components/PageTracker";
 import SiteFooter from "@/src/components/home/SiteFooter";
+import ScrollReveal from "../../../components/ScrollReveal";
+
+export const metadata: Metadata = {
+  title: "Common Pests in Benicia, CA Homes | Sharkys Pest Control",
+  description:
+    "Learn which pests homeowners in Benicia, CA commonly deal with — including ants, rodents, spiders, and wasps — and when to call a professional.",
+  openGraph: {
+    title: "Common Pests in Benicia, CA Homes | Sharkys Pest Control",
+    description:
+      "Pest guide for Benicia homeowners covering ants, rodents, spiders, and wasps. Tips from local Bay Area pest control professionals.",
+    url: "https://sharkyspestcontrolbayarea.com/blog/common-pests-benicia-ca",
+    siteName: "Sharkys Pest Control",
+    images: [{ url: "https://sharkyspestcontrolbayarea.com/common-pest-1.png" }],
+    type: "article",
+  },
+};
 
 const LINKEDIN_SOFTWARE_BY_HREF = "https://www.linkedin.com/in/franciscorones/";
 
@@ -96,6 +114,51 @@ export default function CommonPestsBeniciaPage() {
 
   return (
     <main className="min-h-screen">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify([
+            {
+              "@context": "https://schema.org",
+              "@type": "Article",
+              headline: "Common Pests in Benicia, CA Homes",
+              description:
+                "Learn which pests homeowners in Benicia commonly deal with and when it may be time to call a professional.",
+              publisher: {
+                "@type": "LocalBusiness",
+                name: "Sharkys Pest Control",
+                url: "https://sharkyspestcontrolbayarea.com",
+              },
+              url: "https://sharkyspestcontrolbayarea.com/blog/common-pests-benicia-ca",
+              datePublished: "2025-03-10",
+              image: "https://sharkyspestcontrolbayarea.com/common-pest-1.png",
+            },
+            {
+              "@context": "https://schema.org",
+              "@type": "BreadcrumbList",
+              itemListElement: [
+                {
+                  "@type": "ListItem",
+                  position: 1,
+                  name: "Home",
+                  item: "https://sharkyspestcontrolbayarea.com",
+                },
+                {
+                  "@type": "ListItem",
+                  position: 2,
+                  name: "Blog",
+                  item: "https://sharkyspestcontrolbayarea.com/blog",
+                },
+                {
+                  "@type": "ListItem",
+                  position: 3,
+                  name: "Common Pests in Benicia, CA Homes",
+                },
+              ],
+            },
+          ]),
+        }}
+      />
       <Navbar />
 
       <article className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
@@ -172,6 +235,9 @@ export default function CommonPestsBeniciaPage() {
                     Seasonal Pest Activity
                   </span>
                 </div>
+                <p className="mt-4 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                  Published March 10, 2025 · 5 min read
+                </p>
               </div>
 
               <ImagePlaceholder
@@ -185,6 +251,7 @@ export default function CommonPestsBeniciaPage() {
 
           <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="space-y-8">
+              <ScrollReveal>
               <section
                 className="rounded-[2rem] border p-6 sm:p-8"
                 style={{
@@ -243,7 +310,9 @@ export default function CommonPestsBeniciaPage() {
                   </div>
                 </div>
               </section>
+              </ScrollReveal>
 
+              <ScrollReveal delay={80}>
               <section
                 className="rounded-[2rem] border p-6 sm:p-8"
                 style={{
@@ -287,7 +356,9 @@ export default function CommonPestsBeniciaPage() {
                   </div>
                 </div>
               </section>
+              </ScrollReveal>
 
+              <ScrollReveal delay={160}>
               <section
                 className="rounded-[2rem] border p-6 sm:p-8"
                 style={{
@@ -334,6 +405,7 @@ export default function CommonPestsBeniciaPage() {
                   </Link>
                 </div>
               </section>
+              </ScrollReveal>
             </div>
 
             <aside className="space-y-6">
@@ -356,26 +428,18 @@ export default function CommonPestsBeniciaPage() {
                 </ul>
               </div>
 
-              <div
-                className="rounded-[2rem] border p-6"
-                style={{
-                  borderColor: "rgb(var(--border))",
-                  background:
-                    "linear-gradient(135deg, rgba(59,130,246,0.08), rgba(79,70,229,0.10))",
-                }}
-              >
-                <div className="text-lg font-semibold">Suggested image list</div>
-                <div
-                  className="mt-3 space-y-3 text-sm leading-7"
-                  style={{ color: "rgb(var(--muted))" }}
-                >
-                  <p>Hero: home exterior with multiple pest risk zones</p>
-                  <p>Mid-article: entry points around foundation or patio</p>
-                  <p>Section image: attic vent, garage, patio roof, or nest area</p>
-                </div>
-              </div>
             </aside>
           </div>
+        </div>
+
+        <div className="mt-4 pb-4">
+          <Link
+            href="/blog"
+            className="inline-flex items-center gap-2 text-sm font-semibold transition duration-200 hover:underline"
+            style={{ color: "rgb(var(--muted))" }}
+          >
+            ← Back to Blog
+          </Link>
         </div>
       </article>
       <section className="md:min-h-screen md:flex md:flex-col md:justify-end">

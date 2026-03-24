@@ -1,7 +1,25 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import React from "react";
 import Navbar from "../../../components/Navbar";
 import PageTracker from "../../../components/PageTracker";
 import SiteFooter from "@/src/components/home/SiteFooter";
+import ScrollReveal from "../../../components/ScrollReveal";
+
+export const metadata: Metadata = {
+  title: "How to Prevent Ant Infestations in the Bay Area | Sharkys Pest Control",
+  description:
+    "Practical ant prevention steps for Bay Area homeowners — seal entry points, manage food sources, and reduce landscaping risks to stop recurring infestations.",
+  openGraph: {
+    title: "How to Prevent Ant Infestations in the Bay Area | Sharkys Pest Control",
+    description:
+      "Bay Area ant prevention guide with practical steps homeowners can take to stop recurring ant infestations.",
+    url: "https://sharkyspestcontrolbayarea.com/blog/how-to-prevent-ants-in-the-bay-area",
+    siteName: "Sharkys Pest Control",
+    images: [{ url: "https://sharkyspestcontrolbayarea.com/ants-blog-1.png" }],
+    type: "article",
+  },
+};
 
 const LINKEDIN_SOFTWARE_BY_HREF = "https://www.linkedin.com/in/franciscorones/";
 
@@ -94,6 +112,51 @@ function InfoCard({
 export default function AntPreventionPage() {
   return (
     <main className="min-h-screen">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify([
+            {
+              "@context": "https://schema.org",
+              "@type": "Article",
+              headline: "How to Prevent Ant Infestations in the Bay Area",
+              description:
+                "Simple prevention steps that help reduce ant activity around your home and property.",
+              publisher: {
+                "@type": "LocalBusiness",
+                name: "Sharkys Pest Control",
+                url: "https://sharkyspestcontrolbayarea.com",
+              },
+              url: "https://sharkyspestcontrolbayarea.com/blog/how-to-prevent-ants-in-the-bay-area",
+              datePublished: "2025-03-15",
+              image: "https://sharkyspestcontrolbayarea.com/ants-blog-1.png",
+            },
+            {
+              "@context": "https://schema.org",
+              "@type": "BreadcrumbList",
+              itemListElement: [
+                {
+                  "@type": "ListItem",
+                  position: 1,
+                  name: "Home",
+                  item: "https://sharkyspestcontrolbayarea.com",
+                },
+                {
+                  "@type": "ListItem",
+                  position: 2,
+                  name: "Blog",
+                  item: "https://sharkyspestcontrolbayarea.com/blog",
+                },
+                {
+                  "@type": "ListItem",
+                  position: 3,
+                  name: "How to Prevent Ant Infestations in the Bay Area",
+                },
+              ],
+            },
+          ]),
+        }}
+      />
       <Navbar />
 
       <article className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
@@ -173,6 +236,9 @@ export default function AntPreventionPage() {
                     Bay Area Ant Control
                   </span>
                 </div>
+                <p className="mt-4 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                  Published March 15, 2025 · 4 min read
+                </p>
               </div>
 
               <ImagePlaceholder
@@ -186,6 +252,7 @@ export default function AntPreventionPage() {
 
           <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="space-y-8">
+              <ScrollReveal>
               <section
                 className="rounded-[2rem] border p-6 sm:p-8"
                 style={{
@@ -244,7 +311,9 @@ export default function AntPreventionPage() {
                   </div>
                 </div>
               </section>
+              </ScrollReveal>
 
+              <ScrollReveal delay={80}>
               <section
                 className="rounded-[2rem] border p-6 sm:p-8"
                 style={{
@@ -289,7 +358,9 @@ export default function AntPreventionPage() {
                   </div>
                 </div>
               </section>
+              </ScrollReveal>
 
+              <ScrollReveal delay={160}>
               <section
                 className="rounded-[2rem] border p-6 sm:p-8"
                 style={{
@@ -336,6 +407,7 @@ export default function AntPreventionPage() {
                   </Link>
                 </div>
               </section>
+              </ScrollReveal>
             </div>
 
             <aside className="space-y-6">
@@ -358,26 +430,18 @@ export default function AntPreventionPage() {
                 </ul>
               </div>
 
-              <div
-                className="rounded-[2rem] border p-6"
-                style={{
-                  borderColor: "rgb(var(--border))",
-                  background:
-                    "linear-gradient(135deg, rgba(59,130,246,0.08), rgba(79,70,229,0.10))",
-                }}
-              >
-                <div className="text-lg font-semibold">Suggested image list</div>
-                <div
-                  className="mt-3 space-y-3 text-sm leading-7"
-                  style={{ color: "rgb(var(--muted))" }}
-                >
-                  <p>Hero: ant trail near kitchen or exterior threshold</p>
-                  <p>Mid-article: crack, window edge, or entry seam</p>
-                  <p>Section image: mulch bed, shrubs, or foundation zone</p>
-                </div>
-              </div>
             </aside>
           </div>
+        </div>
+
+        <div className="mt-4 pb-4">
+          <Link
+            href="/blog"
+            className="inline-flex items-center gap-2 text-sm font-semibold transition duration-200 hover:underline"
+            style={{ color: "rgb(var(--muted))" }}
+          >
+            ← Back to Blog
+          </Link>
         </div>
       </article>
 

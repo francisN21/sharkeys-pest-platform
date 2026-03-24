@@ -127,21 +127,21 @@ function getAccountHeaderMeta(role: AppRole) {
     case "superuser":
       return {
         title: "Owner Account",
-        subtitle: "Sharkeys Pest Control · Bay Area · Account & CRM",
+        subtitle: "Sharkys Pest Control · Bay Area · Account & CRM",
         icon: "fa-solid fa-user-shield",
       };
 
     case "admin":
       return {
         title: "Admin Account",
-        subtitle: "Sharkeys Pest Control · Bay Area · Dispatch & Operations",
+        subtitle: "Sharkys Pest Control · Bay Area · Dispatch & Operations",
         icon: "fa-solid fa-briefcase",
       };
 
     case "technician":
       return {
         title: "Technician Account",
-        subtitle: "Sharkeys Pest Control · Bay Area · Field Schedule & Jobs",
+        subtitle: "Sharkys Pest Control · Bay Area · Field Schedule & Jobs",
         icon: "fa-solid fa-screwdriver-wrench",
       };
 
@@ -149,7 +149,7 @@ function getAccountHeaderMeta(role: AppRole) {
     default:
       return {
         title: "My Account",
-        subtitle: "Sharkeys Pest Control · Bay Area · Bookings & Messages",
+        subtitle: "Sharkys Pest Control · Bay Area · Bookings & Messages",
         icon: "fa-solid fa-user",
       };
   }

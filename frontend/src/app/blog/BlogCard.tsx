@@ -7,7 +7,8 @@ type BlogCardProps = {
   title: string;
   desc: string;
   href: string;
-  date?: string;
+  date?: string | null;
+  readTime?: string;
   imageUrl?: string | null;
 };
 
@@ -15,6 +16,8 @@ export default function BlogCard({
   title,
   desc,
   href,
+  date,
+  readTime,
   imageUrl = null,
 }: BlogCardProps) {
   const hasImage = Boolean(imageUrl);
@@ -61,7 +64,7 @@ export default function BlogCard({
       />
 
       <div className="relative flex min-h-[280px] flex-col justify-end p-6 sm:min-h-[320px]">
-        <div className="mb-3">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
           <span
             className="
               inline-flex items-center rounded-full border px-3 py-1 text-[11px]
@@ -77,6 +80,13 @@ export default function BlogCard({
           >
             Sharkys Pest Control
           </span>
+          {(date || readTime) && (
+            <span className="text-[11px] text-white/60">
+              {date && <span>{date}</span>}
+              {date && readTime && <span className="mx-1">·</span>}
+              {readTime && <span>{readTime}</span>}
+            </span>
+          )}
         </div>
 
         <h2

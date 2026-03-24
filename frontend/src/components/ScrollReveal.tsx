@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 type Props = {
   children: React.ReactNode;
   className?: string;
+  delay?: number;
 };
 
 function getScrollParent(node: HTMLElement | null): HTMLElement | null {
@@ -29,11 +30,18 @@ function getScrollParent(node: HTMLElement | null): HTMLElement | null {
   return null;
 }
 
-export default function ScrollReveal({ children, className = "" }: Props) {
+export default function ScrollReveal({ children, className = "", delay = 0 }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (reduced) {
+      setVisible(true);
+      return;
+    }
+
     const el = ref.current;
     if (!el) return;
 
@@ -43,7 +51,11 @@ export default function ScrollReveal({ children, className = "" }: Props) {
       (entries) => {
         for (const entry of entries) {
           if (entry.isIntersecting) {
-            setVisible(true);
+            if (delay > 0) {
+              setTimeout(() => setVisible(true), delay);
+            } else {
+              setVisible(true);
+            }
             obs.disconnect();
             break;
           }
@@ -59,7 +71,7 @@ export default function ScrollReveal({ children, className = "" }: Props) {
     obs.observe(el);
 
     return () => obs.disconnect();
-  }, []);
+  }, [delay]);
 
   return (
     <div
