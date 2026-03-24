@@ -81,13 +81,11 @@ const CERTIFICATIONS = [
     title: "Green Pro Certified",
     imageSrc: "/greenpro-certified-vector-logo.svg",
     imageAlt: "Green Pro Certified logo",
-    href: "/logos/certifications/greenpro-logo.png",
   },
   {
     title: "Bird Barrier Certified Installer",
     imageSrc: "/bird-barrier-logo.jpg",
     imageAlt: "Bird Barrier Certified Installer logo",
-    href: "/logos/certifications/bird-barrier-logo.png",
   },
 ];
 

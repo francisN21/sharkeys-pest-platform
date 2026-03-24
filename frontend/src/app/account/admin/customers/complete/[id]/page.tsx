@@ -7,7 +7,7 @@ import {
   getAdminTechBookingDetail,
   type TechBookingDetail,
 } from "../../../../../../lib/api/adminTechBookings";
-import SectionCard from "../../../components/SectionCard";
+import SectionCard from "../../../../../../app/account/bookings/components/SectionCard";
 
 function formatMoney(cents: number | null | undefined) {
   const amount = (Number(cents) || 0) / 100;
