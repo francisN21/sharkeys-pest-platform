@@ -5,6 +5,7 @@ const { app } = require("./app");
 const { initRealtime } = require("./realtime");
 const { pool } = require("./db");
 const { logger } = require("./logger");
+const { bootstrapSuperuser } = require("./bootstrap/bootstrap-superuser");
 
 const PORT = process.env.PORT || 4000;
 const HOST = "0.0.0.0";
@@ -16,8 +17,15 @@ const server = http.createServer(app);
  */
 initRealtime(server);
 
-server.listen(PORT, HOST, () => {
+server.listen(PORT, HOST, async () => {
   logger.info({ port: PORT, local: `http://localhost:${PORT}`, network: `http://${getLocalIP()}:${PORT}` }, "Server running");
+
+  // Run on every startup — idempotent, skips if a superuser already exists.
+  try {
+    await bootstrapSuperuser();
+  } catch (err) {
+    logger.error({ err }, "[bootstrap-superuser] Startup bootstrap failed");
+  }
 });
 
 // -----------------------------------------------------------

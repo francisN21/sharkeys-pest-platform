@@ -210,12 +210,15 @@ async function bootstrapSuperuser() {
   }
 }
 
-bootstrapSuperuser()
-  .then(() => pool.end())
-  .catch(async (err) => {
-    console.error("[bootstrap-superuser] Unhandled failure:", err);
-    try {
-      await pool.end();
-    } catch {}
-    process.exit(1);
-  });
+module.exports = { bootstrapSuperuser };
+
+// Allow running directly: node bootstrap-superuser.js
+if (require.main === module) {
+  bootstrapSuperuser()
+    .then(() => pool.end())
+    .catch(async (err) => {
+      console.error("[bootstrap-superuser] Unhandled failure:", err);
+      try { await pool.end(); } catch {}
+      process.exit(1);
+    });
+}
