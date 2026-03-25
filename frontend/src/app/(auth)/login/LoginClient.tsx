@@ -130,7 +130,7 @@ export default function LoginClient() {
       </div>
 
       <div className="space-y-3">
-        <button
+        {/* <button
           type="button"
           onClick={handleGooglePlaceholder}
           disabled={busy}
@@ -142,7 +142,7 @@ export default function LoginClient() {
         >
           <Chrome className="h-4 w-4" />
           <span>{googlePending ? "Preparing Google..." : "Continue with Google"}</span>
-        </button>
+        </button> */}
 
         <button
           type="button"
