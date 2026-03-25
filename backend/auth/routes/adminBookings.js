@@ -35,9 +35,9 @@ function requireAnyRole(roles) {
         return res.status(403).json({ ok: false, message: "Forbidden" });
       }
 
-      next();
+      return next();
     } catch (e) {
-      next(e);
+      return next(e);
     }
   };
 }

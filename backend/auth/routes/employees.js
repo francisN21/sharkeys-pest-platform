@@ -87,9 +87,9 @@ async function requireSuperuser(req, res, next) {
       return res.status(403).json({ ok: false, message: "Forbidden" });
     }
 
-    next();
+    return next();
   } catch (err) {
-    next(err);
+    return next(err);
   }
 }
 
