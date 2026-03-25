@@ -108,6 +108,12 @@ export async function adminListBookings(status: string) {
   );
 }
 
+export function clearOrphanedBookings() {
+  return jsonFetch<{ ok: boolean; cleared: number }>("/admin/bookings/clear-orphaned", {
+    method: "POST",
+  });
+}
+
 export function adminAcceptBooking(publicId: string) {
   return jsonFetch<{ ok: boolean; booking: AdminBookingRow }>(
     `/admin/bookings/${publicId}/accept`,

@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
-import { CheckCircle2, Clock, AlertCircle, KeyRound, Mail } from "lucide-react";
+import { CheckCircle2, Clock, AlertCircle, KeyRound, Mail, XCircle, RotateCcw } from "lucide-react";
 import Navbar from "../../../../components/Navbar";
 import OwnerRouteTabs from "../../_components/owner-route-tabs";
 import { me, type MeResponse } from "../../../../lib/api/auth";
-import { getEmployee, type Employee } from "../../../../lib/api/employees";
+import { getEmployee, termEmployee, reinstateEmployee, type Employee } from "../../../../lib/api/employees";
 
 type MeUserWithRoles = NonNullable<MeResponse["user"]> & {
   roles?: string[] | null;
@@ -43,6 +43,7 @@ function formatDateOnly(value?: string | null) {
 
 function getStatusMeta(employee: Employee | null) {
   if (!employee) return { label: "—", color: "rgb(var(--muted))", bg: "rgba(var(--fg),0.06)", border: "rgb(var(--border))", icon: Clock };
+  if (employee.termed_at) return { label: "Termed", color: "rgb(239,68,68)", bg: "rgba(239,68,68,0.1)", border: "rgba(239,68,68,0.3)", icon: XCircle };
   const isActive = employee.status === "active" || !!employee.email_verified_at;
   if (isActive) return { label: "Active", color: "rgb(16,185,129)", bg: "rgba(16,185,129,0.1)", border: "rgba(16,185,129,0.3)", icon: CheckCircle2 };
   if (employee.status === "invited") return { label: "Invited — Awaiting Setup", color: "rgb(234,179,8)", bg: "rgba(234,179,8,0.1)", border: "rgba(234,179,8,0.3)", icon: Clock };
@@ -84,6 +85,18 @@ export default function EmployeeDetailPage() {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
+
+  // Term action
+  const [termConfirm, setTermConfirm] = useState(false);
+  const [termBusy, setTermBusy] = useState(false);
+  const [termError, setTermError] = useState<string | null>(null);
+  const [termSuccess, setTermSuccess] = useState<string | null>(null);
+
+  // Reinstate action
+  const [reinstateOpen, setReinstateOpen] = useState(false);
+  const [reinstateRole, setReinstateRole] = useState("technician");
+  const [reinstateBusy, setReinstateBusy] = useState(false);
+  const [reinstateError, setReinstateError] = useState<string | null>(null);
 
   const employeeName = useMemo(() => {
     if (!employee) return "Employee";
@@ -128,9 +141,51 @@ export default function EmployeeDetailPage() {
     );
   }
 
+  async function handleTerm() {
+    if (!employee) return;
+    setTermBusy(true);
+    setTermError(null);
+    setTermSuccess(null);
+    try {
+      const result = await termEmployee(employee.public_id);
+      const res = await getEmployee(employee.public_id);
+      setEmployee(res.employee ?? null);
+      setTermConfirm(false);
+      const count = result?.unassigned_bookings ?? 0;
+      if (count > 0) {
+        setTermSuccess(
+          `${count} assigned booking${count === 1 ? "" : "s"} returned to the dispatch queue.`
+        );
+      } else {
+        setTermSuccess("Employee access has been revoked.");
+      }
+    } catch (e: unknown) {
+      setTermError(e instanceof Error ? e.message : "Failed to terminate employee");
+    } finally {
+      setTermBusy(false);
+    }
+  }
+
+  async function handleReinstate() {
+    if (!employee) return;
+    setReinstateBusy(true);
+    setReinstateError(null);
+    try {
+      await reinstateEmployee(employee.public_id, reinstateRole);
+      const res = await getEmployee(employee.public_id);
+      setEmployee(res.employee ?? null);
+      setReinstateOpen(false);
+    } catch (e: unknown) {
+      setReinstateError(e instanceof Error ? e.message : "Failed to reinstate employee");
+    } finally {
+      setReinstateBusy(false);
+    }
+  }
+
   const statusMeta = getStatusMeta(employee);
   const roleMeta = getRoleMeta(employee?.user_role);
   const StatusIcon = statusMeta.icon;
+  const isTermed = !!employee?.termed_at;
 
   return (
     <div className="min-h-screen" style={{ background: "rgb(var(--background))" }}>
@@ -338,6 +393,132 @@ export default function EmployeeDetailPage() {
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* Access Control */}
+            <div className="rounded-2xl border p-5 space-y-4"
+              style={{ borderColor: isTermed ? "rgba(239,68,68,0.25)" : "rgb(var(--border))", background: "rgb(var(--card))" }}>
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg"
+                  style={{ background: isTermed ? "rgba(239,68,68,0.1)" : "rgba(var(--fg), 0.07)" }}>
+                  {isTermed
+                    ? <XCircle className="h-4 w-4" style={{ color: "rgb(239,68,68)" }} />
+                    : <i className="fa-solid fa-shield-halved text-[11px]" style={{ color: "rgb(var(--muted))" }} />}
+                </div>
+                <div className="text-sm font-semibold">Access Control</div>
+              </div>
+
+              {isTermed ? (
+                <div className="space-y-4">
+                  {/* Termed banner */}
+                  <div className="rounded-xl border px-4 py-3 text-sm space-y-1"
+                    style={{ borderColor: "rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.06)" }}>
+                    <div className="font-semibold" style={{ color: "rgb(239,68,68)" }}>
+                      Employment terminated
+                    </div>
+                    <div style={{ color: "rgb(var(--muted))" }}>
+                      Termed on {formatDateTime(employee.termed_at)}. All access has been revoked. Booking and message history is preserved.
+                    </div>
+                  </div>
+                  {termSuccess && (
+                    <div className="rounded-xl border px-4 py-3 text-xs"
+                      style={{ borderColor: "rgba(16,185,129,0.3)", background: "rgba(16,185,129,0.07)", color: "rgb(16,185,129)" }}>
+                      {termSuccess} Check the <strong>Dispatch</strong> page to reassign.
+                    </div>
+                  )}
+
+                  {/* Reinstate */}
+                  {!reinstateOpen ? (
+                    <button type="button" onClick={() => { setReinstateOpen(true); setReinstateError(null); setReinstateRole(employee.user_role ?? "technician"); }}
+                      className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition hover:opacity-90 active:scale-[0.97]"
+                      style={{ borderColor: "rgba(16,185,129,0.4)", background: "rgba(16,185,129,0.08)", color: "rgb(16,185,129)" }}>
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      Reinstate Employee
+                    </button>
+                  ) : (
+                    <div className="rounded-xl border p-4 space-y-3"
+                      style={{ borderColor: "rgba(16,185,129,0.3)", background: "rgba(16,185,129,0.05)" }}>
+                      <div className="text-sm font-semibold" style={{ color: "rgb(16,185,129)" }}>
+                        Reinstate &amp; send new invite
+                      </div>
+                      <p className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                        A setup email will be sent. The employee must create a new password before they can sign in.
+                      </p>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: "rgb(var(--muted))" }}>
+                          Role
+                        </label>
+                        <select
+                          value={reinstateRole}
+                          onChange={(e) => setReinstateRole(e.target.value)}
+                          disabled={reinstateBusy}
+                          className="w-full rounded-xl border px-3 py-2 text-sm outline-none disabled:opacity-60"
+                          style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))", color: "rgb(var(--fg))" }}
+                        >
+                          <option value="technician">Technician</option>
+                          <option value="admin">Admin</option>
+                          <option value="superadmin">Super Admin</option>
+                        </select>
+                      </div>
+                      {reinstateError && (
+                        <p className="text-xs" style={{ color: "rgb(239,68,68)" }}>{reinstateError}</p>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={handleReinstate} disabled={reinstateBusy}
+                          className="rounded-xl border px-4 py-2 text-sm font-semibold transition hover:opacity-90 active:scale-[0.97] disabled:opacity-60"
+                          style={{ borderColor: "rgba(16,185,129,0.4)", background: "rgba(16,185,129,0.1)", color: "rgb(16,185,129)" }}>
+                          {reinstateBusy ? "Sending invite…" : "Send reinstate invite"}
+                        </button>
+                        <button type="button" onClick={() => setReinstateOpen(false)} disabled={reinstateBusy}
+                          className="rounded-xl border px-4 py-2 text-sm font-medium transition hover:opacity-80 disabled:opacity-60"
+                          style={{ borderColor: "rgb(var(--border))", background: "transparent" }}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                    Terminating an employee immediately revokes all access, signs them out of all devices, and locks their account. Booking and message history is fully preserved.
+                  </p>
+
+                  {!termConfirm ? (
+                    <button type="button" onClick={() => { setTermConfirm(true); setTermError(null); }}
+                      className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition hover:opacity-90 active:scale-[0.97]"
+                      style={{ borderColor: "rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.07)", color: "rgb(239,68,68)" }}>
+                      <XCircle className="h-3.5 w-3.5" />
+                      Terminate Employee
+                    </button>
+                  ) : (
+                    <div className="rounded-xl border p-4 space-y-3"
+                      style={{ borderColor: "rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.06)" }}>
+                      <div className="text-sm font-semibold" style={{ color: "rgb(239,68,68)" }}>
+                        Confirm termination
+                      </div>
+                      <p className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                        This will immediately revoke <strong>{employeeName}</strong>&apos;s access, sign them out of all devices, and lock their account. This cannot be undone without a reinstate.
+                      </p>
+                      {termError && (
+                        <p className="text-xs" style={{ color: "rgb(239,68,68)" }}>{termError}</p>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={handleTerm} disabled={termBusy}
+                          className="rounded-xl border px-4 py-2 text-sm font-semibold transition hover:opacity-90 active:scale-[0.97] disabled:opacity-60"
+                          style={{ borderColor: "rgba(239,68,68,0.4)", background: "rgba(239,68,68,0.12)", color: "rgb(239,68,68)" }}>
+                          {termBusy ? "Terminating…" : "Yes, terminate access"}
+                        </button>
+                        <button type="button" onClick={() => setTermConfirm(false)} disabled={termBusy}
+                          className="rounded-xl border px-4 py-2 text-sm font-medium transition hover:opacity-80 disabled:opacity-60"
+                          style={{ borderColor: "rgb(var(--border))", background: "transparent" }}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </>
         )}

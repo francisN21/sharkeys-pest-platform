@@ -10,8 +10,6 @@ import {
   CheckCircle2,
   Mail,
   ShieldAlert,
-  Eye,
-  EyeOff,
   Check,
   X,
 } from "lucide-react";
@@ -37,8 +35,6 @@ export default function ResetPasswordPage() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [resetSuccess, setResetSuccess] = useState(false);
   const [requestSuccess, setRequestSuccess] = useState<string | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const resetForm = useForm<ResetPasswordValues>({
     resolver: zodResolver(resetPasswordSchema),
@@ -226,51 +222,23 @@ export default function ResetPasswordPage() {
             className="space-y-4"
             onSubmit={resetForm.handleSubmit(onSubmitReset)}
           >
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-semibold">New password</label>
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="inline-flex items-center gap-1 text-xs font-semibold hover:opacity-80"
-                  style={{ color: "rgb(var(--muted))" }}
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  {showPassword ? "Hide" : "Show"}
-                </button>
-              </div>
-
-              <AuthTextField
-                label=""
-                type={showPassword ? "text" : "password"}
-                error={resetForm.formState.errors.password?.message}
-                {...resetForm.register("password")}
-              />
-            </div>
+            <AuthTextField
+              label="New password"
+              type="password"
+              showToggle
+              error={resetForm.formState.errors.password?.message}
+              {...resetForm.register("password")}
+            />
 
             <PasswordRequirements password={passwordValue} />
 
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-semibold">Confirm new password</label>
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword((v) => !v)}
-                  className="inline-flex items-center gap-1 text-xs font-semibold hover:opacity-80"
-                  style={{ color: "rgb(var(--muted))" }}
-                >
-                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  {showConfirmPassword ? "Hide" : "Show"}
-                </button>
-              </div>
-
-              <AuthTextField
-                label=""
-                type={showConfirmPassword ? "text" : "password"}
-                error={resetForm.formState.errors.confirmPassword?.message}
-                {...resetForm.register("confirmPassword")}
-              />
-            </div>
+            <AuthTextField
+              label="Confirm new password"
+              type="password"
+              showToggle
+              error={resetForm.formState.errors.confirmPassword?.message}
+              {...resetForm.register("confirmPassword")}
+            />
 
             {showPasswordMatchState ? (
               <div

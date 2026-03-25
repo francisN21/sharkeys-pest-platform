@@ -897,6 +897,48 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
   }
 });
 
+/**
+ * POST /admin/bookings/clear-orphaned
+ * Finds bookings that are stuck in 'assigned' status but have no assigned worker
+ * (assigned_worker_user_id IS NULL), and reverts them to 'accepted' so they
+ * re-appear in the dispatch queue ready for reassignment.
+ * This handles the edge case where a technician is terminated and the booking
+ * status did not revert automatically.
+ */
+router.post("/clear-orphaned", requireAuth, requireAnyRole(["admin", "superuser"]), async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const result = await client.query(
+      `UPDATE bookings
+       SET status = 'accepted', updated_at = now()
+       WHERE status = 'assigned'
+         AND assigned_worker_user_id IS NULL
+       RETURNING id`
+    );
+
+    const fixedIds = result.rows.map((r) => r.id);
+
+    if (fixedIds.length > 0) {
+      // Clean up any dangling booking_assignments rows for these bookings
+      await client.query(
+        `DELETE FROM booking_assignments WHERE booking_id = ANY($1::bigint[])`,
+        [fixedIds]
+      );
+    }
+
+    await client.query("COMMIT");
+
+    return res.json({ ok: true, cleared: fixedIds.length });
+  } catch (err) {
+    try { await client.query("ROLLBACK"); } catch (_) {}
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
 router.get("/technicians", requireAuth, requireAnyRole(["admin", "superuser"]), async (req, res, next) => {
   try {
     const r = await pool.query(

@@ -6,8 +6,6 @@ import { useForm } from "react-hook-form";
 import {
   CheckCircle2,
   ShieldAlert,
-  Eye,
-  EyeOff,
   Check,
   X,
 } from "lucide-react";
@@ -30,8 +28,6 @@ export default function EmployeeSetupPage() {
 
   const [serverError, setServerError] = useState<string | null>(null);
   const [setupSuccess, setSetupSuccess] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const form = useForm<EmployeeSetupValues>({
     defaultValues: {
@@ -164,29 +160,12 @@ export default function EmployeeSetupPage() {
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-semibold">Create password</label>
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="inline-flex items-center gap-1 text-xs font-semibold hover:opacity-80"
-                  style={{ color: "rgb(var(--muted))" }}
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                  {showPassword ? "Hide" : "Show"}
-                </button>
-              </div>
-
-              <AuthTextField
-                label=""
-                type={showPassword ? "text" : "password"}
-                error={form.formState.errors.password?.message}
-                {...form.register("password", {
+            <AuthTextField
+              label="Create password"
+              type="password"
+              showToggle
+              error={form.formState.errors.password?.message}
+              {...form.register("password", {
                   required: "Password is required",
                   minLength: {
                     value: 14,
@@ -206,43 +185,22 @@ export default function EmployeeSetupPage() {
                       !/\s/.test(v) || "No spaces allowed",
                   },
                 })}
-              />
-            </div>
+            />
 
             <PasswordRequirements password={passwordValue} />
 
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-semibold">
-                  Confirm password
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword((v) => !v)}
-                  className="inline-flex items-center gap-1 text-xs font-semibold hover:opacity-80"
-                  style={{ color: "rgb(var(--muted))" }}
-                >
-                  {showConfirmPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                  {showConfirmPassword ? "Hide" : "Show"}
-                </button>
-              </div>
-
-              <AuthTextField
-                label=""
-                type={showConfirmPassword ? "text" : "password"}
-                error={form.formState.errors.confirmPassword?.message}
-                {...form.register("confirmPassword", {
-                  required: "Please confirm your password",
-                  validate: (value) =>
-                    value === form.getValues("password") ||
-                    "Passwords must match",
-                })}
-              />
-            </div>
+            <AuthTextField
+              label="Confirm password"
+              type="password"
+              showToggle
+              error={form.formState.errors.confirmPassword?.message}
+              {...form.register("confirmPassword", {
+                required: "Please confirm your password",
+                validate: (value) =>
+                  value === form.getValues("password") ||
+                  "Passwords must match",
+              })}
+            />
 
             {showPasswordMatchState ? (
               <div

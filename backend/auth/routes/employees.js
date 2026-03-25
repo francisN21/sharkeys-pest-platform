@@ -119,12 +119,30 @@ const completeEmployeeSetupSchema = z.object({
   phone: z.string().trim().min(7).max(30).optional(),
 });
 
+const reinstateEmployeeSchema = z.object({
+  user_role: z.enum(["superadmin", "superuser", "admin", "technician", "worker"]),
+});
+
 /**
  * GET /employees
  * Superuser-only employee list
  */
 router.get("/", requireAuth, requireSuperuser, async (req, res, next) => {
   try {
+    const termedFilter = req.query.termed === "true";
+
+    const whereClause = termedFilter
+      ? `WHERE u.termed_at IS NOT NULL`
+      : `WHERE u.termed_at IS NULL
+         AND (
+           EXISTS (
+             SELECT 1 FROM user_roles eur
+             WHERE eur.user_id = u.id
+               AND eur.role IN ('superuser', 'admin', 'worker')
+           )
+           OR (li.id IS NOT NULL AND li.consumed_at IS NULL)
+         )`;
+
     const q = await pool.query(
       `
       SELECT
@@ -136,6 +154,7 @@ router.get("/", requireAuth, requireSuperuser, async (req, res, next) => {
         u.phone,
         u.email_verified_at,
         u.created_at,
+        u.termed_at,
         (u.password_hash IS NOT NULL) AS has_password,
         COALESCE(array_agg(DISTINCT ur.role) FILTER (WHERE ur.role IS NOT NULL), '{}'::text[]) AS roles,
         li.id AS invite_id,
@@ -153,14 +172,7 @@ router.get("/", requireAuth, requireSuperuser, async (req, res, next) => {
         ORDER BY ei.created_at DESC
         LIMIT 1
       ) li ON true
-      WHERE
-        EXISTS (
-          SELECT 1
-          FROM user_roles eur
-          WHERE eur.user_id = u.id
-            AND eur.role IN ('superuser', 'admin', 'worker')
-        )
-        OR (li.id IS NOT NULL AND li.consumed_at IS NULL)
+      ${whereClause}
       GROUP BY
         u.id,
         li.id,
@@ -179,6 +191,8 @@ router.get("/", requireAuth, requireSuperuser, async (req, res, next) => {
 
     const employees = q.rows.map((row) => {
       const roles = Array.isArray(row.roles) ? row.roles : [];
+      const isTermed = !!row.termed_at;
+
       const primaryRole =
         roles.includes("superuser")
           ? "superuser"
@@ -194,6 +208,7 @@ router.get("/", requireAuth, requireSuperuser, async (req, res, next) => {
         (!row.invite_expires_at || new Date(row.invite_expires_at).getTime() > now);
 
       const active =
+        !isTermed &&
         roles.some((r) => ["superuser", "admin", "worker"].includes(String(r))) &&
         !!row.email_verified_at &&
         !!row.has_password;
@@ -207,9 +222,10 @@ router.get("/", requireAuth, requireSuperuser, async (req, res, next) => {
         phone: row.phone,
         email_verified_at: row.email_verified_at,
         created_at: row.created_at,
+        termed_at: row.termed_at || null,
         roles,
         user_role: displayRole(primaryRole),
-        status: active ? "active" : invitePending ? "invited" : "pending",
+        status: isTermed ? "termed" : active ? "active" : invitePending ? "invited" : "pending",
         invite: row.invite_id
           ? {
               invited_role: displayRole(row.invited_role),
@@ -246,6 +262,7 @@ router.get("/:publicId", requireAuth, requireSuperuser, async (req, res, next) =
         u.phone,
         u.email_verified_at,
         u.created_at,
+        u.termed_at,
         (u.password_hash IS NOT NULL) AS has_password,
         COALESCE(array_agg(DISTINCT ur.role) FILTER (WHERE ur.role IS NOT NULL), '{}'::text[]) AS roles,
         li.id AS invite_id,
@@ -302,9 +319,11 @@ router.get("/:publicId", requireAuth, requireSuperuser, async (req, res, next) =
         phone: row.phone,
         email_verified_at: row.email_verified_at,
         created_at: row.created_at,
+        termed_at: row.termed_at || null,
         has_password: !!row.has_password,
         roles,
         user_role: displayRole(primaryRole),
+        status: row.termed_at ? "termed" : null,
         invite: row.invite_id
           ? {
               invited_role: displayRole(row.invited_role),
@@ -681,6 +700,238 @@ router.post("/complete", async (req, res, next) => {
     try {
       await client.query("ROLLBACK");
     } catch {}
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * POST /employees/:publicId/term
+ * Superuser-only — terminate an employee.
+ *
+ * - Blocks access immediately: nulls password_hash, removes all employee
+ *   roles, kills all active sessions, and stamps termed_at.
+ * - The user row is preserved so booking/message history remains intact.
+ * - Self-termination is rejected.
+ */
+router.post("/:publicId/term", requireAuth, requireSuperuser, async (req, res, next) => {
+  const client = await pool.connect();
+
+  try {
+    const actorUserId = req.user?.id ?? req.auth?.userId ?? null;
+    const publicId = String(req.params.publicId || "").trim();
+
+    if (!publicId) {
+      return res.status(400).json({ ok: false, message: "Missing employee id" });
+    }
+
+    await client.query("BEGIN");
+
+    const userRes = await client.query(
+      `SELECT id, email, termed_at FROM users WHERE public_id = $1 LIMIT 1 FOR UPDATE`,
+      [publicId]
+    );
+
+    if (userRes.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ ok: false, message: "Employee not found" });
+    }
+
+    const user = userRes.rows[0];
+
+    if (Number(user.id) === Number(actorUserId)) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ ok: false, message: "You cannot terminate your own account" });
+    }
+
+    if (user.termed_at) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ ok: false, message: "Employee is already termed" });
+    }
+
+    // Remove all employee roles
+    await client.query(
+      `DELETE FROM user_roles WHERE user_id = $1 AND role IN ('superuser', 'admin', 'worker')`,
+      [user.id]
+    );
+
+    // Cancel any pending invites
+    await client.query(
+      `DELETE FROM employee_invites WHERE user_id = $1 AND consumed_at IS NULL`,
+      [user.id]
+    );
+
+    // Kill all active sessions — immediate sign-out
+    await client.query(`DELETE FROM sessions WHERE user_id = $1`, [user.id]);
+
+    // Null password_hash — cannot log in even if sessions are somehow restored
+    await client.query(
+      `UPDATE users SET password_hash = NULL, termed_at = now(), updated_at = now() WHERE id = $1`,
+      [user.id]
+    );
+
+    // Unassign all active bookings assigned to this worker.
+    // Only 'assigned' status bookings are affected — completed and cancelled are
+    // historical records and must not be touched.
+
+    // Step 1: Clear the worker from all open bookings and capture the affected IDs.
+    const unassignRes = await client.query(
+      `UPDATE bookings
+       SET
+         status = 'accepted',
+         assigned_worker_user_id = NULL,
+         updated_at = now()
+       WHERE assigned_worker_user_id = $1
+         AND status = 'assigned'
+       RETURNING id`,
+      [user.id]
+    );
+
+    const affectedBookingIds = unassignRes.rows.map((r) => r.id);
+
+    if (affectedBookingIds.length > 0) {
+      // Step 2: Remove the assignment rows so booking_participants stays in sync
+      // via the existing trg_spc_sync_worker_participant_on_assignment trigger.
+      await client.query(
+        `DELETE FROM booking_assignments
+         WHERE worker_user_id = $1
+           AND booking_id = ANY($2::bigint[])`,
+        [user.id, affectedBookingIds]
+      );
+
+      // Step 3: Audit trail — one event per affected booking.
+      await client.query(
+        `INSERT INTO booking_events (booking_id, actor_user_id, event_type, metadata)
+         SELECT
+           unnest($1::bigint[]),
+           $2,
+           'worker_unassigned',
+           $3::jsonb`,
+        [
+          affectedBookingIds,
+          actorUserId,
+          JSON.stringify({ reason: "employee_termed" }),
+        ]
+      );
+    }
+
+    // Audit log — include how many bookings were unassigned for visibility.
+    await client.query(
+      `INSERT INTO admin_audit_log (actor_user_id, action, target_type, target_id, metadata)
+       VALUES ($1, 'employee_termed', 'user', $2::text, $3::jsonb)`,
+      [
+        actorUserId,
+        String(user.id),
+        JSON.stringify({ unassigned_bookings: affectedBookingIds.length }),
+      ]
+    );
+
+    await client.query("COMMIT");
+
+    return res.json({ ok: true, unassigned_bookings: affectedBookingIds.length });
+  } catch (err) {
+    try { await client.query("ROLLBACK"); } catch (_) {}
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * POST /employees/:publicId/reinstate
+ * Superuser-only — reinstate a termed employee.
+ *
+ * - Clears termed_at.
+ * - Creates a fresh employee invite for the specified role.
+ * - Sends the setup email — employee must create a new password to regain access.
+ * - Does NOT restore roles until the employee completes their new setup.
+ */
+router.post("/:publicId/reinstate", requireAuth, requireSuperuser, async (req, res, next) => {
+  const client = await pool.connect();
+
+  try {
+    const actorUserId = req.user?.id ?? req.auth?.userId ?? null;
+    const publicId = String(req.params.publicId || "").trim();
+
+    if (!publicId) {
+      return res.status(400).json({ ok: false, message: "Missing employee id" });
+    }
+
+    const parsed = reinstateEmployeeSchema.parse(req.body);
+    const invitedRole = normalizeInvitedRole(parsed.user_role);
+    if (!invitedRole) {
+      return res.status(400).json({ ok: false, message: "Invalid employee role" });
+    }
+
+    await client.query("BEGIN");
+
+    const userRes = await client.query(
+      `SELECT id, public_id, email, first_name, last_name, phone, termed_at
+       FROM users WHERE public_id = $1 LIMIT 1 FOR UPDATE`,
+      [publicId]
+    );
+
+    if (userRes.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ ok: false, message: "Employee not found" });
+    }
+
+    const user = userRes.rows[0];
+
+    if (!user.termed_at) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ ok: false, message: "Employee is not currently termed" });
+    }
+
+    // Clear termed status
+    await client.query(
+      `UPDATE users SET termed_at = NULL, updated_at = now() WHERE id = $1`,
+      [user.id]
+    );
+
+    // Cancel any stale pending invites
+    await client.query(
+      `DELETE FROM employee_invites WHERE user_id = $1 AND consumed_at IS NULL`,
+      [user.id]
+    );
+
+    // Create a fresh invite
+    const token = generateInviteToken();
+    const tokenHash = hashValue(token);
+    const expiresAt = addDays(new Date(), 7).toISOString();
+
+    await client.query(
+      `INSERT INTO employee_invites (user_id, invited_by_user_id, invited_role, token_hash, expires_at)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [user.id, actorUserId, invitedRole, tokenHash, expiresAt]
+    );
+
+    // Audit log
+    await client.query(
+      `INSERT INTO admin_audit_log (actor_user_id, action, target_type, target_id, metadata)
+       VALUES ($1, 'employee_reinstated', 'user', $2::text, $3::jsonb)`,
+      [actorUserId, String(user.id), JSON.stringify({ invited_role: invitedRole })]
+    );
+
+    await client.query("COMMIT");
+
+    // Send invite email after commit — failure here doesn't roll back the reinstate
+    const setupUrl = buildAppUrl(
+      String(process.env.EMPLOYEE_SETUP_PATH || "/employee-setup").trim(),
+      { token }
+    );
+
+    const emailResult = await sendEmployeeInviteEmail({
+      to: user.email,
+      firstName: user.first_name,
+      roleLabel: displayRole(invitedRole),
+      setupUrl,
+    });
+
+    return res.json({ ok: true, email: emailResult });
+  } catch (err) {
+    try { await client.query("ROLLBACK"); } catch (_) {}
     next(err);
   } finally {
     client.release();

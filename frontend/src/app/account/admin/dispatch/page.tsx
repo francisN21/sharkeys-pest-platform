@@ -9,6 +9,7 @@ import {
   ClipboardList,
   MapPin,
   Phone,
+  Settings,
   Square,
   User,
   Wrench,
@@ -21,6 +22,7 @@ import {
   type AdminBookingRow,
   adminListTechnicians,
   adminAssignBooking,
+  clearOrphanedBookings,
   type TechnicianRow,
 } from "../../../../lib/api/adminBookings";
 import AdminModal from "../_components/AdminModal";
@@ -369,7 +371,21 @@ export default function AdminDispatchPage() {
   const [acceptedRows, setAcceptedRows] = useState<AdminBookingRow[]>([]);
 
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<"created" | "scheduled">("created");
+  const [clearBusy, setClearBusy] = useState(false);
+  const [clearMsg, setClearMsg] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+        setSettingsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [settingsOpen]);
 
   const [techs, setTechs] = useState<TechnicianRow[]>([]);
 
@@ -406,6 +422,24 @@ export default function AdminDispatchPage() {
     setPendingRows(p.bookings || []);
     setAcceptedRows(a.bookings || []);
   }, []);
+
+  async function handleClearOrphaned() {
+    setClearBusy(true);
+    setClearMsg(null);
+    try {
+      const result = await clearOrphanedBookings();
+      await refresh();
+      setClearMsg(
+        result.cleared > 0
+          ? `${result.cleared} orphaned booking${result.cleared === 1 ? "" : "s"} moved to Accepted.`
+          : "No orphaned bookings found."
+      );
+    } catch {
+      setClearMsg("Failed to clear orphaned bookings.");
+    } finally {
+      setClearBusy(false);
+    }
+  }
 
   useEffect(() => {
     let alive = true;
@@ -444,24 +478,16 @@ export default function AdminDispatchPage() {
   // ─── Sort ───────────────────────────────────────────────────────────────────
 
   const sortedPending = useMemo(() => {
-    const copy = [...pendingRows];
-    copy.sort((a, b) => {
-      const aKey = sortBy === "created" ? a.created_at : a.starts_at;
-      const bKey = sortBy === "created" ? b.created_at : b.starts_at;
-      return new Date(bKey).getTime() - new Date(aKey).getTime();
-    });
-    return copy;
-  }, [pendingRows, sortBy]);
+    return [...pendingRows].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  }, [pendingRows]);
 
   const sortedAccepted = useMemo(() => {
-    const copy = [...acceptedRows];
-    copy.sort((a, b) => {
-      const aKey = sortBy === "created" ? a.created_at : a.starts_at;
-      const bKey = sortBy === "created" ? b.created_at : b.starts_at;
-      return new Date(bKey).getTime() - new Date(aKey).getTime();
-    });
-    return copy;
-  }, [acceptedRows, sortBy]);
+    return [...acceptedRows].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  }, [acceptedRows]);
 
   // ─── Modal helpers ───────────────────────────────────────────────────────────
 
@@ -776,18 +802,6 @@ export default function AdminDispatchPage() {
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-[rgb(var(--muted))]">Sort by</label>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value === "scheduled" ? "scheduled" : "created")}
-                className="rounded-xl border border-white/10 bg-[rgb(var(--card))] px-3 py-2 text-sm focus:outline-none"
-              >
-                <option value="created">Created</option>
-                <option value="scheduled">Scheduled</option>
-              </select>
-            </div>
-
             <button
               type="button"
               onClick={() => refresh()}
@@ -796,8 +810,68 @@ export default function AdminDispatchPage() {
             >
               Refresh
             </button>
+            <div ref={settingsRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setSettingsOpen((o) => !o)}
+                className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-[rgb(var(--card))] p-2 text-[rgb(var(--muted))] transition hover:bg-white/[0.06] hover:text-[rgb(var(--fg))]"
+                title="Dispatch settings"
+              >
+                <Settings className="h-4 w-4" />
+              </button>
+
+              <AnimatePresence>
+                {settingsOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                    transition={{ duration: 0.12 }}
+                    className="absolute right-0 top-full z-50 mt-1.5 w-52 rounded-2xl border border-white/10 bg-[rgb(var(--card))] shadow-xl shadow-black/30"
+                  >
+                    <div className="px-3 py-2 border-b border-white/[0.06]">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-[rgb(var(--muted))]">
+                        Utilities
+                      </p>
+                    </div>
+                    <div className="p-1.5">
+                      <button
+                        type="button"
+                        onClick={() => { setSettingsOpen(false); handleClearOrphaned(); }}
+                        disabled={clearBusy || loading || !!busyId}
+                        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-[rgb(var(--fg))] transition hover:bg-white/[0.06] disabled:opacity-50"
+                      >
+                        <Wrench className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                        <span>{clearBusy ? "Clearing…" : "Clear Orphaned Bookings"}</span>
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
+
+        {/* Clear orphaned feedback */}
+        <AnimatePresence>
+          {clearMsg ? (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              className="flex items-center justify-between rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-300"
+            >
+              <span>{clearMsg}</span>
+              <button
+                type="button"
+                onClick={() => setClearMsg(null)}
+                className="ml-3 text-amber-300/70 hover:text-amber-200"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
 
         {/* Error banner */}
         <AnimatePresence>

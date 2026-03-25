@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Check, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -45,6 +46,15 @@ export default function SignupPage() {
   });
 
   const passwordValue = watch("password") || "";
+  const confirmPasswordValue = watch("confirmPassword") || "";
+
+  const passwordsMatch = useMemo(() => {
+    if (!passwordValue || !confirmPasswordValue) return false;
+    return passwordValue === confirmPasswordValue;
+  }, [passwordValue, confirmPasswordValue]);
+
+  const showPasswordMatchState =
+    passwordValue.length > 0 || confirmPasswordValue.length > 0;
 
   useEffect(() => {
     let alive = true;
@@ -193,6 +203,27 @@ export default function SignupPage() {
           error={errors.confirmPassword?.message}
           {...register("confirmPassword")}
         />
+
+        {showPasswordMatchState ? (
+          <div
+            className="rounded-xl border p-3"
+            style={{
+              borderColor: "rgb(var(--border))",
+              background: "rgba(var(--bg), 0.2)",
+            }}
+          >
+            <div className="flex items-center gap-2 text-sm">
+              {passwordsMatch ? (
+                <Check className="h-4 w-4 text-green-500" />
+              ) : (
+                <X className="h-4 w-4 text-red-500" />
+              )}
+              <span style={{ opacity: passwordsMatch ? 1 : 0.8 }}>
+                {passwordsMatch ? "Passwords match" : "Passwords must match"}
+              </span>
+            </div>
+          </div>
+        ) : null}
 
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" className="mt-1" {...register("agree")} />

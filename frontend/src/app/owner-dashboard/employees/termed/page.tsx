@@ -2,12 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { UserPlus, RefreshCcw } from "lucide-react";
-import Navbar from "../../../components/Navbar";
-import { listEmployees, type Employee } from "../../../lib/api/employees";
-import { me, type MeResponse } from "../../../lib/api/auth";
-import InviteEmployeeModal from "../../../components/su-dashboard/InviteEmployeeModal";
-import OwnerRouteTabs from "../_components/owner-route-tabs";
+import { RefreshCcw, XCircle } from "lucide-react";
+import Navbar from "../../../../components/Navbar";
+import { listEmployees, type Employee } from "../../../../lib/api/employees";
+import { me, type MeResponse } from "../../../../lib/api/auth";
+import OwnerRouteTabs from "../../_components/owner-route-tabs";
 
 type MeUserWithRoles = NonNullable<MeResponse["user"]> & {
   roles?: string[] | null;
@@ -34,20 +33,19 @@ function getInitials(emp: Employee) {
   return (first + last).toUpperCase() || emp.email[0].toUpperCase();
 }
 
-function getStatusMeta(emp: Employee) {
-  const isActive = emp.status === "active" || !!emp.email_verified_at;
-  if (isActive) return { label: "Active", color: "rgb(16,185,129)", bg: "rgba(16,185,129,0.1)", border: "rgba(16,185,129,0.3)" };
-  if (emp.status === "invited") return { label: "Invited", color: "rgb(234,179,8)", bg: "rgba(234,179,8,0.1)", border: "rgba(234,179,8,0.3)" };
-  return { label: "Pending", color: "rgb(234,179,8)", bg: "rgba(234,179,8,0.1)", border: "rgba(234,179,8,0.3)" };
-}
-
 function getRoleMeta(role?: string | null) {
   switch ((role ?? "").toLowerCase()) {
     case "superadmin": return { label: "Super Admin", color: "rgb(139,92,246)", bg: "rgba(139,92,246,0.1)", border: "rgba(139,92,246,0.3)" };
     case "admin":      return { label: "Admin",       color: "rgb(99,102,241)",  bg: "rgba(99,102,241,0.1)",  border: "rgba(99,102,241,0.3)" };
-    case "technician":
     default:           return { label: "Technician",  color: "rgb(59,130,246)",  bg: "rgba(59,130,246,0.1)",  border: "rgba(59,130,246,0.3)" };
   }
+}
+
+function formatDateOnly(value?: string | null) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
 const AVATAR_COLORS = [
@@ -60,18 +58,17 @@ function avatarColor(emp: Employee) {
   return AVATAR_COLORS[hash % AVATAR_COLORS.length];
 }
 
-export default function EmployeesPage() {
+export default function TermedEmployeesPage() {
   const pathname = usePathname();
   const router = useRouter();
 
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
 
   const loadEmployees = useCallback(async () => {
-    const res = await listEmployees();
+    const res = await listEmployees({ termed: true });
     setEmployees(res.employees ?? []);
   }, []);
 
@@ -83,12 +80,12 @@ export default function EmployeesPage() {
         if (!alive) return;
         if (!auth?.ok || !auth.user) { router.replace("/login"); return; }
         if (!isSuperUser(auth)) { router.replace("/account"); return; }
-        const res = await listEmployees();
+        const res = await listEmployees({ termed: true });
         if (!alive) return;
         setEmployees(res.employees ?? []);
       } catch (e: unknown) {
         if (!alive) return;
-        setPageError(e instanceof Error ? e.message : "Failed to load employees");
+        setPageError(e instanceof Error ? e.message : "Failed to load termed employees");
       } finally {
         if (alive) setLoading(false);
       }
@@ -101,17 +98,10 @@ export default function EmployeesPage() {
     try { await loadEmployees(); } finally { setRefreshing(false); }
   }
 
-  async function handleInviteSuccess() {
-    await loadEmployees();
-  }
-
-  // Stats
   const stats = useMemo(() => {
-    const active = employees.filter((e) => e.status === "active" || !!e.email_verified_at).length;
-    const invited = employees.filter((e) => e.status === "invited" || (e.status !== "active" && !e.email_verified_at)).length;
     const technicians = employees.filter((e) => (e.user_role ?? "").toLowerCase() === "technician").length;
     const admins = employees.filter((e) => ["admin", "superadmin"].includes((e.user_role ?? "").toLowerCase())).length;
-    return { total: employees.length, active, invited, technicians, admins };
+    return { total: employees.length, technicians, admins };
   }, [employees]);
 
   if (loading) {
@@ -122,7 +112,7 @@ export default function EmployeesPage() {
           <div className="flex flex-col items-center gap-3">
             <div className="h-8 w-8 rounded-full border-2 animate-spin"
               style={{ borderColor: "rgb(var(--border))", borderTopColor: "transparent" }} />
-            <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>Loading employees…</div>
+            <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>Loading termed employees…</div>
           </div>
         </main>
       </>
@@ -139,13 +129,13 @@ export default function EmployeesPage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl border"
-                style={{ borderColor: "rgb(var(--border))", background: "rgba(var(--fg), 0.05)" }}>
-                <i className="fa-solid fa-user-gear text-sm" style={{ color: "rgb(var(--muted))" }} />
+                style={{ borderColor: "rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.07)" }}>
+                <XCircle className="h-5 w-5" style={{ color: "rgb(239,68,68)" }} />
               </div>
               <div>
-                <h1 className="text-lg font-bold tracking-tight">Employees</h1>
+                <h1 className="text-lg font-bold tracking-tight">Termed Employees</h1>
                 <p className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                  Sharkys Pest Control · Technicians, Admins &amp; Staff
+                  Former staff · Access revoked · History preserved
                 </p>
               </div>
             </div>
@@ -159,23 +149,10 @@ export default function EmployeesPage() {
                   {refreshing ? "Refreshing…" : "Refresh"}
                 </span>
               </button>
-              <button type="button" onClick={() => setOpen(true)}
-                className="rounded-xl border px-3 py-1.5 text-xs font-semibold hover:opacity-90 transition-opacity"
-                style={{ borderColor: "rgba(16,185,129,0.4)", background: "rgba(16,185,129,0.1)", color: "rgb(16,185,129)" }}>
-                <span className="inline-flex items-center gap-1.5">
-                  <UserPlus className="h-3.5 w-3.5" />
-                  Invite Employee
-                </span>
-              </button>
-              <button type="button" onClick={() => router.push("/owner-dashboard/employees/termed")}
-                className="rounded-xl border px-3 py-1.5 text-xs font-semibold hover:opacity-80 transition-opacity"
-                style={{ borderColor: "rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.06)", color: "rgb(239,68,68)" }}>
-                Termed →
-              </button>
-              <button type="button" onClick={() => router.push("/account")}
+              <button type="button" onClick={() => router.push("/owner-dashboard/employees")}
                 className="rounded-xl border px-3 py-1.5 text-xs font-semibold hover:opacity-80 transition-opacity"
                 style={{ borderColor: "rgb(var(--border))", background: "transparent" }}>
-                ← Back to Account
+                ← Active Employees
               </button>
             </div>
           </div>
@@ -197,11 +174,10 @@ export default function EmployeesPage() {
         )}
 
         {/* Stats row */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard label="Total staff" value={stats.total} />
-          <StatCard label="Active" value={stats.active} color="rgb(16,185,129)" />
-          <StatCard label="Pending / Invited" value={stats.invited} color="rgb(234,179,8)" />
+        <div className="grid grid-cols-3 gap-3">
+          <StatCard label="Total termed" value={stats.total} color="rgb(239,68,68)" />
           <StatCard label="Technicians" value={stats.technicians} color="rgb(59,130,246)" />
+          <StatCard label="Admins / Super" value={stats.admins} color="rgb(99,102,241)" />
         </div>
 
         {/* Employee grid */}
@@ -210,26 +186,17 @@ export default function EmployeesPage() {
             <div className="rounded-2xl border p-12 text-center"
               style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}>
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl mx-auto mb-4"
-                style={{ background: "rgba(var(--fg), 0.06)" }}>
-                <i className="fa-solid fa-user-gear text-xl" style={{ color: "rgb(var(--muted))" }} />
+                style={{ background: "rgba(239,68,68,0.07)" }}>
+                <XCircle className="h-7 w-7" style={{ color: "rgba(239,68,68,0.5)" }} />
               </div>
-              <div className="text-sm font-semibold mb-1">No employees yet</div>
-              <div className="text-sm mb-4" style={{ color: "rgb(var(--muted))" }}>
-                Invite your first technician or admin to get started.
+              <div className="text-sm font-semibold mb-1">No termed employees</div>
+              <div className="text-sm" style={{ color: "rgb(var(--muted))" }}>
+                Terminated employees will appear here.
               </div>
-              <button type="button" onClick={() => setOpen(true)}
-                className="rounded-xl border px-4 py-2 text-sm font-semibold hover:opacity-90"
-                style={{ borderColor: "rgba(16,185,129,0.4)", background: "rgba(16,185,129,0.1)", color: "rgb(16,185,129)" }}>
-                <span className="inline-flex items-center gap-2">
-                  <UserPlus className="h-4 w-4" />
-                  Invite Employee
-                </span>
-              </button>
             </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {employees.map((emp) => {
-                const status = getStatusMeta(emp);
                 const role = getRoleMeta(emp.user_role);
                 const initials = getInitials(emp);
                 const color = avatarColor(emp);
@@ -241,43 +208,41 @@ export default function EmployeesPage() {
                     type="button"
                     onClick={() => router.push(`/owner-dashboard/employees/${emp.public_id}`)}
                     className="rounded-2xl border p-5 text-left transition-all hover:opacity-90 hover:-translate-y-0.5 hover:shadow-lg"
-                    style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--card))" }}
+                    style={{ borderColor: "rgba(239,68,68,0.2)", background: "rgb(var(--card))" }}
                   >
                     <div className="flex items-start gap-4">
-                      {/* Avatar */}
-                      <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white"
+                      {/* Avatar — desaturated for termed */}
+                      <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white opacity-60"
                         style={{ background: color }}>
                         {initials}
                       </div>
 
-                      {/* Info */}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">
                           <div className="font-semibold truncate text-sm">{name}</div>
                           <span className="rounded-full border px-2 py-0.5 text-[11px] font-semibold flex-shrink-0"
-                            style={{ borderColor: status.border, background: status.bg, color: status.color }}>
-                            {status.label}
+                            style={{ borderColor: "rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.08)", color: "rgb(239,68,68)" }}>
+                            Termed
                           </span>
                         </div>
                         <div className="mt-0.5 text-xs truncate" style={{ color: "rgb(var(--muted))" }}>
                           {emp.email}
                         </div>
-                        {emp.phone && (
+                        {emp.termed_at && (
                           <div className="mt-0.5 text-xs" style={{ color: "rgb(var(--muted))" }}>
-                            {emp.phone}
+                            Termed {formatDateOnly(emp.termed_at)}
                           </div>
                         )}
                       </div>
                     </div>
 
-                    {/* Role badge */}
                     <div className="mt-4 flex items-center justify-between">
-                      <span className="rounded-full border px-2.5 py-0.5 text-xs font-semibold"
+                      <span className="rounded-full border px-2.5 py-0.5 text-xs font-semibold opacity-70"
                         style={{ borderColor: role.border, background: role.bg, color: role.color }}>
                         {role.label}
                       </span>
                       <span className="text-xs" style={{ color: "rgb(var(--muted))" }}>
-                        View profile →
+                        Reinstate →
                       </span>
                     </div>
                   </button>
@@ -287,8 +252,6 @@ export default function EmployeesPage() {
           )}
         </div>
       </main>
-
-      <InviteEmployeeModal open={open} onClose={() => setOpen(false)} onSuccess={handleInviteSuccess} />
     </div>
   );
 }

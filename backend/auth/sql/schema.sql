@@ -52,7 +52,10 @@ ALTER TABLE users
   ADD COLUMN IF NOT EXISTS crm_tag TEXT,
   ADD COLUMN IF NOT EXISTS crm_tag_note TEXT,
   ADD COLUMN IF NOT EXISTS crm_tag_updated_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS crm_tag_updated_by_user_id BIGINT;
+  ADD COLUMN IF NOT EXISTS crm_tag_updated_by_user_id BIGINT,
+  ADD COLUMN IF NOT EXISTS termed_at TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS idx_users_termed_at ON users(termed_at) WHERE termed_at IS NOT NULL;
 
 UPDATE users SET public_id = gen_random_uuid() WHERE public_id IS NULL;
 ALTER TABLE users ALTER COLUMN public_id SET NOT NULL;
@@ -1014,8 +1017,6 @@ CREATE INDEX IF NOT EXISTS idx_lead_survey_heard_from
 CREATE INDEX IF NOT EXISTS idx_lead_survey_submitted_at
   ON lead_survey_responses (submitted_at DESC);
 
-COMMIT;
-
 
 -- ============================================================
 -- CUSTOMER TAGS (CRM tagging for users + leads)
@@ -1108,3 +1109,5 @@ CREATE INDEX IF NOT EXISTS idx_admin_audit_log_time
 
 CREATE INDEX IF NOT EXISTS idx_admin_audit_log_action
   ON admin_audit_log (action, created_at DESC);
+
+COMMIT;

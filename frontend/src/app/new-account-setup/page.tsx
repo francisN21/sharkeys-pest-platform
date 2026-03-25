@@ -6,12 +6,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import {
   ArrowLeft,
+  Check,
   CheckCircle2,
-  Eye,
-  EyeOff,
   Mail,
   ShieldAlert,
   UserRoundPlus,
+  X,
 } from "lucide-react";
 
 import AuthTextField from "../../components/forms/AuthTextField";
@@ -35,8 +35,6 @@ export default function NewAccountSetupPage() {
 
   const [serverError, setServerError] = useState<string | null>(null);
   const [setupSuccess, setSetupSuccess] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const {
     register,
@@ -197,32 +195,13 @@ export default function NewAccountSetupPage() {
             </div>
 
             <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-semibold">
-                    Create password
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    className="inline-flex items-center gap-1 text-xs font-semibold hover:opacity-80"
-                    style={{ color: "rgb(var(--muted))" }}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                    {showPassword ? "Hide" : "Show"}
-                  </button>
-                </div>
-
-                <AuthTextField
-                  label=""
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Create a strong password"
-                  error={errors.password?.message}
-                  {...register("password", {
+              <AuthTextField
+                label="Create password"
+                type="password"
+                showToggle
+                placeholder="Create a strong password"
+                error={errors.password?.message}
+                {...register("password", {
                     required: "Password is required",
                     minLength: {
                       value: 14,
@@ -243,63 +222,41 @@ export default function NewAccountSetupPage() {
                       noSpaces: (v) => !/\s/.test(v) || "No spaces allowed",
                     },
                   })}
-                />
-              </div>
+              />
 
               <PasswordRequirements password={password} />
 
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-semibold">
-                    Confirm password
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword((v) => !v)}
-                    className="inline-flex items-center gap-1 text-xs font-semibold hover:opacity-80"
-                    style={{ color: "rgb(var(--muted))" }}
-                  >
-                    {showConfirmPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                    {showConfirmPassword ? "Hide" : "Show"}
-                  </button>
-                </div>
-
-                <AuthTextField
-                  label=""
-                  type={showConfirmPassword ? "text" : "password"}
-                  placeholder="Re-enter your password"
-                  error={errors.confirmPassword?.message}
-                  {...register("confirmPassword", {
-                    required: "Please confirm your password",
-                    validate: (value) =>
-                      value === getValues("password") || "Passwords must match",
-                  })}
-                />
-              </div>
+              <AuthTextField
+                label="Confirm password"
+                type="password"
+                showToggle
+                placeholder="Re-enter your password"
+                error={errors.confirmPassword?.message}
+                {...register("confirmPassword", {
+                  required: "Please confirm your password",
+                  validate: (value) =>
+                    value === getValues("password") || "Passwords must match",
+                })}
+              />
 
               {showMatchRow ? (
                 <div
-                  className="rounded-xl border px-3 py-2 text-sm"
+                  className="rounded-xl border p-3"
                   style={{
                     borderColor: "rgb(var(--border))",
                     background: "rgba(var(--bg), 0.2)",
                   }}
                 >
-                  <span
-                    style={{
-                      color: passwordsMatch
-                        ? "rgb(34 197 94)"
-                        : "rgb(239 68 68)",
-                    }}
-                  >
-                    {passwordsMatch
-                      ? "Passwords match"
-                      : "Passwords must match"}
-                  </span>
+                  <div className="flex items-center gap-2 text-sm">
+                    {passwordsMatch ? (
+                      <Check className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <X className="h-4 w-4 text-red-500" />
+                    )}
+                    <span style={{ opacity: passwordsMatch ? 1 : 0.8 }}>
+                      {passwordsMatch ? "Passwords match" : "Passwords must match"}
+                    </span>
+                  </div>
                 </div>
               ) : null}
 
