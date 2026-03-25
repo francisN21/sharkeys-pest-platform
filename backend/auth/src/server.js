@@ -21,11 +21,23 @@ server.listen(PORT, HOST, async () => {
   logger.info({ port: PORT, local: `http://localhost:${PORT}`, network: `http://${getLocalIP()}:${PORT}` }, "Server running");
 
   // Run on every startup — idempotent, skips if a superuser already exists.
-  try {
-    await bootstrapSuperuser();
-  } catch (err) {
-    logger.error({ err }, "[bootstrap-superuser] Startup bootstrap failed");
-  }
+  // Retries with backoff to handle Railway's DB not being reachable immediately.
+  (async () => {
+    const delays = [3000, 6000, 12000]; // 3s, 6s, 12s
+    for (let attempt = 0; attempt <= delays.length; attempt++) {
+      try {
+        await bootstrapSuperuser();
+        return;
+      } catch (err) {
+        if (attempt < delays.length) {
+          logger.warn({ attempt: attempt + 1, err }, "[bootstrap-superuser] Retrying after delay");
+          await new Promise((r) => setTimeout(r, delays[attempt]));
+        } else {
+          logger.error({ err }, "[bootstrap-superuser] All attempts failed");
+        }
+      }
+    }
+  })();
 });
 
 // -----------------------------------------------------------
