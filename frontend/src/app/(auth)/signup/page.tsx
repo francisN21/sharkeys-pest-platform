@@ -179,6 +179,7 @@ export default function SignupPage() {
         <AuthTextField
           label="Password"
           type="password"
+          showToggle
           error={errors.password?.message}
           {...register("password")}
         />
@@ -188,6 +189,7 @@ export default function SignupPage() {
         <AuthTextField
           label="Confirm password"
           type="password"
+          showToggle
           error={errors.confirmPassword?.message}
           {...register("confirmPassword")}
         />
@@ -199,7 +201,7 @@ export default function SignupPage() {
 
         <button
           disabled={isSubmitting}
-          className="w-full rounded-xl px-4 py-3 text-sm font-semibold disabled:opacity-60"
+          className="w-full rounded-xl px-4 py-3 text-sm font-semibold transition hover:opacity-90 active:scale-[0.98] disabled:opacity-60"
           style={{
             background: "rgb(var(--primary))",
             color: "rgb(var(--primary-fg))",

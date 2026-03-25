@@ -270,7 +270,7 @@ export default function EmployeeSetupPage() {
             <button
               type="submit"
               disabled={form.formState.isSubmitting}
-              className="w-full rounded-xl px-4 py-3 text-sm font-semibold transition disabled:opacity-60"
+              className="w-full rounded-xl px-4 py-3 text-sm font-semibold transition hover:opacity-90 active:scale-[0.98] disabled:opacity-60"
               style={{
                 background: "rgb(var(--primary))",
                 color: "rgb(var(--primary-fg))",

@@ -45,22 +45,14 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- All columns above are defined in CREATE TABLE.
+-- ALTER TABLE ADD COLUMN IF NOT EXISTS guards kept only for columns
+-- that were added after initial schema creation (migration safety).
 ALTER TABLE users
-  ADD COLUMN IF NOT EXISTS public_id UUID,
-  ADD COLUMN IF NOT EXISTS email CITEXT,
-  ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS password_hash TEXT,
-  ADD COLUMN IF NOT EXISTS first_name TEXT,
-  ADD COLUMN IF NOT EXISTS last_name TEXT,
-  ADD COLUMN IF NOT EXISTS phone TEXT,
-  ADD COLUMN IF NOT EXISTS account_type TEXT,
-  ADD COLUMN IF NOT EXISTS address TEXT,
   ADD COLUMN IF NOT EXISTS crm_tag TEXT,
   ADD COLUMN IF NOT EXISTS crm_tag_note TEXT,
   ADD COLUMN IF NOT EXISTS crm_tag_updated_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS crm_tag_updated_by_user_id BIGINT,
-  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+  ADD COLUMN IF NOT EXISTS crm_tag_updated_by_user_id BIGINT;
 
 UPDATE users SET public_id = gen_random_uuid() WHERE public_id IS NULL;
 ALTER TABLE users ALTER COLUMN public_id SET NOT NULL;
@@ -118,20 +110,12 @@ CREATE TABLE IF NOT EXISTS leads (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Migration guard for CRM columns added after initial schema creation.
 ALTER TABLE leads
-  ADD COLUMN IF NOT EXISTS public_id UUID,
-  ADD COLUMN IF NOT EXISTS email CITEXT,
-  ADD COLUMN IF NOT EXISTS first_name TEXT,
-  ADD COLUMN IF NOT EXISTS last_name TEXT,
-  ADD COLUMN IF NOT EXISTS phone TEXT,
-  ADD COLUMN IF NOT EXISTS account_type TEXT,
-  ADD COLUMN IF NOT EXISTS address TEXT,
   ADD COLUMN IF NOT EXISTS crm_tag TEXT,
   ADD COLUMN IF NOT EXISTS crm_tag_note TEXT,
   ADD COLUMN IF NOT EXISTS crm_tag_updated_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS crm_tag_updated_by_user_id BIGINT,
-  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+  ADD COLUMN IF NOT EXISTS crm_tag_updated_by_user_id BIGINT;
 
 UPDATE leads SET public_id = gen_random_uuid() WHERE public_id IS NULL;
 ALTER TABLE leads ALTER COLUMN public_id SET NOT NULL;
@@ -411,23 +395,9 @@ CREATE TABLE IF NOT EXISTS bookings (
   CHECK (ends_at > starts_at)
 );
 
-ALTER TABLE bookings
-  ADD COLUMN IF NOT EXISTS public_id UUID,
-  ADD COLUMN IF NOT EXISTS customer_user_id BIGINT,
-  ADD COLUMN IF NOT EXISTS lead_id BIGINT,
-  ADD COLUMN IF NOT EXISTS service_id BIGINT,
-  ADD COLUMN IF NOT EXISTS status TEXT,
-  ADD COLUMN IF NOT EXISTS starts_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS ends_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS address TEXT,
-  ADD COLUMN IF NOT EXISTS notes TEXT,
-  ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS assigned_worker_user_id BIGINT,
-  ADD COLUMN IF NOT EXISTS completed_worker_user_id BIGINT,
-  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+-- All bookings columns are defined in CREATE TABLE above.
+-- Migration guard: drop NOT NULL on customer_user_id for lead-only bookings.
+-- (The DO block below handles this idempotently.)
 
 DO $$
 BEGIN
@@ -473,6 +443,12 @@ CREATE INDEX IF NOT EXISTS bookings_assigned_worker_idx
 
 CREATE INDEX IF NOT EXISTS bookings_completed_worker_user_id_idx
   ON bookings (completed_worker_user_id);
+
+CREATE INDEX IF NOT EXISTS idx_bookings_lead_id
+  ON bookings (lead_id);
+
+CREATE INDEX IF NOT EXISTS idx_bookings_service_id
+  ON bookings (service_id);
 
 DO $$
 BEGIN
@@ -747,6 +723,9 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
 
 CREATE INDEX IF NOT EXISTS idx_notifications_booking
   ON notifications (booking_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_message_id
+  ON notifications (message_id);
 
 -- ============================================================
 -- AVAILABILITY BLOCKS
