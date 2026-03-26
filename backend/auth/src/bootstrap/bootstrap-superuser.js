@@ -4,7 +4,7 @@ const { config } = require("../config");
 const { sendEmployeeInviteEmail } = require("../email/mailer");
 
 const ADMIN_EMAIL = String(process.env.BOOTSTRAP_SUPERUSER_EMAIL || "").trim();
-const ADMIN_FIRST_NAME = String(process.env.BOOTSTRAP_SUPERUSER_FIRST_NAME || "Sharky's").trim();
+const ADMIN_FIRST_NAME = String(process.env.BOOTSTRAP_SUPERUSER_FIRST_NAME || "Sharkys").trim();
 const ADMIN_LAST_NAME = String(process.env.BOOTSTRAP_SUPERUSER_LAST_NAME || "Admin").trim();
 const EMPLOYEE_SETUP_PATH = String(process.env.EMPLOYEE_SETUP_PATH || "/employee-setup").trim();
 
