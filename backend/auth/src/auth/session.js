@@ -12,11 +12,13 @@ function makeSessionId() {
 
 function getCookieOptions() {
   const isProd = process.env.NODE_ENV === "production";
+  const cookieDomain = process.env.COOKIE_DOMAIN || undefined;
   return {
     httpOnly: true,
-    secure: isProd,         // set true behind HTTPS in prod
+    secure: isProd,
     sameSite: "lax",
     path: "/",
+    ...(cookieDomain ? { domain: cookieDomain } : {}),
   };
 }
 
@@ -72,12 +74,14 @@ function generateCsrfToken() {
 
 function setCsrfCookie(res) {
   const isProd = process.env.NODE_ENV === "production";
+  const cookieDomain = process.env.COOKIE_DOMAIN || undefined;
   const token = generateCsrfToken();
   res.cookie(CSRF_COOKIE_NAME, token, {
     httpOnly: false, // Must be readable by JavaScript so the frontend can send it as a header
     secure: isProd,
     sameSite: "lax",
     path: "/",
+    ...(cookieDomain ? { domain: cookieDomain } : {}),
   });
   return token;
 }
