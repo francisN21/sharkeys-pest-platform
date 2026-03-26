@@ -411,7 +411,7 @@ export default function ServiceAreaPage() {
                   </Link>
 
                   <Link
-                    href="/contact"
+                    href="/login"
                     className="inline-flex items-center rounded-2xl border px-5 py-3 text-sm font-semibold transition duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:opacity-95"
                     style={{
                       borderColor: "rgb(var(--border))",
