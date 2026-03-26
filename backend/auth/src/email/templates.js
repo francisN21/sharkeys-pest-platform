@@ -28,9 +28,9 @@ function formatMoney(cents) {
 
 const BRAND = {
   logoUrl: "https://sharkyspestcontrolbayarea.com/main-logo.jpg",
-  logoAlt: "Sharky's Pest Control",
+  logoAlt: "Sharkys Pest Control",
   logoWidth: "160",
-  companyName: "Sharky's Pest Control",
+  companyName: "Sharkys Pest Control",
   phone: "(707) 361-5023",
   website: "https://sharkyspestcontrolbayarea.com",
   headerBg: "#0f172a",
@@ -154,17 +154,17 @@ function buildWelcomeEmail(payload = {}) {
 
   const body = `
     ${p(`Hi ${escapeHtml(firstName)},`)}
-    ${p("Welcome to Sharky's Pest Control. Your account has been created successfully and you're all set to get started.")}
+    ${p("Welcome to Sharkys Pest Control. Your account has been created successfully and you're all set to get started.")}
     ${appBaseUrl ? divider() + p("You can sign in to your account anytime using the button below.") : ""}
   `;
 
   return {
-    subject: "Welcome to Sharky's Pest Control",
-    html: wrapEmailHtml("Welcome to Sharky's Pest Control", body, ctaButtonHtml("Sign In to Your Account", appBaseUrl)),
+    subject: "Welcome to Sharkys Pest Control",
+    html: wrapEmailHtml("Welcome to Sharkys Pest Control", body, ctaButtonHtml("Sign In to Your Account", appBaseUrl)),
     text: [
       `Hi ${firstName},`,
       "",
-      "Welcome to Sharky's Pest Control. Your account has been created successfully.",
+      "Welcome to Sharkys Pest Control. Your account has been created successfully.",
       appBaseUrl ? `Sign in: ${appBaseUrl}` : "",
       "",
       "We're glad to have you with us.",
@@ -192,7 +192,7 @@ function buildLeadBookingInviteEmail(payload = {}) {
 
   const body = `
     ${p(`Hi ${escapeHtml(firstName)},`)}
-    ${p("Thanks for booking with Sharky's Pest Control. Your request has been received successfully.")}
+    ${p("Thanks for booking with Sharkys Pest Control. Your request has been received successfully.")}
     ${infoTableHtml([
       ["Booking ID", bookingPublicId],
       ["Service", serviceTitle],
@@ -223,7 +223,7 @@ function buildLeadBookingInviteEmail(payload = {}) {
     text: [
       `Hi ${firstName},`,
       "",
-      "Thanks for booking with Sharky's Pest Control.",
+      "Thanks for booking with Sharkys Pest Control.",
       lineItemText("Booking ID", bookingPublicId),
       lineItemText("Service", serviceTitle),
       lineItemText("Scheduled Time", schedule),
@@ -244,7 +244,7 @@ function buildWelcomeVerificationEmail(payload = {}) {
 
   const body = `
     ${p(`Hi ${escapeHtml(firstName)},`)}
-    ${p("Welcome to Sharky's Pest Control. Your account has been created — please verify your email address to get started.")}
+    ${p("Welcome to Sharkys Pest Control. Your account has been created — please verify your email address to get started.")}
     ${divider()}
     <div style="margin:24px 0;padding:24px;background:${BRAND.cardBg};border:1px solid ${BRAND.borderColor};
                 border-radius:10px;text-align:center;">
@@ -260,12 +260,12 @@ function buildWelcomeVerificationEmail(payload = {}) {
   `;
 
   return {
-    subject: "Welcome to Sharky's Pest Control – Verify your email",
+    subject: "Welcome to Sharkys Pest Control – Verify your email",
     html: wrapEmailHtml("Verify Your Email", body, ctaButtonHtml("Verify My Email", verifyUrl)),
     text: [
       `Hi ${firstName},`,
       "",
-      "Welcome to Sharky's Pest Control. Please verify your email.",
+      "Welcome to Sharkys Pest Control. Please verify your email.",
       "",
       `Verification code: ${code}`,
       verifyUrl ? `Verify here: ${verifyUrl}` : "",
@@ -283,13 +283,13 @@ function buildPasswordResetEmail(payload = {}) {
 
   const body = `
     ${p(`Hi ${escapeHtml(firstName)},`)}
-    ${p("We received a request to reset your Sharky's Pest Control password. Click the button below to choose a new one.")}
+    ${p("We received a request to reset your Sharkys Pest Control password. Click the button below to choose a new one.")}
     ${divider()}
     ${p(`This link expires in <strong>1 hour</strong>. If you didn't request a reset, you can safely ignore this email — your password won't change.`)}
   `;
 
   return {
-    subject: "Reset your password – Sharky's Pest Control",
+    subject: "Reset your password – Sharkys Pest Control",
     html: wrapEmailHtml("Reset Your Password", body, ctaButtonHtml("Reset My Password", resetUrl)),
     text: [
       `Hi ${firstName},`,
@@ -366,7 +366,7 @@ function buildBookingCreatedCustomerEmail(payload = {}) {
       ["Notes", payload.notes],
     ])}
     ${divider()}
-    ${p("We'll be in touch if anything changes. Thank you for choosing Sharky's Pest Control!", `color:${BRAND.mutedColor};font-size:14px;margin-bottom:0;`)}
+    ${p("We'll be in touch if anything changes. Thank you for choosing Sharkys Pest Control!", `color:${BRAND.mutedColor};font-size:14px;margin-bottom:0;`)}
   `;
 
   return {
@@ -493,7 +493,7 @@ function buildBookingCompletedCustomerEmail(payload = {}) {
       ["Final Price", finalPrice],
     ])}
     ${divider()}
-    ${p("Thank you for choosing Sharky's Pest Control. We appreciate your business and look forward to serving you again!", `color:${BRAND.mutedColor};font-size:14px;margin-bottom:0;`)}
+    ${p("Thank you for choosing Sharkys Pest Control. We appreciate your business and look forward to serving you again!", `color:${BRAND.mutedColor};font-size:14px;margin-bottom:0;`)}
   `;
 
   return {
@@ -510,7 +510,7 @@ function buildBookingCompletedCustomerEmail(payload = {}) {
       lineItemText("Completed At", completedAt),
       lineItemText("Final Price", finalPrice),
       "",
-      "Thank you for choosing Sharky's Pest Control.",
+      "Thank you for choosing Sharkys Pest Control.",
     ]
       .filter(Boolean)
       .join("\n"),
