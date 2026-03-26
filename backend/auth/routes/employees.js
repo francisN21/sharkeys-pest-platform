@@ -5,6 +5,7 @@ const { z } = require("zod");
 
 const { pool } = require("../src/db");
 const { requireAuth } = require("../middleware/requireAuth");
+const { requireRole } = require("../middleware/requireRole");
 const { config } = require("../src/config");
 const { sendEmployeeInviteEmail } = require("../src/email/mailer");
 const {
@@ -71,27 +72,6 @@ function displayRole(role) {
   return value || null;
 }
 
-async function requireSuperuser(req, res, next) {
-  try {
-    const userId = req.user?.id ?? req.auth?.userId ?? null;
-    if (!userId) {
-      return res.status(401).json({ ok: false, message: "Not authenticated" });
-    }
-
-    const r = await pool.query(
-      `SELECT 1 FROM user_roles WHERE user_id = $1 AND role = 'superuser' LIMIT 1`,
-      [userId]
-    );
-
-    if (r.rowCount === 0) {
-      return res.status(403).json({ ok: false, message: "Forbidden" });
-    }
-
-    return next();
-  } catch (err) {
-    return next(err);
-  }
-}
 
 const strongPasswordSchema = z
   .string()
@@ -127,7 +107,7 @@ const reinstateEmployeeSchema = z.object({
  * GET /employees
  * Superuser-only employee list
  */
-router.get("/", requireAuth, requireSuperuser, async (req, res, next) => {
+router.get("/", requireAuth, requireRole("superuser"), async (req, res, next) => {
   try {
     const termedFilter = req.query.termed === "true";
 
@@ -247,7 +227,7 @@ router.get("/", requireAuth, requireSuperuser, async (req, res, next) => {
  * GET /employees/:publicId
  * Superuser-only employee detail
  */
-router.get("/:publicId", requireAuth, requireSuperuser, async (req, res, next) => {
+router.get("/:publicId", requireAuth, requireRole("superuser"), async (req, res, next) => {
   try {
     const publicId = String(req.params.publicId || "").trim();
 
@@ -349,7 +329,7 @@ router.get("/:publicId", requireAuth, requireSuperuser, async (req, res, next) =
  * - sends setup email
  * - role is applied only after employee completes setup
  */
-router.post("/invite", requireAuth, requireSuperuser, async (req, res, next) => {
+router.post("/invite", requireAuth, requireRole("superuser"), async (req, res, next) => {
   const client = await pool.connect();
 
   try {
@@ -715,7 +695,7 @@ router.post("/complete", async (req, res, next) => {
  * - The user row is preserved so booking/message history remains intact.
  * - Self-termination is rejected.
  */
-router.post("/:publicId/term", requireAuth, requireSuperuser, async (req, res, next) => {
+router.post("/:publicId/term", requireAuth, requireRole("superuser"), async (req, res, next) => {
   const client = await pool.connect();
 
   try {
@@ -847,7 +827,7 @@ router.post("/:publicId/term", requireAuth, requireSuperuser, async (req, res, n
  * - Sends the setup email — employee must create a new password to regain access.
  * - Does NOT restore roles until the employee completes their new setup.
  */
-router.post("/:publicId/reinstate", requireAuth, requireSuperuser, async (req, res, next) => {
+router.post("/:publicId/reinstate", requireAuth, requireRole("superuser"), async (req, res, next) => {
   const client = await pool.connect();
 
   try {

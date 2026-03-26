@@ -2,6 +2,7 @@ const express = require("express");
 const { z } = require("zod");
 const { pool } = require("../src/db");
 const { requireAuth } = require("../middleware/requireAuth");
+const { requireRole } = require("../middleware/requireRole");
 const { config } = require("../src/config");
 const {
   broadcastToRoles,
@@ -17,30 +18,6 @@ const {
 
 const router = express.Router();
 
-/**
- * Helper: accept BOTH admin + superuser for this router.
- */
-function requireAnyRole(roles) {
-  return async (req, res, next) => {
-    try {
-      if (!req.user?.id) {
-        return res.status(401).json({ ok: false, message: "Not authenticated" });
-      }
-
-      const r = await pool.query(`SELECT role FROM user_roles WHERE user_id = $1`, [req.user.id]);
-      const userRoles = r.rows.map((x) => String(x.role).trim().toLowerCase());
-
-      const ok = roles.some((role) => userRoles.includes(String(role).trim().toLowerCase()));
-      if (!ok) {
-        return res.status(403).json({ ok: false, message: "Forbidden" });
-      }
-
-      return next();
-    } catch (e) {
-      return next(e);
-    }
-  };
-}
 
 async function addEvent(client, bookingId, actorUserId, eventType, metadata = {}) {
   await client.query(
@@ -135,7 +112,7 @@ const adminCreateBookingSchema = z
     message: "Provide either customerPublicId OR lead",
   });
 
-router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req, res, next) => {
+router.post("/", requireAuth, requireRole("admin", "superuser"), async (req, res, next) => {
   const client = await pool.connect();
   try {
     const actorUserId = req.user.id;
@@ -362,7 +339,7 @@ router.post("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req
 /**
  * GET /admin/bookings?status=pending
  */
-router.get("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req, res, next) => {
+router.get("/", requireAuth, requireRole("admin", "superuser"), async (req, res, next) => {
   const status = String(req.query.status || "pending");
 
   try {
@@ -421,7 +398,7 @@ router.get("/", requireAuth, requireAnyRole(["admin", "superuser"]), async (req,
   }
 });
 
-router.patch("/:publicId/cancel", requireAuth, requireAnyRole(["admin", "superuser"]), async (req, res, next) => {
+router.patch("/:publicId/cancel", requireAuth, requireRole("admin", "superuser"), async (req, res, next) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -546,7 +523,7 @@ router.patch("/:publicId/cancel", requireAuth, requireAnyRole(["admin", "superus
   }
 });
 
-router.patch("/:publicId/accept", requireAuth, requireAnyRole(["admin", "superuser"]), async (req, res, next) => {
+router.patch("/:publicId/accept", requireAuth, requireRole("admin", "superuser"), async (req, res, next) => {
   const client = await pool.connect();
   try {
     const bookingPublicId = req.params.publicId;
@@ -639,7 +616,7 @@ const assignSchema = z.object({
   workerUserId: z.number().int().positive(),
 });
 
-router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superuser"]), async (req, res, next) => {
+router.patch("/:publicId/assign", requireAuth, requireRole("admin", "superuser"), async (req, res, next) => {
   const client = await pool.connect();
   try {
     const bookingPublicId = req.params.publicId;
@@ -905,7 +882,7 @@ router.patch("/:publicId/assign", requireAuth, requireAnyRole(["admin", "superus
  * This handles the edge case where a technician is terminated and the booking
  * status did not revert automatically.
  */
-router.post("/clear-orphaned", requireAuth, requireAnyRole(["admin", "superuser"]), async (req, res, next) => {
+router.post("/clear-orphaned", requireAuth, requireRole("admin", "superuser"), async (req, res, next) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -939,7 +916,7 @@ router.post("/clear-orphaned", requireAuth, requireAnyRole(["admin", "superuser"
   }
 });
 
-router.get("/technicians", requireAuth, requireAnyRole(["admin", "superuser"]), async (req, res, next) => {
+router.get("/technicians", requireAuth, requireRole("admin", "superuser"), async (req, res, next) => {
   try {
     const r = await pool.query(
       `
@@ -995,7 +972,7 @@ function buildCompletedRange({ year, month, day }) {
   return { start, end };
 }
 
-router.get("/completed", requireAuth, requireAnyRole(["admin", "superuser"]), async (req, res, next) => {
+router.get("/completed", requireAuth, requireRole("admin", "superuser"), async (req, res, next) => {
   try {
     const { page, pageSize, year, month, day, q } = completedQuerySchema.parse(req.query);
     const offset = (page - 1) * pageSize;
@@ -1155,7 +1132,7 @@ router.get("/completed", requireAuth, requireAnyRole(["admin", "superuser"]), as
   }
 });
 
-router.get("/completed/filters", requireAuth, requireAnyRole(["admin", "superuser"]), async (req, res, next) => {
+router.get("/completed/filters", requireAuth, requireRole("admin", "superuser"), async (req, res, next) => {
   try {
     const year = req.query.year ? Number(req.query.year) : null;
     const month = req.query.month ? Number(req.query.month) : null;
