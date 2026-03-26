@@ -10,9 +10,15 @@ function makeSessionId() {
   return crypto.randomBytes(32).toString("hex");
 }
 
+function parseCookieDomain() {
+  const raw = process.env.COOKIE_DOMAIN || "";
+  const cleaned = raw.trim().replace(/^["']+|["']+$/g, "").trim();
+  return cleaned || undefined;
+}
+
 function getCookieOptions() {
   const isProd = process.env.NODE_ENV === "production";
-  const cookieDomain = process.env.COOKIE_DOMAIN || undefined;
+  const cookieDomain = parseCookieDomain();
   return {
     httpOnly: true,
     secure: isProd,
@@ -74,7 +80,7 @@ function generateCsrfToken() {
 
 function setCsrfCookie(res) {
   const isProd = process.env.NODE_ENV === "production";
-  const cookieDomain = process.env.COOKIE_DOMAIN || undefined;
+  const cookieDomain = parseCookieDomain();
   const token = generateCsrfToken();
   res.cookie(CSRF_COOKIE_NAME, token, {
     httpOnly: false, // Must be readable by JavaScript so the frontend can send it as a header
