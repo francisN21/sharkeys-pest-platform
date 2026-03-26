@@ -1,289 +1,84 @@
-# auth_module  
-**A secure, reusable authentication backend template that I will be using for my future projects**
+# SPC Backend — Auth & API
 
-`auth_module` is a production-ready authentication foundation built with **Node.js, Express, and PostgreSQL**.  
-It is designed to be **copied, reused, and extended** across future projects with minimal setup.
+Express 5 REST API for the Sharkey's Pest Control platform.
 
-This repository prioritizes:
-- security-by-default
-- testability
-- clean separation of concerns
-- real-world attack awareness (logging + throttling)
+See the root [`README.md`](../../README.md) for full platform documentation.
 
 ---
 
-## Features
+## Stack
 
-### Authentication
-- Local email + password signup/login
-- Secure password hashing (Argon2)
-- Cookie-based sessions stored in PostgreSQL
-- Sliding session expiration (e.g., 24 hours)
-- `/auth/me` session validation
-- Logout with session invalidation
-
-### Security
-- Parameterized SQL queries (SQL injection safe)
-- Suspicious input detection (e.g. `OR '1'='1' --`)
-- Logs **only suspicious excerpts**, never normal values
-- Never logs:
-  - passwords
-  - tokens
-  - session IDs
-  - cookies
-- Rate-limited suspicious logging per IP
-- Persistent IP offender tracking (JSON)
-- Hardened HTTP headers via `helmet`
-
-### Testing
-- Full Jest + Supertest coverage
-- DB-backed integration tests
-- Security behavior tests:
-  - SQL injection detection
-  - secret-safe logging
-  - IP-based rate limiting
-- Test-safe async handling (no hanging handles)
-
----
-
-## Tech Stack
-
-- Node.js
-- Express (CommonJS)
-- PostgreSQL
-- `pg` connection pool
-- Argon2
-- Jest + Supertest
-- Helmet, CORS, Cookie Parser
+- Node.js + Express 5 (CommonJS)
+- PostgreSQL via `pg` pool (no ORM)
+- Argon2 (password hashing)
+- Resend (transactional email)
+- Pino (structured JSON logging)
 - Zod (request validation)
-- Pino (structured logging)
+- Jest + Supertest (integration tests)
 
 ---
 
-## Project Structure
-```tree
-auth_module/
-├─ src/
-│ ├─ app.js # Express app (no listen)
-│ ├─ server.js # Server entry point
-│ ├─ db.js # Postgres pool (dev/test aware)
-│ └─ security/
-│ ├─ suspiciousFileLogger.js
-│ └─ ipThrottleStore.js
-├─ routes/
-│ └─ auth.js
-├─ middleware/
-│ ├─ requireAuth.js
-│ ├─ suspiciousInputLogger.js
-│ ├─ notFound.js
-│ └─ errorHandler.js
-├─ sql/
-│ └─ schema.sql
-├─ tests/
-│ ├─ auth.local.test.js
-│ ├─ health.test.js
-│ └─ helpers/
-│ └─ dbReset.js
-├─ log/
-│ ├─ sql.inject.test.js
-│ ├─ no-secrets-logged.test.js
-│ └─ rate-limit-logging.test.js
-├─ .env.example
-├─ .gitignore
-├─ package.json
-└─ README.md
-```
-> Runtime logs are written to `log/` but ignored by Git.  
-> Only test files inside `log/` are committed.
-
----
-
-## Setup
-
-### 1. Install dependencies
+## Dev Commands
 
 ```bash
-npm install
+npm run dev          # nodemon (port 4000)
+npm run start        # production
+npm run test         # Jest once (PGTESTDATABASE)
+npm run test:watch   # watch mode
+
+# Single test file
+npx jest __tests__/auth.local.test.js --runInBand
+
+# Superuser utilities
+node src/bootstrap/bootstrap-superuser.js     # re-send invite email
+node src/bootstrap/manual-setup-superuser.js  # activate directly (no email)
 ```
+
 ---
 
-### 2. Environment variables
+## Request Lifecycle
 
-Create .env in the project root:
+1. CORS — origin whitelist (`FRONTEND_ORIGIN`, `LOCAL_ORIGIN`)
+2. `suspiciousInputLogger` — SQL injection detection, IP throttling
+3. `requireAuth` — validates `sid` cookie, loads `req.user` (with roles)
+4. `requireRole(...roles)` — RBAC assertion, 403 on failure
+5. Route handler — parameterized `pg` queries
+6. `errorHandler` — PostgreSQL error normalization, no internals in production
+
+---
+
+## Route Groups
+
+| Prefix | Auth | Roles |
+|---|---|---|
+| `/auth/*` | None / session | — |
+| `/bookings/*` | Required | customer |
+| `/worker/bookings/*` | Required | worker |
+| `/admin/*` | Required | admin, superuser |
+| `/employees/*` | Required | superuser |
+| `/public/bookings/*` | None | — |
+
+---
+
+## Database
+
+Schema: `sql/schema.sql` (manually applied, no migration runner)
+
+Extensions: `CITEXT`, `pgcrypto`, `btree_gist`
+
+`NODE_ENV=test` switches to `PGTESTDATABASE`.
+
+---
+
+## Environment Variables
+
+See root README for full list. Key vars:
+
+```env
+DATABASE_URL=           # preferred (Railway injects for linked Postgres)
+EMAIL_ENABLED=true
+RESEND_API_KEY=
+EMAIL_FROM_BOOKINGS=
+APP_BASE_URL=
+BOOTSTRAP_SUPERUSER_EMAIL=
 ```
-NODE_ENV=development
-PORT=4000
-FRONTEND_ORIGIN=http://localhost:3000
-
-PGHOST=localhost
-PGPORT=5432
-PGUSER=auth_user
-PGPASSWORD=your_password
-PGDATABASE=auth_module
-PGTESTDATABASE=auth_module_test
-
-SUSPICIOUS_LOG_PATH=log/suspiciousInput.txt
-SUSPICIOUS_IPS_PATH=log/suspiciousIps.json
-```
----
-
-### 3. PostgreSQL setup
-```psql
-CREATE DATABASE auth_module;
-CREATE DATABASE auth_module_test;
-
-CREATE USER auth_user WITH PASSWORD 'your_password';
-GRANT ALL PRIVILEGES ON DATABASE auth_module TO auth_user;
-GRANT ALL PRIVILEGES ON DATABASE auth_module_test TO auth_user;
-
-Apply schema to both databases:
-psql -h localhost -U auth_user -d auth_module -f sql/schema.sql
-psql -h localhost -U auth_user -d auth_module_test -f sql/schema.sql
-```
----
-
-### 4. Running the Service
-Development (auto-reload)
-```bash
-npm run dev
-```
-Production-style run
-```bash
-npm start
-```
-Health checks
-
-- GET /health
-- GET /health/db
-
----
-
-Auth API Endpoints
-
----
-Signup
-
-POST /auth/signup
-```json
-{ "email": "user@example.com", "password": "StrongPassword123!" }
-```
----
-Login
-
-POST /auth/login
-```json
-{ "email": "user@example.com", "password": "StrongPassword123!" }
-```
----
-Current User
-
-- GET /auth/me
-
-Logout
-
-- POST /auth/logout
----
-
-Session Design
-
-- Cookie name: sid
-- HttpOnly cookie (JS cannot read it)
-- Session rows stored in PostgreSQL
-- Sliding expiration extends on activity
-- Sessions can be revoked server-side
-
-Why cookies instead of JWTs?
-
-- No localStorage XSS risk
-- Centralized session revocation
-- Cleaner fit for web apps (Next.js / React)
-
----
-
-Suspicious Input Detection
-
-- The system detects SQL injection-style patterns across:
-- query parameters
-- request body
-- route parameters
-- Logging rules
-- Logs only when suspicious patterns appear
-- Logs only the suspicious excerpt
-- Never logs sensitive fields
-- Normal input is never logged
-
-Files
-
-- log/suspiciousInput.txt → JSONL suspicious events
-- log/suspiciousIps.json → per-IP tracking and rate limits
-
----
-
-Rate-Limiting Security Logs
-
-To prevent log flooding:
-
-- Suspicious payload logging is rate-limited per IP
-- Default: 5 logs per minute per IP
-- Excess attempts are tracked but not logged repeatedly
-- IP metadata is persisted for inspection
-
----
-
-### Testing
-
-Run tests once:
-npm test
-npm run test:watch
-
-Coverage includes:
-
-- API correctness
-- DB integration
-- session handling
-- SQL injection detection
-- secret-safe logging
-- IP throttling behavior
-
-## Using This Repo as a Template
-
-### Option 1: GitHub Template (recommended)
-
-- Mark repo as Template Repository
-- Create new services with one click
-
-### Option 2: Manual reuse
-
-- Copy repo folder
-- Rename service references
-- Update .env.example
-- Create new databases
-- Apply schema
-- Start building features
-
-This repo is intentionally structured to be reused as-is.
-
----
-
-### Production Checklist
-
-Before deploying:
-
-- NODE_ENV=production
-- secure cookie flags
-- HTTPS enforced
-- correct FRONTEND_ORIGIN
-- log rotation strategy
-- external rate limiting (Redis) if multi-instance
-- CSRF protection strategy for cookies
-
----
-
-### Roadmap
-
-- Frontend integration
-- Google OAuth (OIDC)
-- Email verification + password reset
-- CSRF hardening
-- Redis-backed session store (optional)
-

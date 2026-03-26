@@ -1,7 +1,9 @@
-# Sharkys Pest Control — SPC Platform
+# Sharkey's Pest Control — SPC Platform
 
-A full-stack SaaS CRM and booking platform for **Sharkys Pest Control** (Bay Area, CA).
+A full-stack SaaS CRM and booking platform for **Sharkey's Pest Control** (Bay Area, CA).
 Built for real-world production: customer booking, technician dispatch, admin CRM, owner analytics, real-time messaging, and email notifications — all in one platform.
+
+**Status: Live in production** — hosted on Railway (backend + PostgreSQL) and Vercel (frontend).
 
 ---
 
@@ -109,10 +111,13 @@ npm run dev                  # Express + nodemon (port 4000)
 npm run start                # Production start
 npm run test                 # Jest (uses PGTESTDATABASE)
 npm run test:watch           # Watch mode
-npm run bootstrap:superuser  # Create initial superadmin user
 
 # Single test file
 npx jest __tests__/auth.local.test.js --runInBand
+
+# Superuser utilities (run locally with DB access)
+node src/bootstrap/bootstrap-superuser.js      # Re-send superuser invite email
+node src/bootstrap/manual-setup-superuser.js   # Directly activate superuser (no email required)
 ```
 
 ---
@@ -123,7 +128,8 @@ npx jest __tests__/auth.local.test.js --runInBand
 ```
 NODE_ENV=production
 
-# Database
+# Database — prefer DATABASE_URL (Railway injects this automatically for linked Postgres services)
+DATABASE_URL=           # preferred; falls back to individual PG* vars if not set
 PGHOST=
 PGPORT=5432
 PGUSER=
@@ -271,6 +277,7 @@ NEXT_PUBLIC_WS_URL=              # wss://api.yourdomain.com (optional)
 - [x] Completed bookings — pagination, search, date filter, technician + completion info
 - [x] Tech bookings calendar view — per-technician schedule, reassign modal
 - [x] Reassign modal with technician selection and confirmation
+- [x] Dispatch page — gear dropdown with "Clear Orphaned Bookings" utility (reverts `assigned` bookings with no technician → `accepted`)
 
 ### Customer & Lead CRM (`/account/admin/customers`)
 - [x] Unified directory — registered customers and leads in one paginated list
@@ -302,6 +309,9 @@ NEXT_PUBLIC_WS_URL=              # wss://api.yourdomain.com (optional)
 - [x] Role badges with color coding
 - [x] Invite Employee modal — name, email, phone, role picker, role description card
 - [x] Per-employee profile page (`/owner-dashboard/employees/[id]`)
+- [x] Employee termination — instantly revokes access (nulls password, kills all sessions, removes roles)
+- [x] Auto-unassign open bookings on termination — reverts `assigned` → `accepted`, clears `booking_assignments`
+- [x] Reinstate employee — clears `termed_at`, issues fresh invite email
 
 ### System Logs (`/owner-dashboard/system-logs`)
 - [x] Request log viewer — method, path, status, duration, IP
@@ -443,7 +453,8 @@ All charts built with **Recharts** — responsive, dark-themed, accessible.
 - [x] Error handler — PostgreSQL error normalization, no internals exposed in production
 - [x] Session store: PostgreSQL — survives restarts, no in-memory state
 - [x] `.env` files never committed (confirmed via git history scan)
-- [x] Superadmin bootstrap script (`npm run bootstrap:superuser`)
+- [x] Superadmin bootstrap — auto-runs on server startup (idempotent, retries with backoff if DB not ready)
+- [x] `manual-setup-superuser.js` — activates superuser directly via DB when email delivery is unavailable
 
 ---
 
