@@ -41,6 +41,7 @@ const HOW_IT_WORKS = [
     desc: "Head to our booking page. No account needed — just pick your service, choose a date and time that works for you, and enter your address.",
     accent: "rgba(59,130,246,0.12)",
     iconColor: "#3b82f6",
+    glowColor: "rgba(59,130,246,0.25)",
   },
   {
     step: "2",
@@ -49,6 +50,7 @@ const HOW_IT_WORKS = [
     desc: "After booking, you'll receive an email invite to create your Sharkys account. Set up your password to access your customer portal.",
     accent: "rgba(99,102,241,0.12)",
     iconColor: "#6366f1",
+    glowColor: "rgba(99,102,241,0.25)",
   },
   {
     step: "3",
@@ -57,6 +59,7 @@ const HOW_IT_WORKS = [
     desc: "Our team reviews your booking, accepts it, and assigns a technician. You'll get an email notification once a tech is on their way.",
     accent: "rgba(16,185,129,0.12)",
     iconColor: "#10b981",
+    glowColor: "rgba(16,185,129,0.25)",
   },
   {
     step: "4",
@@ -65,6 +68,7 @@ const HOW_IT_WORKS = [
     desc: "Log in to your portal to track your booking status, message your technician directly, and view your full service history.",
     accent: "rgba(245,158,11,0.12)",
     iconColor: "#f59e0b",
+    glowColor: "rgba(245,158,11,0.25)",
   },
   {
     step: "5",
@@ -73,36 +77,58 @@ const HOW_IT_WORKS = [
     desc: "Your technician completes the job and sets the final price. You'll receive a completion email with a full summary of the service.",
     accent: "rgba(236,72,153,0.12)",
     iconColor: "#ec4899",
+    glowColor: "rgba(236,72,153,0.25)",
   },
 ];
 
+// ─── Contact image cards ──────────────────────────────────────────────────────
+// Replace the imageUrl values with your actual image paths in /public/
 const CONTACT_CARDS = [
   {
     icon: Mail,
     label: "Email Us",
     value: "Office.sharkyspestcontrol@gmail.com",
     href: "mailto:Office.sharkyspestcontrol@gmail.com",
-    desc: "For general inquiries, quotes, or service questions.",
-    iconColor: "#3b82f6",
-    accent: "rgba(59,130,246,0.08)",
+    cta: "Send an email",
+    // 📌 PLACEHOLDER — replace with your image: /public/contact-email-bg.jpg
+    imageUrl: "/contact-email-bg.jpg",
   },
   {
     icon: Phone,
     label: "Call Us",
     value: "(707) 361-5023",
     href: "tel:+17073615023",
-    desc: "Speak directly with our team during business hours.",
-    iconColor: "#10b981",
-    accent: "rgba(16,185,129,0.08)",
+    cta: "Give us a call",
+    // 📌 PLACEHOLDER — replace with your image: /public/contact-phone-bg.jpg
+    imageUrl: "/contact-phone-bg.jpg",
   },
   {
     icon: MapPin,
     label: "Service Area",
     value: "Bay Area, CA",
     href: "/service-area",
-    desc: "We serve Benicia, Vallejo, Fairfield, and surrounding cities.",
-    iconColor: "#f59e0b",
-    accent: "rgba(245,158,11,0.08)",
+    cta: "View coverage",
+    // 📌 PLACEHOLDER — replace with your image: /public/contact-area-bg.jpg
+    imageUrl: "/contact-area-bg.jpg",
+  },
+];
+
+// ─── Team members ─────────────────────────────────────────────────────────────
+// Replace imageUrl with your actual owner photos in /public/
+const TEAM = [
+  {
+    name: "Owner Name",
+    role: "Owner & Founder",
+    bio: "Bay Area native with years of hands-on pest control experience. Passionate about protecting homes and families from unwanted guests.",
+    // 📌 PLACEHOLDER — replace with owner photo: /public/team-owner-1.jpg
+    imageUrl: "/team-owner-1.jpg",
+  },
+  {
+    name: "Owner Name",
+    role: "Co-Owner & Operations",
+    bio: "Manages day-to-day operations and ensures every job meets Sharkys' high standards of service and customer satisfaction.",
+    // 📌 PLACEHOLDER — replace with owner photo: /public/team-owner-2.jpg
+    imageUrl: "/team-owner-2.jpg",
   },
 ];
 
@@ -120,7 +146,7 @@ export default function ContactPage() {
             ]}
           />
 
-          {/* Hero Header */}
+          {/* ── Hero Header ─────────────────────────────────────────────────── */}
           <header
             className="overflow-hidden rounded-[2rem] border"
             style={{
@@ -181,40 +207,25 @@ export default function ContactPage() {
                 </div>
 
                 <div className="mt-5 flex flex-wrap gap-3 text-sm">
-                  <span
-                    className="rounded-full border px-3 py-1"
-                    style={{
-                      borderColor: "rgb(var(--border))",
-                      background: "rgb(var(--bg))",
-                      color: "rgb(var(--muted))",
-                    }}
-                  >
-                    Bay Area Coverage
-                  </span>
-                  <span
-                    className="rounded-full border px-3 py-1"
-                    style={{
-                      borderColor: "rgb(var(--border))",
-                      background: "rgb(var(--bg))",
-                      color: "rgb(var(--muted))",
-                    }}
-                  >
-                    Fast Response
-                  </span>
-                  <span
-                    className="rounded-full border px-3 py-1"
-                    style={{
-                      borderColor: "rgb(var(--border))",
-                      background: "rgb(var(--bg))",
-                      color: "rgb(var(--muted))",
-                    }}
-                  >
-                    Online Booking
-                  </span>
+                  {["Bay Area Coverage", "Fast Response", "Online Booking"].map(
+                    (tag) => (
+                      <span
+                        key={tag}
+                        className="rounded-full border px-3 py-1"
+                        style={{
+                          borderColor: "rgb(var(--border))",
+                          background: "rgb(var(--bg))",
+                          color: "rgb(var(--muted))",
+                        }}
+                      >
+                        {tag}
+                      </span>
+                    )
+                  )}
                 </div>
               </div>
 
-              {/* Hero visual */}
+              {/* Hero right — phone callout */}
               <div
                 className="relative hidden overflow-hidden rounded-2xl border md:block"
                 style={{
@@ -264,47 +275,68 @@ export default function ContactPage() {
             </div>
           </header>
 
-          {/* Contact Cards */}
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {/* ── Contact Image Cards ──────────────────────────────────────────── */}
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {CONTACT_CARDS.map((card, i) => {
               const Icon = card.icon;
               return (
                 <ScrollReveal key={card.label} delay={i * 80}>
                   <a
                     href={card.href}
-                    className="group flex h-full flex-col gap-4 rounded-2xl border p-6 transition-all hover:scale-[1.01]"
+                    className="group relative block overflow-hidden rounded-3xl border transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
                     style={{
                       borderColor: "rgb(var(--border))",
-                      background: "rgb(var(--card))",
+                      background: `linear-gradient(180deg, rgba(12,18,46,0.08) 0%, rgba(12,18,46,0.75) 100%), url(${card.imageUrl}) center / cover no-repeat`,
                     }}
                   >
+                    {/* Shimmer overlay */}
                     <div
-                      className="flex h-11 w-11 items-center justify-center rounded-xl"
-                      style={{ background: card.accent }}
-                    >
-                      <Icon className="h-5 w-5" style={{ color: card.iconColor }} />
-                    </div>
-                    <div className="flex-1">
-                      <p
-                        className="text-xs font-semibold uppercase tracking-widest"
-                        style={{ color: "rgb(var(--muted))" }}
-                      >
-                        {card.label}
-                      </p>
-                      <p className="mt-1 text-base font-bold">{card.value}</p>
-                      <p
-                        className="mt-1.5 text-sm leading-relaxed"
-                        style={{ color: "rgb(var(--muted))" }}
-                      >
-                        {card.desc}
-                      </p>
-                    </div>
+                      className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                      style={{
+                        background:
+                          "linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.08) 35%, transparent 70%)",
+                      }}
+                    />
+                    {/* Inner scale layer */}
                     <div
-                      className="flex items-center gap-1.5 text-sm font-semibold transition-gap group-hover:gap-2.5"
-                      style={{ color: card.iconColor }}
-                    >
-                      {card.label === "Service Area" ? "View coverage" : "Reach out"}
-                      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                      className="pointer-events-none absolute inset-0 transition-transform duration-500 ease-out group-hover:scale-[1.03]"
+                      style={{
+                        background:
+                          "linear-gradient(180deg, rgba(20,28,70,0.18) 0%, rgba(12,18,46,0.78) 100%)",
+                      }}
+                    />
+
+                    <div className="relative flex min-h-[280px] flex-col justify-end p-6 sm:min-h-[320px]">
+                      <div className="mb-3 flex items-center gap-2">
+                        <span
+                          className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.08em] transition-transform duration-300 group-hover:translate-x-0.5"
+                          style={{
+                            borderColor: "rgba(255,255,255,0.16)",
+                            background: "rgba(255,255,255,0.10)",
+                            color: "#ffffff",
+                            backdropFilter: "blur(8px)",
+                          }}
+                        >
+                          <Icon className="h-3 w-3" />
+                          {card.label}
+                        </span>
+                      </div>
+
+                      <h2 className="max-w-[28ch] text-2xl font-extrabold leading-tight tracking-tight text-white transition-transform duration-300 group-hover:translate-y-[-2px] sm:text-3xl">
+                        {card.value}
+                      </h2>
+
+                      <div className="mt-5 flex items-center gap-2 text-sm font-semibold text-white">
+                        <span className="transition-transform duration-300 group-hover:translate-x-0.5">
+                          {card.cta}
+                        </span>
+                        <span
+                          className="transition-transform duration-300 group-hover:translate-x-1"
+                          aria-hidden="true"
+                        >
+                          →
+                        </span>
+                      </div>
                     </div>
                   </a>
                 </ScrollReveal>
@@ -312,7 +344,88 @@ export default function ContactPage() {
             })}
           </div>
 
-          {/* How Booking Works */}
+          {/* ── Meet the Team ────────────────────────────────────────────────── */}
+          <ScrollReveal>
+            <div
+              className="rounded-[2rem] border p-6 md:p-10"
+              style={{
+                borderColor: "rgb(var(--border))",
+                background:
+                  "linear-gradient(135deg, rgba(37,99,235,0.08) 0%, rgba(79,70,229,0.10) 40%, rgb(var(--card)) 100%)",
+              }}
+            >
+              <div className="mb-8">
+                <div
+                  className="inline-flex w-fit rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]"
+                  style={{
+                    borderColor: "rgb(var(--border))",
+                    background: "rgba(59,130,246,0.08)",
+                    color: "rgb(var(--fg))",
+                  }}
+                >
+                  Meet the Team
+                </div>
+                <h2 className="mt-3 text-2xl font-extrabold tracking-tight sm:text-3xl">
+                  The People Behind Sharkys
+                </h2>
+                <p
+                  className="mt-2 max-w-xl text-base leading-relaxed"
+                  style={{ color: "rgb(var(--muted))" }}
+                >
+                  A family-run business built on trust, quality, and a genuine
+                  commitment to the Bay Area community.
+                </p>
+              </div>
+
+              <div className="grid gap-6 sm:grid-cols-2">
+                {TEAM.map((member, i) => (
+                  <ScrollReveal key={member.name + i} delay={i * 100}>
+                    <div
+                      className="group relative overflow-hidden rounded-3xl border transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-2xl"
+                      style={{
+                        borderColor: "rgb(var(--border))",
+                        // Background image — replace imageUrl in TEAM array above
+                        background: `linear-gradient(180deg, rgba(12,18,46,0.10) 0%, rgba(12,18,46,0.80) 100%), url(${member.imageUrl}) center top / cover no-repeat`,
+                      }}
+                    >
+                      {/* Inner scale on hover */}
+                      <div
+                        className="pointer-events-none absolute inset-0 transition-transform duration-500 ease-out group-hover:scale-[1.03]"
+                        style={{
+                          background:
+                            "linear-gradient(180deg, rgba(20,28,70,0.10) 0%, rgba(12,18,46,0.72) 100%)",
+                        }}
+                      />
+
+                      <div className="relative flex min-h-[340px] flex-col justify-end p-7 sm:min-h-[380px]">
+                        <div className="mb-2">
+                          <span
+                            className="inline-flex rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.08em]"
+                            style={{
+                              borderColor: "rgba(255,255,255,0.16)",
+                              background: "rgba(255,255,255,0.10)",
+                              color: "#ffffff",
+                              backdropFilter: "blur(8px)",
+                            }}
+                          >
+                            {member.role}
+                          </span>
+                        </div>
+                        <h3 className="text-2xl font-extrabold leading-tight text-white sm:text-3xl">
+                          {member.name}
+                        </h3>
+                        <p className="mt-3 text-sm leading-relaxed text-white/80">
+                          {member.bio}
+                        </p>
+                      </div>
+                    </div>
+                  </ScrollReveal>
+                ))}
+              </div>
+            </div>
+          </ScrollReveal>
+
+          {/* ── How It Works ─────────────────────────────────────────────────── */}
           <ScrollReveal>
             <div
               className="rounded-[2rem] border p-6 md:p-10"
@@ -350,29 +463,50 @@ export default function ContactPage() {
                   const Icon = step.icon;
                   return (
                     <ScrollReveal key={step.step} delay={i * 70}>
+                      {/* Outer wrapper handles translate + shadow on hover */}
                       <div
-                        className="relative flex h-full flex-col gap-4 rounded-2xl border p-5"
+                        className="group relative flex h-full cursor-default flex-col gap-4 rounded-2xl border p-5 transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-xl"
                         style={{
                           borderColor: "rgb(var(--border))",
                           background: step.accent,
+                          // CSS variable trick: shadow color on hover via inline style is not possible,
+                          // so we use the boxShadow trick with a data attribute driven by JS—but since
+                          // this is server-side we just rely on the Tailwind hover:shadow-xl above.
                         }}
                       >
+                        {/* Glow ring that appears on hover */}
+                        <div
+                          className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                          style={{
+                            boxShadow: `inset 0 0 0 1.5px ${step.glowColor}`,
+                          }}
+                        />
+
                         <div className="flex items-start justify-between">
+                          {/* Icon — scales up on card hover */}
                           <div
-                            className="flex h-10 w-10 items-center justify-center rounded-xl"
+                            className="flex h-10 w-10 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-110"
                             style={{ background: "rgb(var(--card))" }}
                           >
-                            <Icon className="h-5 w-5" style={{ color: step.iconColor }} />
+                            <Icon
+                              className="h-5 w-5 transition-colors duration-300"
+                              style={{ color: step.iconColor }}
+                            />
                           </div>
+                          {/* Step number — fades in more on hover */}
                           <span
-                            className="text-3xl font-black leading-none opacity-15"
-                            style={{ color: step.iconColor }}
+                            className="text-3xl font-black leading-none transition-opacity duration-300 group-hover:opacity-30"
+                            style={{ color: step.iconColor, opacity: 0.15 }}
                           >
                             {step.step}
                           </span>
                         </div>
+
                         <div>
-                          <p className="text-sm font-bold">{step.title}</p>
+                          {/* Title — lifts slightly on hover */}
+                          <p className="text-sm font-bold transition-transform duration-300 group-hover:-translate-y-px">
+                            {step.title}
+                          </p>
                           <p
                             className="mt-1.5 text-sm leading-relaxed"
                             style={{ color: "rgb(var(--muted))" }}
@@ -412,7 +546,7 @@ export default function ContactPage() {
             </div>
           </ScrollReveal>
 
-          {/* FAQ strip */}
+          {/* ── FAQ ──────────────────────────────────────────────────────────── */}
           <ScrollReveal>
             <div
               className="rounded-[2rem] border p-6 md:p-10"
@@ -487,7 +621,7 @@ export default function ContactPage() {
             </div>
           </ScrollReveal>
 
-          {/* Bottom CTA */}
+          {/* ── Bottom CTA ───────────────────────────────────────────────────── */}
           <ScrollReveal>
             <div
               className="flex flex-col items-center gap-5 rounded-[2rem] border p-8 text-center md:p-12"
