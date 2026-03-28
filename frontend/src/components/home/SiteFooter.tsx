@@ -1,4 +1,4 @@
-// frontend/src/components/home/MobileSiteFooter.tsx
+// frontend/src/components/home/SiteFooter.tsx
 "use client";
 
 import Image from "next/image";
@@ -21,6 +21,7 @@ const SITE_MAP_LINKS = [
   { label: "Booking", href: "/sharkys-pest-control-booking" },
   { label: "Service Area", href: "/service-area" },
   { label: "Blog", href: "/blog" },
+  { label: "Contact", href: "/contact" },
 ];
 
 const SERVICE_LINKS = [
@@ -34,8 +35,7 @@ const SERVICE_LINKS = [
 
 const SOCIAL_LINKS = [
   { label: "Facebook", href: "#", icon: Facebook, comingSoon: true },
-  { label: "Instagram", href: "#", icon: Instagram, comingSoon: true },
-  { label: "LinkedIn", href: "#", icon: Linkedin, comingSoon: true },
+  { label: "Instagram", href: "https://www.instagram.com/sharkys.pestcontrol/", icon: Instagram, comingSoon: false },
 ];
 
 type SiteFooterProps = {
@@ -200,20 +200,27 @@ export default function SiteFooter({
 
                   return (
                     <li key={item.label}>
-                      <a
-                        href={item.href}
-                        aria-disabled="true"
-                        onClick={(e) => e.preventDefault()}
-                        className="inline-flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm text-white/85 transition duration-300 hover:bg-white/10 hover:text-white"
-                      >
-                        <span className="inline-flex items-center gap-2">
+                      {item.comingSoon ? (
+                        <span className="inline-flex w-full cursor-default items-center justify-between rounded-xl px-3 py-2 text-sm text-white/50">
+                          <span className="inline-flex items-center gap-2">
+                            <Icon className="h-4 w-4 text-yellow-300/40" />
+                            {item.label}
+                          </span>
+                          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] text-white/40">
+                            Coming soon
+                          </span>
+                        </span>
+                      ) : (
+                        <a
+                          href={item.href}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-white/85 transition duration-300 hover:bg-white/10 hover:text-white"
+                        >
                           <Icon className="h-4 w-4 text-yellow-300" />
                           {item.label}
-                        </span>
-                        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] text-white/60">
-                          Coming soon
-                        </span>
-                      </a>
+                        </a>
+                      )}
                     </li>
                   );
                 })}
