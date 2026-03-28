@@ -8,7 +8,7 @@ import ScrollReveal from "../../components/ScrollReveal";
 export const metadata: Metadata = {
   title: "Pest Control Service Area – Bay Area | Sharkys Pest Control",
   description:
-    "Sharkys Pest Control serves Benicia, Vallejo, Fairfield, Concord, Martinez, San Francisco, Oakland, and surrounding Bay Area communities with residential and commercial pest management.",
+    "Sharkys Pest Control serves 12 Bay Area counties including Solano, Contra Costa, Alameda, Napa, San Francisco, Marin, Sonoma, San Mateo, Santa Clara, Sacramento, Placer, and Yolo counties with residential and commercial pest management.",
   openGraph: {
     title: "Pest Control Service Area – Bay Area | Sharkys Pest Control",
     description:
@@ -22,16 +22,55 @@ export const metadata: Metadata = {
 
 const LINKEDIN_SOFTWARE_BY_HREF = "https://www.linkedin.com/in/franciscorones/";
 
-const AREAS = [
-  "Benicia",
-  "Vallejo",
-  "Fairfield",
-  "Concord",
-  "Martinez",
-  "San Francisco",
-  "Daly City",
-  "San Ramon",
-  "Oakland",
+const COUNTIES = [
+  {
+    county: "Solano County",
+    cities: ["Benicia", "Vallejo", "Fairfield", "Vacaville", "Suisun City", "Dixon"],
+  },
+  {
+    county: "Contra Costa County",
+    cities: ["Concord", "Martinez", "Walnut Creek", "Richmond", "San Ramon", "Antioch", "Brentwood", "Pittsburg", "Hercules"],
+  },
+  {
+    county: "Alameda County",
+    cities: ["Oakland", "Berkeley", "Fremont", "Hayward", "Livermore", "San Leandro"],
+  },
+  {
+    county: "Napa County",
+    cities: ["Napa", "American Canyon"],
+  },
+  {
+    county: "San Francisco County",
+    cities: ["San Francisco"],
+  },
+  {
+    county: "Marin County",
+    cities: ["San Rafael", "Novato", "Mill Valley", "Sausalito"],
+  },
+  {
+    county: "Sonoma County",
+    cities: ["Santa Rosa", "Petaluma", "Rohnert Park", "Windsor"],
+  },
+  {
+    county: "San Mateo County",
+    cities: ["Daly City", "South San Francisco", "San Mateo", "Redwood City"],
+  },
+  {
+    county: "Santa Clara County",
+    cities: ["San Jose", "Sunnyvale", "Santa Clara", "Mountain View", "Palo Alto"],
+  },
+  {
+    county: "Sacramento County",
+    cities: ["Sacramento", "Elk Grove", "Rancho Cordova", "Folsom", "Citrus Heights"],
+  },
+  {
+    county: "Placer County",
+    cities: ["Roseville", "Rocklin", "Auburn", "Lincoln"],
+  },
+  {
+    county: "Yolo County",
+    cities: ["Davis", "Woodland", "West Sacramento"],
+  },
 ];
 
 function ImagePlaceholder({
@@ -158,17 +197,39 @@ function ServiceAreaHeroImage({
   );
 }
 
-function AreaCard({ area }: { area: string }) {
+function CountyCard({ county, cities }: { county: string; cities: string[] }) {
   return (
     <div
-      className="rounded-2xl border px-4 py-4 text-sm font-semibold transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+      className="rounded-2xl border p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
       style={{
         borderColor: "rgb(var(--border))",
         background: "rgb(var(--bg))",
-        color: "rgb(var(--fg))",
       }}
     >
-      {area}, CA
+      <div className="mb-3 flex items-center gap-2">
+        <span
+          className="inline-block h-2 w-2 shrink-0 rounded-full"
+          style={{ background: "rgb(var(--primary))" }}
+        />
+        <span className="text-sm font-bold" style={{ color: "rgb(var(--fg))" }}>
+          {county}
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {cities.map((city) => (
+          <span
+            key={city}
+            className="rounded-full border px-2.5 py-0.5 text-xs font-medium"
+            style={{
+              borderColor: "rgb(var(--border))",
+              background: "rgb(var(--card))",
+              color: "rgb(var(--muted))",
+            }}
+          >
+            {city}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -192,17 +253,9 @@ export default function ServiceAreaPage() {
               addressRegion: "CA",
               addressCountry: "US",
             },
-            areaServed: [
-              "Benicia, CA",
-              "Vallejo, CA",
-              "Fairfield, CA",
-              "Concord, CA",
-              "Martinez, CA",
-              "San Francisco, CA",
-              "Daly City, CA",
-              "San Ramon, CA",
-              "Oakland, CA",
-            ],
+            areaServed: COUNTIES.flatMap(({ county, cities }) =>
+              cities.map((city) => `${city}, CA`).concat(`${county}, CA`)
+            ),
             serviceType: [
               "Residential Pest Control",
               "Commercial Pest Control",
@@ -310,21 +363,21 @@ export default function ServiceAreaPage() {
                 <div className="space-y-6">
                   <div>
                     <h2 className="text-2xl font-bold tracking-tight">
-                      Cities we proudly serve
+                      Counties &amp; cities we serve
                     </h2>
                     <p
                       className="mt-3 max-w-3xl text-base leading-7"
                       style={{ color: "rgb(var(--muted))" }}
                     >
-                      We provide reliable pest control service across multiple
-                      Bay Area communities, with responsive local support and
-                      tailored treatment recommendations for each property.
+                      We provide reliable pest control service across 12 Bay
+                      Area counties, with responsive local support and tailored
+                      treatment recommendations for every property.
                     </p>
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    {AREAS.map((area) => (
-                      <AreaCard key={area} area={area} />
+                    {COUNTIES.map(({ county, cities }) => (
+                      <CountyCard key={county} county={county} cities={cities} />
                     ))}
                   </div>
                 </div>
@@ -440,7 +493,7 @@ export default function ServiceAreaPage() {
                   style={{ color: "rgb(var(--muted))" }}
                 >
                   <li>• Based in Benicia, CA</li>
-                  <li>• Serving multiple Bay Area cities</li>
+                  <li>• Serving 12 Bay Area counties</li>
                   <li>• Residential and commercial pest control</li>
                   <li>• Tailored treatment plans for each property</li>
                 </ul>

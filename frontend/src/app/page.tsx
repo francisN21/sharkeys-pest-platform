@@ -58,22 +58,26 @@ const HIGHLIGHTS = [
 ];
 
 const SLIDER_ITEMS = [
-  { type: "area", label: "Benicia" },
+  { type: "area", label: "Benicia · Solano Co." },
   { type: "trust", label: "Licensed & Insured" },
-  { type: "area", label: "Vallejo" },
-  { type: "area", label: "Fairfield" },
+  { type: "area", label: "Vallejo · Solano Co." },
+  { type: "area", label: "Fairfield · Solano Co." },
   { type: "trust", label: "Family Owned & Operated" },
-  { type: "area", label: "Concord" },
-  { type: "area", label: "Martinez" },
+  { type: "area", label: "Concord · Contra Costa Co." },
+  { type: "area", label: "Martinez · Contra Costa Co." },
   { type: "trust", label: "GreenPro Certified" },
-  { type: "area", label: "San Francisco" },
-  { type: "area", label: "Daly City" },
+  { type: "area", label: "San Francisco · SF County" },
+  { type: "area", label: "Daly City · San Mateo Co." },
   { type: "trust", label: "Bird Barrier Certified" },
-  { type: "area", label: "San Ramon" },
-  { type: "area", label: "Oakland" },
+  { type: "area", label: "San Ramon · Contra Costa Co." },
+  { type: "area", label: "Oakland · Alameda Co." },
   { type: "trust", label: "Bay Area Trusted Since Day One" },
-  { type: "area", label: "Walnut Creek" },
-  { type: "area", label: "Hercules" },
+  { type: "area", label: "Walnut Creek · Contra Costa Co." },
+  { type: "area", label: "Napa · Napa Co." },
+  { type: "area", label: "Santa Rosa · Sonoma Co." },
+  { type: "area", label: "Sacramento · Sacramento Co." },
+  { type: "area", label: "Hercules · Contra Costa Co." },
+  { type: "area", label: "San Rafael · Marin Co." },
 ];
 
 const CERTIFICATIONS = [
