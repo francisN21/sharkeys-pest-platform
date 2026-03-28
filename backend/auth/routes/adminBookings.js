@@ -357,6 +357,7 @@ router.get("/", requireAuth, requireRole("admin", "superuser"), async (req, res,
         b.cancelled_at,
         b.notes,
         s.title AS service_title,
+        s.public_id AS service_public_id,
         b.assigned_worker_user_id,
 
         cu.public_id AS customer_public_id,
@@ -528,8 +529,23 @@ router.patch("/:publicId/accept", requireAuth, requireRole("admin", "superuser")
   try {
     const bookingPublicId = req.params.publicId;
     const adminId = req.user.id;
+    const { servicePublicId, startsAt, endsAt, notes } = req.body ?? {};
 
     await client.query("BEGIN");
+
+    // Resolve service override if provided
+    let serviceIdOverride = null;
+    if (servicePublicId) {
+      const svc = await client.query(
+        `SELECT id FROM services WHERE public_id = $1`,
+        [servicePublicId]
+      );
+      if (svc.rowCount === 0) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ ok: false, message: "Service not found" });
+      }
+      serviceIdOverride = svc.rows[0].id;
+    }
 
     const b = await client.query(
       `
@@ -558,11 +574,15 @@ router.patch("/:publicId/accept", requireAuth, requireRole("admin", "superuser")
       UPDATE bookings
       SET status = 'accepted',
           accepted_at = now(),
+          service_id = COALESCE($2, service_id),
+          starts_at  = COALESCE($3::timestamptz, starts_at),
+          ends_at    = COALESCE($4::timestamptz, ends_at),
+          notes      = COALESCE($5, notes),
           updated_at = now()
       WHERE id = $1
       RETURNING public_id, status, accepted_at
       `,
-      [booking.id]
+      [booking.id, serviceIdOverride, startsAt ?? null, endsAt ?? null, notes ?? null]
     );
 
     await addEvent(client, booking.id, adminId, "accepted", {});

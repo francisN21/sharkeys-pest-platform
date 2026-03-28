@@ -25,6 +25,7 @@ import {
   clearOrphanedBookings,
   type TechnicianRow,
 } from "../../../../lib/api/adminBookings";
+import { getOwnerServices, type Service } from "../../../../lib/api/adminServices";
 import AdminModal from "../_components/AdminModal";
 import UndoToast, { type UndoToastState } from "../_components/UndoToast";
 import { usePolling } from "../_components/usePolling";
@@ -52,6 +53,13 @@ function formatCreated(ts: string) {
 function formatNotes(notes: string | null) {
   const n = (notes ?? "").trim();
   return n.length ? n : null;
+}
+
+function toDatetimeLocal(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 type PersonKind = "lead" | "registered";
@@ -388,12 +396,21 @@ export default function AdminDispatchPage() {
   }, [settingsOpen]);
 
   const [techs, setTechs] = useState<TechnicianRow[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
 
   // Modals
   const [modalOpen, setModalOpen] = useState(false);
   const [modalKind, setModalKind] = useState<"accept" | "cancel">("accept");
   const [modalBookingId, setModalBookingId] = useState<string | null>(null);
   const [modalBookingTitle, setModalBookingTitle] = useState<string | null>(null);
+  const [acceptDraft, setAcceptDraft] = useState<{
+    servicePublicId: string;
+    startsAt: string;
+    endsAt: string;
+    notes: string;
+    customerName: string;
+    serviceAddress: string;
+  } | null>(null);
 
   // Assign modal
   const [assignModalOpen, setAssignModalOpen] = useState(false);
@@ -448,9 +465,10 @@ export default function AdminDispatchPage() {
       try {
         setLoading(true);
         setErr(null);
-        const [t] = await Promise.all([adminListTechnicians()]);
+        const [t, svcs] = await Promise.all([adminListTechnicians(), getOwnerServices()]);
         if (!alive) return;
         setTechs(t.technicians || []);
+        setServices(svcs.services || []);
         await refresh();
       } catch (e: unknown) {
         if (!alive) return;
@@ -497,10 +515,19 @@ export default function AdminDispatchPage() {
     );
   }
 
-  function openAcceptModal(publicId: string) {
+  function openAcceptModal(b: AdminBookingRow) {
+    const bookee = getBookee(b);
     setModalKind("accept");
-    setModalBookingId(publicId);
-    setModalBookingTitle(findBookingTitle(publicId));
+    setModalBookingId(b.public_id);
+    setModalBookingTitle(b.service_title);
+    setAcceptDraft({
+      servicePublicId: b.service_public_id,
+      startsAt: toDatetimeLocal(b.starts_at),
+      endsAt: toDatetimeLocal(b.ends_at),
+      notes: b.notes ?? "",
+      customerName: bookee.displayName,
+      serviceAddress: b.address || bookee.customerAddress || "",
+    });
     setModalOpen(true);
   }
 
@@ -516,6 +543,7 @@ export default function AdminDispatchPage() {
     setModalOpen(false);
     setModalBookingId(null);
     setModalBookingTitle(null);
+    setAcceptDraft(null);
   }
 
   async function confirmModalAction() {
@@ -527,7 +555,17 @@ export default function AdminDispatchPage() {
       try {
         setBusyId(bookingId);
         setErr(null);
-        await adminAcceptBooking(bookingId);
+        await adminAcceptBooking(
+          bookingId,
+          acceptDraft
+            ? {
+                servicePublicId: acceptDraft.servicePublicId,
+                startsAt: new Date(acceptDraft.startsAt).toISOString(),
+                endsAt: new Date(acceptDraft.endsAt).toISOString(),
+                notes: acceptDraft.notes,
+              }
+            : undefined
+        );
         await refresh();
         closeModal();
       } catch (e: unknown) {
@@ -679,12 +717,13 @@ export default function AdminDispatchPage() {
         open={modalOpen && modalKind === "accept"}
         onClose={closeModal}
         disabled={modalBusy}
-        title="Accept this booking?"
-        subtitle="This will move the booking to Accepted so it can be assigned to a technician."
+        title="Review & Accept Booking"
+        subtitle="Confirm or update the details before accepting."
         icon={<CheckCircle2 className="h-6 w-6" />}
         accentFrom="rgba(34,197,94,0.10)"
         accentVia="rgba(16,185,129,0.08)"
         accentTo="rgba(6,182,212,0.06)"
+        maxWidth="max-w-lg"
         footer={
           <>
             <button
@@ -711,21 +750,94 @@ export default function AdminDispatchPage() {
               ) : (
                 <>
                   <CheckCircle2 className="h-4 w-4" />
-                  Accept Booking
+                  Confirm & Accept
                 </>
               )}
             </motion.button>
           </>
         }
       >
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm">
-          <div className="font-medium text-[rgb(var(--fg))]">
-            {modalBookingTitle ?? "—"}
+        {acceptDraft ? (
+          <div className="space-y-3">
+            {/* Customer (read-only) */}
+            <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] px-4 py-3">
+              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted))]">Customer</div>
+              <div className="text-sm font-medium text-[rgb(var(--fg))]">{acceptDraft.customerName}</div>
+              {acceptDraft.serviceAddress ? (
+                <div className="mt-1 flex items-center gap-1.5 text-xs text-[rgb(var(--muted))]">
+                  <MapPin className="h-3 w-3 shrink-0" />
+                  <span>{acceptDraft.serviceAddress}</span>
+                </div>
+              ) : null}
+            </div>
+
+            {/* Service */}
+            <div>
+              <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted))]">
+                Service
+              </label>
+              <select
+                value={acceptDraft.servicePublicId}
+                onChange={(e) => setAcceptDraft((d) => d ? { ...d, servicePublicId: e.target.value } : d)}
+                disabled={modalBusy}
+                className="w-full rounded-xl border border-white/10 bg-[rgb(var(--card))] px-3 py-2 text-sm text-[rgb(var(--fg))] focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-50"
+              >
+                {services.length === 0 ? (
+                  <option value={acceptDraft.servicePublicId}>{modalBookingTitle ?? "Loading…"}</option>
+                ) : (
+                  services.map((s) => (
+                    <option key={s.public_id} value={s.public_id}>
+                      {s.title}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+
+            {/* Date / Time */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted))]">
+                  Start
+                </label>
+                <input
+                  type="datetime-local"
+                  value={acceptDraft.startsAt}
+                  onChange={(e) => setAcceptDraft((d) => d ? { ...d, startsAt: e.target.value } : d)}
+                  disabled={modalBusy}
+                  className="w-full rounded-xl border border-white/10 bg-[rgb(var(--card))] px-3 py-2 text-sm text-[rgb(var(--fg))] focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-50"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted))]">
+                  End
+                </label>
+                <input
+                  type="datetime-local"
+                  value={acceptDraft.endsAt}
+                  onChange={(e) => setAcceptDraft((d) => d ? { ...d, endsAt: e.target.value } : d)}
+                  disabled={modalBusy}
+                  className="w-full rounded-xl border border-white/10 bg-[rgb(var(--card))] px-3 py-2 text-sm text-[rgb(var(--fg))] focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-50"
+                />
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted))]">
+                Notes
+              </label>
+              <textarea
+                value={acceptDraft.notes}
+                onChange={(e) => setAcceptDraft((d) => d ? { ...d, notes: e.target.value } : d)}
+                disabled={modalBusy}
+                rows={3}
+                placeholder="No notes"
+                className="w-full resize-none rounded-xl border border-white/10 bg-[rgb(var(--card))] px-3 py-2 text-sm text-[rgb(var(--fg))] placeholder:text-[rgb(var(--muted))] focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-50"
+              />
+            </div>
           </div>
-          <div className="mt-1 font-mono text-xs text-[rgb(var(--muted))]">
-            {modalBookingId ?? "—"}
-          </div>
-        </div>
+        ) : null}
       </AdminModal>
 
       {/* Cancel confirm modal */}
@@ -982,7 +1094,7 @@ export default function AdminDispatchPage() {
                           </button>
                           <motion.button
                             type="button"
-                            onClick={() => openAcceptModal(b.public_id)}
+                            onClick={() => openAcceptModal(b)}
                             disabled={busy || bulkBusy}
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}

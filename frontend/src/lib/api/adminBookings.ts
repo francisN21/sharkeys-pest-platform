@@ -14,6 +14,7 @@ export type AdminBookingRow = {
   completed_at: string | null;
   cancelled_at: string | null;
   service_title: string;
+  service_public_id: string;
   //Customer Data
   customer_public_id: string;
   customer_first_name: string;
@@ -114,10 +115,16 @@ export function clearOrphanedBookings() {
   });
 }
 
-export function adminAcceptBooking(publicId: string) {
+export function adminAcceptBooking(
+  publicId: string,
+  overrides?: { servicePublicId?: string; startsAt?: string; endsAt?: string; notes?: string }
+) {
   return jsonFetch<{ ok: boolean; booking: AdminBookingRow }>(
     `/admin/bookings/${publicId}/accept`,
-    { method: "PATCH" }
+    {
+      method: "PATCH",
+      ...(overrides ? { body: JSON.stringify(overrides) } : {}),
+    }
   );
 }
 

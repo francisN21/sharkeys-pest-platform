@@ -1,6 +1,6 @@
-# Sharkey's Pest Control — SPC Platform
+# Sharkys Pest Control — SPC Platform
 
-A full-stack SaaS CRM and booking platform for **Sharkey's Pest Control** (Bay Area, CA).
+A full-stack SaaS CRM and booking platform for **Sharkys Pest Control** (Bay Area, CA).
 Built for real-world production: customer booking, technician dispatch, admin CRM, owner analytics, real-time messaging, and email notifications — all in one platform.
 
 **Status: Live in production** — hosted on Railway (backend + PostgreSQL) and Vercel (frontend).
