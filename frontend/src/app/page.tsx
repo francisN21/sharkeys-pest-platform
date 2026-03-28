@@ -1,5 +1,13 @@
 import Image from "next/image";
 import Link from "next/link";
+import {
+  ArrowRight,
+  CalendarCheck,
+  CheckCircle2,
+  ClipboardList,
+  MessageSquare,
+  UserCircle,
+} from "lucide-react";
 import Navbar from "../components/Navbar";
 import ScrollReveal from "../components/ScrollReveal";
 import MarketingCard from "../components/ui/marketing-card";
@@ -10,6 +18,54 @@ import { InfiniteSlider } from "../components/ui/infinite-slider";
 const SECTION =
   "flex flex-col justify-start py-20 md:snap-start md:min-h-screen md:justify-center";
 const CONTAINER = "mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8";
+
+const HOW_IT_WORKS = [
+  {
+    step: "1",
+    icon: ClipboardList,
+    title: "Book Your Service",
+    desc: "Head to our booking page. No account needed — just pick your service, choose a date and time that works for you, and enter your address.",
+    accent: "rgba(59,130,246,0.12)",
+    iconColor: "#3b82f6",
+    glowColor: "rgba(59,130,246,0.25)",
+  },
+  {
+    step: "2",
+    icon: UserCircle,
+    title: "Create Your Account",
+    desc: "After booking, you'll receive an email invite to create your Sharkys account. Set up your password to access your customer portal.",
+    accent: "rgba(99,102,241,0.12)",
+    iconColor: "#6366f1",
+    glowColor: "rgba(99,102,241,0.25)",
+  },
+  {
+    step: "3",
+    icon: CalendarCheck,
+    title: "We Confirm & Assign",
+    desc: "Our team reviews your booking, accepts it, and assigns a technician. You'll get an email notification once a tech is on their way.",
+    accent: "rgba(16,185,129,0.12)",
+    iconColor: "#10b981",
+    glowColor: "rgba(16,185,129,0.25)",
+  },
+  {
+    step: "4",
+    icon: MessageSquare,
+    title: "Track & Message",
+    desc: "Log in to your portal to track your booking status, message your technician directly, and view your full service history.",
+    accent: "rgba(245,158,11,0.12)",
+    iconColor: "#f59e0b",
+    glowColor: "rgba(245,158,11,0.25)",
+  },
+  {
+    step: "5",
+    icon: CheckCircle2,
+    title: "Service Complete",
+    desc: "Your technician completes the job and sets the final price. You'll receive a completion email with a full summary of the service.",
+    accent: "rgba(236,72,153,0.12)",
+    iconColor: "#ec4899",
+    glowColor: "rgba(236,72,153,0.25)",
+  },
+];
 
 const SERVICES = [
   {
@@ -261,87 +317,112 @@ export default function HomePage() {
       {/* BOOKING FLOW */}
       <section id="booking" className={`${SECTION} scroll-mt-24 md:scroll-mt-28`}>
         <div className={CONTAINER}>
-          <ScrollReveal className="mx-auto max-w-5xl">
-            <MarketingCard className="p-8">
-              <div
-                className="inline-flex w-fit rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]"
-                style={{
-                  borderColor: "rgb(var(--border))",
-                  background: "rgba(59,130,246,0.08)",
-                  color: "rgb(var(--fg))",
-                }}
-              >
-                Online Booking
+          <ScrollReveal>
+            <div
+              className="rounded-[2rem] border p-6 md:p-10"
+              style={{
+                borderColor: "rgb(var(--border))",
+                background: "rgb(var(--card))",
+              }}
+            >
+              <div className="mb-8 flex flex-col gap-2">
+                <div
+                  className="inline-flex w-fit rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]"
+                  style={{
+                    borderColor: "rgb(var(--border))",
+                    background: "rgba(59,130,246,0.08)",
+                    color: "rgb(var(--fg))",
+                  }}
+                >
+                  How It Works
+                </div>
+                <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
+                  Book, Track &amp; Manage Your Service Online
+                </h2>
+                <p
+                  className="max-w-2xl text-base leading-relaxed"
+                  style={{ color: "rgb(var(--muted))" }}
+                >
+                  Our online platform makes it easy to book pest control, track
+                  your appointment, and communicate with your technician — all
+                  in one place.
+                </p>
               </div>
 
-              <h2 className="mt-4 text-2xl font-bold tracking-tight">
-                How booking works
-              </h2>
-              <p className="mt-2" style={{ color: "rgb(var(--muted))" }}>
-                Choose a service, pick a date, and request your appointment online.
-              </p>
-
-              <ol
-                className="mt-6 grid gap-3 text-sm sm:grid-cols-2"
-                style={{ color: "rgb(var(--muted))" }}
-              >
-                {[
-                  "Choose a service that matches your pest issue",
-                  "Enter your contact details and property information",
-                  "Select your preferred date and time",
-                  "Receive confirmation and next steps",
-                ].map((step, index) => (
-                  <MarketingCard key={step} className="p-4">
-                    <div
-                      className="flex items-center gap-2 text-sm font-semibold"
-                      style={{ color: "rgb(var(--fg))" }}
-                    >
-                      <span
-                        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                {HOW_IT_WORKS.map((step, i) => {
+                  const Icon = step.icon;
+                  return (
+                    <ScrollReveal key={step.step} delay={i * 70}>
+                      <div
+                        className="group relative flex h-full cursor-default flex-col gap-4 rounded-2xl border p-5 transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-xl"
                         style={{
-                          background: "rgb(var(--primary))",
-                          color: "rgb(var(--primary-fg))",
+                          borderColor: "rgb(var(--border))",
+                          background: step.accent,
                         }}
                       >
-                        {index + 1}
-                      </span>
-                      Step {index + 1}
-                    </div>
-                    <div
-                      className="mt-2 text-sm"
-                      style={{ color: "rgb(var(--muted))" }}
-                    >
-                      {step}
-                    </div>
-                  </MarketingCard>
-                ))}
-              </ol>
+                        <div
+                          className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                          style={{ boxShadow: `inset 0 0 0 1.5px ${step.glowColor}` }}
+                        />
+                        <div className="flex items-start justify-between">
+                          <div
+                            className="flex h-10 w-10 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-110"
+                            style={{ background: "rgb(var(--card))" }}
+                          >
+                            <Icon
+                              className="h-5 w-5 transition-colors duration-300"
+                              style={{ color: step.iconColor }}
+                            />
+                          </div>
+                          <span
+                            className="text-3xl font-black leading-none transition-opacity duration-300 group-hover:opacity-30"
+                            style={{ color: step.iconColor, opacity: 0.15 }}
+                          >
+                            {step.step}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold transition-transform duration-300 group-hover:-translate-y-px">
+                            {step.title}
+                          </p>
+                          <p
+                            className="mt-1.5 text-sm leading-relaxed"
+                            style={{ color: "rgb(var(--muted))" }}
+                          >
+                            {step.desc}
+                          </p>
+                        </div>
+                      </div>
+                    </ScrollReveal>
+                  );
+                })}
+              </div>
 
-              <div className="mt-6 flex flex-wrap gap-3">
+              <div className="mt-8 flex flex-wrap gap-4">
                 <Link
                   href="/sharkys-pest-control-booking"
-                  className="inline-flex items-center rounded-2xl px-5 py-3 text-sm font-semibold transition duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:opacity-95"
+                  className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition-opacity hover:opacity-80"
                   style={{
                     background: "rgb(var(--primary))",
                     color: "rgb(var(--primary-fg))",
                   }}
                 >
-                  Start booking
+                  Start Your Booking
+                  <ArrowRight className="h-4 w-4" />
                 </Link>
-
                 <a
                   href="#services"
-                  className="inline-flex items-center rounded-2xl border px-5 py-3 text-sm font-semibold transition duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:opacity-95"
+                  className="inline-flex items-center gap-2 rounded-full border px-6 py-3 text-sm font-semibold transition-opacity hover:opacity-80"
                   style={{
                     borderColor: "rgb(var(--border))",
-                    background: "rgb(var(--bg))",
                     color: "rgb(var(--fg))",
                   }}
                 >
-                  View services
+                  View Services
                 </a>
               </div>
-            </MarketingCard>
+            </div>
           </ScrollReveal>
         </div>
       </section>
