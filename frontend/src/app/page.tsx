@@ -334,7 +334,7 @@ export default function HomePage() {
                     color: "rgb(var(--fg))",
                   }}
                 >
-                  How It Works
+                  Booking
                 </div>
                 <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
                   Book, Track &amp; Manage Your Service Online

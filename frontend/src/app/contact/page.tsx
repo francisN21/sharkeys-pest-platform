@@ -91,7 +91,7 @@ const CONTACT_CARDS = [
     href: "mailto:Office.sharkyspestcontrol@gmail.com",
     cta: "Send an email",
     // 📌 PLACEHOLDER — replace with your image: /public/contact-email-bg.jpg
-    imageUrl: "/contact-email-bg.jpg",
+    imageUrl: "/Deillen-1.png",
   },
   {
     icon: Phone,
@@ -100,7 +100,7 @@ const CONTACT_CARDS = [
     href: "tel:+17073615023",
     cta: "Give us a call",
     // 📌 PLACEHOLDER — replace with your image: /public/contact-phone-bg.jpg
-    imageUrl: "/contact-phone-bg.jpg",
+    imageUrl: "/Deillen-2.png",
   },
   {
     icon: MapPin,
@@ -109,7 +109,7 @@ const CONTACT_CARDS = [
     href: "/service-area",
     cta: "View coverage",
     // 📌 PLACEHOLDER — replace with your image: /public/contact-area-bg.jpg
-    imageUrl: "/contact-area-bg.jpg",
+    imageUrl: "/Deillen-3.png",
   },
 ];
 
@@ -117,18 +117,18 @@ const CONTACT_CARDS = [
 // Replace imageUrl with your actual owner photos in /public/
 const TEAM = [
   {
-    name: "Owner Name",
+    name: "Allan Garcia",
     role: "Owner & Founder",
     bio: "Bay Area native with years of hands-on pest control experience. Passionate about protecting homes and families from unwanted guests.",
     // 📌 PLACEHOLDER — replace with owner photo: /public/team-owner-1.jpg
     imageUrl: "/team-owner-1.jpg",
   },
   {
-    name: "Owner Name",
+    name: "Deillen Garcia",
     role: "Co-Owner & Operations",
     bio: "Manages day-to-day operations and ensures every job meets Sharkys' high standards of service and customer satisfaction.",
     // 📌 PLACEHOLDER — replace with owner photo: /public/team-owner-2.jpg
-    imageUrl: "/team-owner-2.jpg",
+    imageUrl: "/Deillen.png",
   },
 ];
 
