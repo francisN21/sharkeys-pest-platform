@@ -57,7 +57,7 @@ function trackSiteAccess(opts = {}) {
               now(), $1, $2, $3,
               $4, $5,
               $6::inet, digest($6::text, 'sha256'), $7, $8,
-              jsonb_build_object('duration_ms', $9)
+              jsonb_build_object('duration_ms', $9::numeric)
             )
             `,
             [pathname, method, statusCode, userId, sessionId, ip, userAgent, referer, durationMs]
