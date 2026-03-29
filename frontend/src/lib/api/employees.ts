@@ -59,6 +59,13 @@ export function reinstateEmployee(publicId: string, user_role: string) {
   });
 }
 
+export function adjustEmployeeRoles(publicId: string, roles: string[]) {
+  return jsonFetch<{ ok: true; roles: string[] }>(`/employees/${publicId}/roles`, {
+    method: "PATCH",
+    body: JSON.stringify({ roles }),
+  });
+}
+
 export function completeEmployeeSetup(payload: {
   token: string;
   password: string;

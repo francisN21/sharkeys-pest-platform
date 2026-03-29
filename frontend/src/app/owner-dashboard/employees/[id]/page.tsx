@@ -6,7 +6,7 @@ import { CheckCircle2, Clock, AlertCircle, KeyRound, Mail, XCircle, RotateCcw } 
 import Navbar from "../../../../components/Navbar";
 import OwnerRouteTabs from "../../_components/owner-route-tabs";
 import { me, type MeResponse } from "../../../../lib/api/auth";
-import { getEmployee, termEmployee, reinstateEmployee, type Employee } from "../../../../lib/api/employees";
+import { getEmployee, termEmployee, reinstateEmployee, adjustEmployeeRoles, type Employee } from "../../../../lib/api/employees";
 
 type MeUserWithRoles = NonNullable<MeResponse["user"]> & {
   roles?: string[] | null;
@@ -98,6 +98,14 @@ export default function EmployeeDetailPage() {
   const [reinstateBusy, setReinstateBusy] = useState(false);
   const [reinstateError, setReinstateError] = useState<string | null>(null);
 
+  // Adjust roles action
+  const [adjustRolesOpen, setAdjustRolesOpen] = useState(false);
+  const [adjustRolesBusy, setAdjustRolesBusy] = useState(false);
+  const [adjustRolesError, setAdjustRolesError] = useState<string | null>(null);
+  const [adjustRolesSuccess, setAdjustRolesSuccess] = useState<string | null>(null);
+  const [draftWorker, setDraftWorker] = useState(false);
+  const [draftAdmin, setDraftAdmin] = useState(false);
+
   const employeeName = useMemo(() => {
     if (!employee) return "Employee";
     const full = [employee.first_name, employee.last_name].filter(Boolean).join(" ").trim();
@@ -179,6 +187,41 @@ export default function EmployeeDetailPage() {
       setReinstateError(e instanceof Error ? e.message : "Failed to reinstate employee");
     } finally {
       setReinstateBusy(false);
+    }
+  }
+
+  function openAdjustRoles() {
+    if (!employee) return;
+    const roles = Array.isArray(employee.roles) ? employee.roles : [];
+    setDraftWorker(roles.includes("worker"));
+    setDraftAdmin(roles.includes("admin"));
+    setAdjustRolesError(null);
+    setAdjustRolesSuccess(null);
+    setAdjustRolesOpen(true);
+  }
+
+  async function handleAdjustRoles() {
+    if (!employee) return;
+    const roles: string[] = [];
+    if (draftWorker) roles.push("worker");
+    if (draftAdmin) roles.push("admin");
+    if (roles.length === 0) {
+      setAdjustRolesError("Select at least one role.");
+      return;
+    }
+    setAdjustRolesBusy(true);
+    setAdjustRolesError(null);
+    setAdjustRolesSuccess(null);
+    try {
+      await adjustEmployeeRoles(employee.public_id, roles);
+      const res = await getEmployee(employee.public_id);
+      setEmployee(res.employee ?? null);
+      setAdjustRolesSuccess("Roles updated successfully.");
+      setAdjustRolesOpen(false);
+    } catch (e: unknown) {
+      setAdjustRolesError(e instanceof Error ? e.message : "Failed to update roles");
+    } finally {
+      setAdjustRolesBusy(false);
     }
   }
 
@@ -483,6 +526,84 @@ export default function EmployeeDetailPage() {
                   <p className="text-xs" style={{ color: "rgb(var(--muted))" }}>
                     Terminating an employee immediately revokes all access, signs them out of all devices, and locks their account. Booking and message history is fully preserved.
                   </p>
+
+                  {/* Adjust Roles */}
+                  {adjustRolesSuccess && !adjustRolesOpen && (
+                    <div className="rounded-xl border px-4 py-3 text-xs"
+                      style={{ borderColor: "rgba(16,185,129,0.3)", background: "rgba(16,185,129,0.07)", color: "rgb(16,185,129)" }}>
+                      {adjustRolesSuccess}
+                    </div>
+                  )}
+                  {!adjustRolesOpen ? (
+                    <button type="button" onClick={openAdjustRoles}
+                      className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition hover:opacity-90 active:scale-[0.97]"
+                      style={{ borderColor: "rgba(99,102,241,0.35)", background: "rgba(99,102,241,0.07)", color: "rgb(99,102,241)" }}>
+                      <i className="fa-solid fa-user-pen text-[13px]" />
+                      Adjust Roles
+                    </button>
+                  ) : (
+                    <div className="rounded-xl border p-4 space-y-3"
+                      style={{ borderColor: "rgba(99,102,241,0.3)", background: "rgba(99,102,241,0.05)" }}>
+                      <div className="text-sm font-semibold" style={{ color: "rgb(99,102,241)" }}>
+                        Adjust roles
+                      </div>
+                      <p className="text-xs" style={{ color: "rgb(var(--muted))" }}>
+                        Changes take effect immediately. Sessions are not revoked — the employee will use their new permissions on next action.
+                      </p>
+                      {Array.isArray(employee?.roles) && employee.roles.includes("superuser") && (
+                        <div className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"
+                          style={{ borderColor: "rgba(139,92,246,0.3)", background: "rgba(139,92,246,0.06)", color: "rgb(139,92,246)" }}>
+                          <i className="fa-solid fa-shield-halved text-[11px]" />
+                          Super Admin role is managed separately and cannot be changed here.
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        <label className="flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 transition hover:bg-white/5"
+                          style={{ borderColor: "rgb(var(--border))" }}>
+                          <input
+                            type="checkbox"
+                            checked={draftWorker}
+                            onChange={(e) => setDraftWorker(e.target.checked)}
+                            disabled={adjustRolesBusy}
+                            className="h-4 w-4 rounded accent-blue-500"
+                          />
+                          <div>
+                            <div className="text-sm font-medium" style={{ color: "rgb(var(--fg))" }}>Technician</div>
+                            <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>Can be assigned to bookings and set final completion price.</div>
+                          </div>
+                        </label>
+                        <label className="flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 transition hover:bg-white/5"
+                          style={{ borderColor: "rgb(var(--border))" }}>
+                          <input
+                            type="checkbox"
+                            checked={draftAdmin}
+                            onChange={(e) => setDraftAdmin(e.target.checked)}
+                            disabled={adjustRolesBusy}
+                            className="h-4 w-4 rounded accent-indigo-500"
+                          />
+                          <div>
+                            <div className="text-sm font-medium" style={{ color: "rgb(var(--fg))" }}>Admin</div>
+                            <div className="text-xs" style={{ color: "rgb(var(--muted))" }}>Can access dispatch, manage bookings, and view all customers.</div>
+                          </div>
+                        </label>
+                      </div>
+                      {adjustRolesError && (
+                        <p className="text-xs" style={{ color: "rgb(239,68,68)" }}>{adjustRolesError}</p>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={handleAdjustRoles} disabled={adjustRolesBusy || (!draftWorker && !draftAdmin)}
+                          className="rounded-xl border px-4 py-2 text-sm font-semibold transition hover:opacity-90 active:scale-[0.97] disabled:opacity-50"
+                          style={{ borderColor: "rgba(99,102,241,0.4)", background: "rgba(99,102,241,0.1)", color: "rgb(99,102,241)" }}>
+                          {adjustRolesBusy ? "Saving…" : "Save roles"}
+                        </button>
+                        <button type="button" onClick={() => setAdjustRolesOpen(false)} disabled={adjustRolesBusy}
+                          className="rounded-xl border px-4 py-2 text-sm font-medium transition hover:opacity-80 disabled:opacity-60"
+                          style={{ borderColor: "rgb(var(--border))", background: "transparent" }}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {!termConfirm ? (
                     <button type="button" onClick={() => { setTermConfirm(true); setTermError(null); }}

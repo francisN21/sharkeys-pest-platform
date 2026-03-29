@@ -918,4 +918,115 @@ router.post("/:publicId/reinstate", requireAuth, requireRole("superuser"), async
   }
 });
 
+/**
+ * PATCH /employees/:publicId/roles
+ * Superuser-only — adjust admin/worker roles for an active employee.
+ *
+ * - Replaces the employee's admin + worker roles with the submitted set.
+ * - Superuser role is immutable via this endpoint.
+ * - Self-modification is rejected.
+ * - Termed employees cannot have roles adjusted.
+ * - Result set must not be empty (at least one of admin/worker required).
+ */
+const adjustRolesSchema = z.object({
+  roles: z
+    .array(z.enum(["admin", "worker"]))
+    .min(1, "At least one role is required"),
+});
+
+router.patch("/:publicId/roles", requireAuth, requireRole("superuser"), async (req, res, next) => {
+  const client = await pool.connect();
+
+  try {
+    const actorUserId = req.user?.id ?? req.auth?.userId ?? null;
+    const publicId = String(req.params.publicId || "").trim();
+
+    if (!publicId) {
+      return res.status(400).json({ ok: false, message: "Missing employee id" });
+    }
+
+    const parsed = adjustRolesSchema.parse(req.body);
+    const newRoles = [...new Set(parsed.roles)]; // deduplicate
+
+    await client.query("BEGIN");
+
+    const userRes = await client.query(
+      `SELECT id, email, termed_at FROM users WHERE public_id = $1 LIMIT 1 FOR UPDATE`,
+      [publicId]
+    );
+
+    if (userRes.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ ok: false, message: "Employee not found" });
+    }
+
+    const user = userRes.rows[0];
+
+    if (Number(user.id) === Number(actorUserId)) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ ok: false, message: "You cannot modify your own roles" });
+    }
+
+    if (user.termed_at) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ ok: false, message: "Cannot adjust roles for a termed employee" });
+    }
+
+    // Verify target is actually an employee (has at least one employee role)
+    const currentRolesRes = await client.query(
+      `SELECT role FROM user_roles WHERE user_id = $1 AND role IN ('superuser', 'admin', 'worker')`,
+      [user.id]
+    );
+    const currentRoles = currentRolesRes.rows.map((r) => String(r.role));
+
+    if (currentRoles.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ ok: false, message: "User is not an active employee" });
+    }
+
+    const isSuperuser = currentRoles.includes("superuser");
+
+    // Remove only admin/worker — preserve superuser if present
+    await client.query(
+      `DELETE FROM user_roles WHERE user_id = $1 AND role IN ('admin', 'worker')`,
+      [user.id]
+    );
+
+    // Insert the new role set
+    for (const role of newRoles) {
+      await client.query(
+        `INSERT INTO user_roles (user_id, role) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+        [user.id, role]
+      );
+    }
+
+    // Audit log
+    await client.query(
+      `INSERT INTO admin_audit_log (actor_user_id, action, target_type, target_id, metadata)
+       VALUES ($1, 'employee_roles_adjusted', 'user', $2::text, $3::jsonb)`,
+      [
+        actorUserId,
+        String(user.id),
+        JSON.stringify({ previous_roles: currentRoles.filter((r) => r !== "superuser"), new_roles: newRoles, superuser_preserved: isSuperuser }),
+      ]
+    );
+
+    await client.query("COMMIT");
+
+    // Return the full updated role set
+    const updatedRolesRes = await pool.query(
+      `SELECT role FROM user_roles WHERE user_id = $1`,
+      [user.id]
+    );
+    const updatedRoles = updatedRolesRes.rows.map((r) => String(r.role));
+
+    return res.json({ ok: true, roles: updatedRoles });
+  } catch (err) {
+    try { await client.query("ROLLBACK"); } catch (_) {}
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;
