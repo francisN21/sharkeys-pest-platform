@@ -237,6 +237,7 @@ NEXT_PUBLIC_WS_URL=              # wss://api.yourdomain.com (optional)
 - [x] Protected routes with role-based redirect
 - [x] New account setup flow for public booking invites (`/new-account-setup`)
 - [x] Employee setup flow (`/employee-setup`) — invite token + password creation
+- [x] User-first public booking — logged-in users who book via the public flow are matched to their existing account; no duplicate lead created
 - [x] Cookie-based auth (HttpOnly, SameSite=lax, Secure in production)
 - [x] CSRF double-submit protection
 
@@ -278,6 +279,8 @@ NEXT_PUBLIC_WS_URL=              # wss://api.yourdomain.com (optional)
 - [x] Tech bookings calendar view — per-technician schedule, reassign modal
 - [x] Reassign modal with technician selection and confirmation
 - [x] Dispatch page — gear dropdown with "Clear Orphaned Bookings" utility (reverts `assigned` bookings with no technician → `accepted`)
+- [x] **Smart accept modal scheduling** — date picker + 30-min increment time select (6 AM–9 PM slots); end time auto-calculates to start + 1 hour; no free-form datetime entry
+- [x] **Real-time availability conflict detection** — fetches existing accepted bookings for the selected date on modal open; shows inline conflict warning (`AlertTriangle`) or green "slot available" confirmation; re-checks on date change
 
 ### Customer & Lead CRM (`/account/admin/customers`)
 - [x] Unified directory — registered customers and leads in one paginated list
@@ -312,6 +315,8 @@ NEXT_PUBLIC_WS_URL=              # wss://api.yourdomain.com (optional)
 - [x] Employee termination — instantly revokes access (nulls password, kills all sessions, removes roles)
 - [x] Auto-unassign open bookings on termination — reverts `assigned` → `accepted`, clears `booking_assignments`
 - [x] Reinstate employee — clears `termed_at`, issues fresh invite email
+- [x] **Adjust Roles** — superadmin can grant/revoke `admin` and `technician` roles on active employees in real time; changes take effect immediately without revoking the current session
+- [x] Action buttons grouped in aligned flex-wrap row — visually consistent on desktop, stacks cleanly on mobile
 
 ### System Logs (`/owner-dashboard/system-logs`)
 - [x] Request log viewer — method, path, status, duration, IP
@@ -412,6 +417,8 @@ Provider: **Resend**
 - [x] `useReducedMotion` respected in all animated components
 - [x] Mobile-first responsive layouts across all pages
 - [x] `overflow-hidden` removed from all `SectionCard` containers — address autocomplete dropdown no longer clipped
+- [x] Dark mode enforced as default (`enableSystem: false`) — consistent experience across all devices
+- [x] Instagram social link live in site footer
 
 ---
 
@@ -455,6 +462,8 @@ All charts built with **Recharts** — responsive, dark-themed, accessible.
 - [x] `.env` files never committed (confirmed via git history scan)
 - [x] Superadmin bootstrap — auto-runs on server startup (idempotent, retries with backoff if DB not ready)
 - [x] `manual-setup-superuser.js` — activates superuser directly via DB when email delivery is unavailable
+- [x] `trackSiteAccess` middleware — per-request analytics (path, method, status, duration, IP hash, user agent) written to `site_access_events`; daily unique visitor deduplication in `site_unique_visitors_daily` via SHA256 IP hash
+- [x] Fixed `site_access_events` `jsonb_build_object` type inference bug — explicit `::numeric` cast prevents PostgreSQL from rejecting untyped parameters on every request
 
 ---
 
@@ -497,7 +506,7 @@ PostgreSQL — no ORM. Direct parameterized queries via `pg` pool.
 
 **Extensions:** `CITEXT`, `pgcrypto`, `btree_gist`
 
-**Key tables:** `users`, `leads`, `sessions`, `bookings`, `booking_prices`, `booking_messages`, `services`, `user_roles`, `lead_account_invites`, `employee_invites`, `notifications`, `customer_tags`, `availability_blocks`
+**Key tables:** `users`, `leads`, `sessions`, `bookings`, `booking_prices`, `booking_messages`, `services`, `user_roles`, `lead_account_invites`, `employee_invites`, `notifications`, `customer_tags`, `availability_blocks`, `site_access_events`, `site_unique_visitors_daily`
 
 **Test isolation:** `NODE_ENV=test` switches to `PGTESTDATABASE`
 
@@ -514,6 +523,9 @@ PostgreSQL — no ORM. Direct parameterized queries via `pg` pool.
 | **Employee invite** | Admin invites via email → employee receives setup link → creates password → account active |
 | **CRM tagging** | Admins tag customers (VIP, Bad, Big Spender, etc.) with undo support and audit trail |
 | **Admin lead creation** | Admin creates lead directly with Invite Lead modal → lead record inserted → invite email sent immediately |
+| **User-first public booking** | Logged-in customer visits public booking page → matched to existing account → booking created without a lead record |
+| **Employee role adjustment** | Superadmin edits active employee's roles (add/remove admin or technician) → permissions update immediately, no session revoke needed |
+| **Booking conflict check** | Admin opens accept modal → availability fetched for selected date → conflict or clear status shown inline before confirming |
 
 ---
 
