@@ -62,6 +62,52 @@ function toDatetimeLocal(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// ─── Appointment scheduling helpers ───────────────────────────────────────────
+
+// 30-min time slots from 6:00 AM to 9:00 PM
+const APPOINTMENT_TIMES = Array.from({ length: 31 }, (_, i) => {
+  const totalMinutes = 6 * 60 + i * 30;
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const ampm = h >= 12 ? "PM" : "AM";
+  const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h;
+  return { label: `${h12}:${pad(m)} ${ampm}`, value: `${pad(h)}:${pad(m)}` };
+});
+
+function addOneHour(datetimeLocal: string): string {
+  const d = new Date(datetimeLocal);
+  if (Number.isNaN(d.getTime())) return datetimeLocal;
+  d.setHours(d.getHours() + 1);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function snapToHalfHour(datetimeLocal: string): string {
+  const d = new Date(datetimeLocal);
+  if (Number.isNaN(d.getTime())) return datetimeLocal;
+  const mins = d.getMinutes();
+  const snapped = mins < 15 ? 0 : mins < 45 ? 30 : 60;
+  d.setMinutes(snapped < 60 ? snapped : 0);
+  if (snapped === 60) d.setHours(d.getHours() + 1);
+  d.setSeconds(0);
+  d.setMilliseconds(0);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function formatTimeFromDatetimeLocal(dtLocal: string): string {
+  const timePart = dtLocal.split("T")[1]?.slice(0, 5) ?? "";
+  if (!timePart) return "—";
+  const [hStr = "0", mStr = "0"] = timePart.split(":");
+  const h = parseInt(hStr, 10);
+  const m = parseInt(mStr, 10);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const ampm = h >= 12 ? "PM" : "AM";
+  const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h;
+  return `${h12}:${pad(m)} ${ampm}`;
+}
+
 type PersonKind = "lead" | "registered";
 
 function getKind(b: AdminBookingRow): PersonKind {
@@ -520,10 +566,11 @@ export default function AdminDispatchPage() {
     setModalKind("accept");
     setModalBookingId(b.public_id);
     setModalBookingTitle(b.service_title);
+    const snappedStart = snapToHalfHour(toDatetimeLocal(b.starts_at));
     setAcceptDraft({
       servicePublicId: b.service_public_id,
-      startsAt: toDatetimeLocal(b.starts_at),
-      endsAt: toDatetimeLocal(b.ends_at),
+      startsAt: snappedStart,
+      endsAt: addOneHour(snappedStart),
       notes: b.notes ?? "",
       customerName: bookee.displayName,
       serviceAddress: b.address || bookee.customerAddress || "",
@@ -795,30 +842,56 @@ export default function AdminDispatchPage() {
             </div>
 
             {/* Date / Time */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-3">
               <div>
                 <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted))]">
-                  Start
+                  Date
                 </label>
                 <input
-                  type="datetime-local"
-                  value={acceptDraft.startsAt}
-                  onChange={(e) => setAcceptDraft((d) => d ? { ...d, startsAt: e.target.value } : d)}
+                  type="date"
+                  value={acceptDraft.startsAt.split("T")[0] ?? ""}
+                  onChange={(e) => {
+                    const date = e.target.value;
+                    const time = acceptDraft.startsAt.split("T")[1]?.slice(0, 5) ?? "09:00";
+                    const newStartsAt = `${date}T${time}`;
+                    setAcceptDraft((d) => d ? { ...d, startsAt: newStartsAt, endsAt: addOneHour(newStartsAt) } : d);
+                  }}
                   disabled={modalBusy}
                   className="w-full rounded-xl border border-white/10 bg-[rgb(var(--card))] px-3 py-2 text-sm text-[rgb(var(--fg))] focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-50"
                 />
               </div>
-              <div>
-                <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted))]">
-                  End
-                </label>
-                <input
-                  type="datetime-local"
-                  value={acceptDraft.endsAt}
-                  onChange={(e) => setAcceptDraft((d) => d ? { ...d, endsAt: e.target.value } : d)}
-                  disabled={modalBusy}
-                  className="w-full rounded-xl border border-white/10 bg-[rgb(var(--card))] px-3 py-2 text-sm text-[rgb(var(--fg))] focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-50"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted))]">
+                    Start Time
+                  </label>
+                  <select
+                    value={acceptDraft.startsAt.split("T")[1]?.slice(0, 5) ?? "09:00"}
+                    onChange={(e) => {
+                      const date = acceptDraft.startsAt.split("T")[0] ?? "";
+                      const newStartsAt = `${date}T${e.target.value}`;
+                      setAcceptDraft((d) => d ? { ...d, startsAt: newStartsAt, endsAt: addOneHour(newStartsAt) } : d);
+                    }}
+                    disabled={modalBusy}
+                    className="w-full rounded-xl border border-white/10 bg-[rgb(var(--card))] px-3 py-2 text-sm text-[rgb(var(--fg))] focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-50"
+                  >
+                    {APPOINTMENT_TIMES.map((slot) => (
+                      <option key={slot.value} value={slot.value}>{slot.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--muted))]">
+                    End Time
+                  </label>
+                  <div
+                    className="flex h-[38px] items-center gap-1.5 rounded-xl border border-white/[0.07] bg-white/[0.02] px-3 text-sm"
+                    style={{ color: "rgb(var(--muted))" }}
+                  >
+                    {formatTimeFromDatetimeLocal(acceptDraft.endsAt)}
+                    <span className="text-[10px] opacity-50">(+1 hr)</span>
+                  </div>
+                </div>
               </div>
             </div>
 

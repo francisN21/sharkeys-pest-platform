@@ -527,21 +527,33 @@ export default function EmployeeDetailPage() {
                     Terminating an employee immediately revokes all access, signs them out of all devices, and locks their account. Booking and message history is fully preserved.
                   </p>
 
-                  {/* Adjust Roles */}
-                  {adjustRolesSuccess && !adjustRolesOpen && (
+                  {adjustRolesSuccess && !adjustRolesOpen && !termConfirm && (
                     <div className="rounded-xl border px-4 py-3 text-xs"
                       style={{ borderColor: "rgba(16,185,129,0.3)", background: "rgba(16,185,129,0.07)", color: "rgb(16,185,129)" }}>
                       {adjustRolesSuccess}
                     </div>
                   )}
-                  {!adjustRolesOpen ? (
-                    <button type="button" onClick={openAdjustRoles}
-                      className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition hover:opacity-90 active:scale-[0.97]"
-                      style={{ borderColor: "rgba(99,102,241,0.35)", background: "rgba(99,102,241,0.07)", color: "rgb(99,102,241)" }}>
-                      <i className="fa-solid fa-user-pen text-[13px]" />
-                      Adjust Roles
-                    </button>
-                  ) : (
+
+                  {/* Action buttons — side by side when both collapsed, stacks on mobile */}
+                  {!adjustRolesOpen && !termConfirm && (
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={openAdjustRoles}
+                        className="inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition hover:opacity-90 active:scale-[0.97]"
+                        style={{ borderColor: "rgba(99,102,241,0.35)", background: "rgba(99,102,241,0.07)", color: "rgb(99,102,241)" }}>
+                        <i className="fa-solid fa-user-pen text-[13px]" />
+                        Adjust Roles
+                      </button>
+                      <button type="button" onClick={() => { setTermConfirm(true); setTermError(null); }}
+                        className="inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition hover:opacity-90 active:scale-[0.97]"
+                        style={{ borderColor: "rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.07)", color: "rgb(239,68,68)" }}>
+                        <XCircle className="h-3.5 w-3.5" />
+                        Terminate Employee
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Adjust Roles expanded panel */}
+                  {adjustRolesOpen && (
                     <div className="rounded-xl border p-4 space-y-3"
                       style={{ borderColor: "rgba(99,102,241,0.3)", background: "rgba(99,102,241,0.05)" }}>
                       <div className="text-sm font-semibold" style={{ color: "rgb(99,102,241)" }}>
@@ -590,7 +602,7 @@ export default function EmployeeDetailPage() {
                       {adjustRolesError && (
                         <p className="text-xs" style={{ color: "rgb(239,68,68)" }}>{adjustRolesError}</p>
                       )}
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <button type="button" onClick={handleAdjustRoles} disabled={adjustRolesBusy || (!draftWorker && !draftAdmin)}
                           className="rounded-xl border px-4 py-2 text-sm font-semibold transition hover:opacity-90 active:scale-[0.97] disabled:opacity-50"
                           style={{ borderColor: "rgba(99,102,241,0.4)", background: "rgba(99,102,241,0.1)", color: "rgb(99,102,241)" }}>
@@ -605,14 +617,8 @@ export default function EmployeeDetailPage() {
                     </div>
                   )}
 
-                  {!termConfirm ? (
-                    <button type="button" onClick={() => { setTermConfirm(true); setTermError(null); }}
-                      className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition hover:opacity-90 active:scale-[0.97]"
-                      style={{ borderColor: "rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.07)", color: "rgb(239,68,68)" }}>
-                      <XCircle className="h-3.5 w-3.5" />
-                      Terminate Employee
-                    </button>
-                  ) : (
+                  {/* Terminate confirmation panel */}
+                  {termConfirm && (
                     <div className="rounded-xl border p-4 space-y-3"
                       style={{ borderColor: "rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.06)" }}>
                       <div className="text-sm font-semibold" style={{ color: "rgb(239,68,68)" }}>
@@ -624,7 +630,7 @@ export default function EmployeeDetailPage() {
                       {termError && (
                         <p className="text-xs" style={{ color: "rgb(239,68,68)" }}>{termError}</p>
                       )}
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <button type="button" onClick={handleTerm} disabled={termBusy}
                           className="rounded-xl border px-4 py-2 text-sm font-semibold transition hover:opacity-90 active:scale-[0.97] disabled:opacity-60"
                           style={{ borderColor: "rgba(239,68,68,0.4)", background: "rgba(239,68,68,0.12)", color: "rgb(239,68,68)" }}>
