@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
+  AlertTriangle,
   Calendar,
   CheckCheck,
   CheckCircle2,
@@ -19,7 +20,9 @@ import {
   adminAcceptBooking,
   adminCancelBooking,
   getAdminBookings,
+  getBookingAvailability,
   type AdminBookingRow,
+  type AvailabilityBooking,
   adminListTechnicians,
   adminAssignBooking,
   clearOrphanedBookings,
@@ -458,6 +461,10 @@ export default function AdminDispatchPage() {
     serviceAddress: string;
   } | null>(null);
 
+  // Availability check for accept modal
+  const [availBooked, setAvailBooked] = useState<AvailabilityBooking[]>([]);
+  const [availLoading, setAvailLoading] = useState(false);
+
   // Assign modal
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [assignBooking, setAssignBooking] = useState<{
@@ -750,6 +757,49 @@ export default function AdminDispatchPage() {
   const allPendingSelected =
     sortedPending.length > 0 && sortedPending.every((b) => bulkSelected.has(b.public_id));
 
+  // ─── Availability check ───────────────────────────────────────────────────────
+
+  const acceptModalDate =
+    modalOpen && modalKind === "accept"
+      ? (acceptDraft?.startsAt.split("T")[0] ?? null)
+      : null;
+
+  useEffect(() => {
+    if (!acceptModalDate) {
+      setAvailBooked([]);
+      setAvailLoading(false);
+      return;
+    }
+    let alive = true;
+    setAvailLoading(true);
+    (async () => {
+      try {
+        const tzOffsetMinutes = new Date().getTimezoneOffset();
+        const res = await getBookingAvailability({ date: acceptModalDate, tzOffsetMinutes });
+        if (!alive) return;
+        setAvailBooked(res.bookings || []);
+      } catch {
+        if (!alive) return;
+        setAvailBooked([]);
+      } finally {
+        if (alive) setAvailLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [acceptModalDate]);
+
+  const slotConflict = useMemo(() => {
+    if (!acceptDraft || availBooked.length === 0) return null;
+    const slotStart = new Date(acceptDraft.startsAt);
+    const slotEnd = new Date(acceptDraft.endsAt);
+    if (Number.isNaN(slotStart.getTime()) || Number.isNaN(slotEnd.getTime())) return null;
+    return availBooked.find((b) => {
+      const bStart = new Date(b.starts_at);
+      const bEnd = new Date(b.ends_at);
+      return slotStart < bEnd && slotEnd > bStart;
+    }) ?? null;
+  }, [acceptDraft, availBooked]);
+
   // ─── Render ───────────────────────────────────────────────────────────────────
 
   return (
@@ -894,6 +944,28 @@ export default function AdminDispatchPage() {
                 </div>
               </div>
             </div>
+
+            {/* Availability indicator */}
+            {availLoading ? (
+              <div className="flex items-center gap-2 text-xs" style={{ color: "rgb(var(--muted))" }}>
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                Checking availability…
+              </div>
+            ) : slotConflict ? (
+              <div className="flex items-start gap-2 rounded-xl border px-3 py-2.5 text-xs"
+                style={{ borderColor: "rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.07)", color: "rgb(239,68,68)" }}>
+                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                <span>
+                  <span className="font-semibold">Time conflict</span>
+                  {" — another booking is already scheduled at this time."}
+                </span>
+              </div>
+            ) : acceptDraft ? (
+              <div className="flex items-center gap-2 text-xs" style={{ color: "rgb(16,185,129)" }}>
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Time slot is available
+              </div>
+            ) : null}
 
             {/* Notes */}
             <div>
